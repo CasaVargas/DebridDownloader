@@ -2,11 +2,24 @@
 
 @theme {
   --color-rd-green: #78be20;
-  --color-rd-dark: #1a1a2e;
-  --color-rd-darker: #0f0f1e;
-  --color-rd-card: #1e1e36;
-  --color-rd-border: #2a2a4a;
-  --color-rd-hover: #252545;
+  --color-rd-green-dim: #5a9a10;
+  --color-rd-dark: #13131f;
+  --color-rd-darker: #0b0b14;
+  --color-rd-card: #1a1a2c;
+  --color-rd-card-hover: #20203a;
+  --color-rd-border: #2e2e4a;
+  --color-rd-surface: #161626;
+  --color-rd-card-gradient-start: #1e1e34;
+  --color-rd-card-gradient-end: #1a1a2c;
+  --color-rd-sidebar-start: #141428;
+  --color-rd-sidebar-end: #0f0f1e;
+  --color-rd-border-soft: rgba(255, 255, 255, 0.06);
+  --color-rd-border-hover: rgba(255, 255, 255, 0.12);
+  --shadow-glow-green: 0 0 20px rgba(120, 190, 32, 0.15), 0 0 4px rgba(120, 190, 32, 0.1);
+  --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 4px rgba(59, 130, 246, 0.1);
+  --shadow-glow-red: 0 0 20px rgba(239, 68, 68, 0.15), 0 0 4px rgba(239, 68, 68, 0.1);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -21,37 +34,139 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar styling */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-rd-darker);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-rd-border);
-  border-radius: 4px;
+  background: #2e2e4a;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a5a;
+  background: #3e3e5e;
 }
 
-/* Custom transition for sidebar */
-.sidebar-link {
+::selection {
+  background: rgba(120, 190, 32, 0.3);
+}
+
+/* Custom checkbox */
+input[type="checkbox"] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #3e3e5e;
+  border-radius: 5px;
+  background: #0b0b14;
+  cursor: pointer;
   transition: all 0.15s ease;
+  position: relative;
+  flex-shrink: 0;
 }
 
-.sidebar-link:hover {
-  background-color: var(--color-rd-hover);
+input[type="checkbox"]:checked {
+  background: #78be20;
+  border-color: #78be20;
 }
 
-.sidebar-link.active {
-  background-color: var(--color-rd-green);
-  color: #000;
-  font-weight: 600;
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 6px;
+  height: 10px;
+  border: solid #000;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:hover {
+  border-color: #78be20;
+}
+
+/* Select styling */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+/* Card base */
+.card-base {
+  background: linear-gradient(135deg, var(--color-rd-card-gradient-start), var(--color-rd-card-gradient-end));
+  border: 1px solid var(--color-rd-border-soft);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  transition: all 0.2s ease;
+}
+
+.card-base:hover {
+  border-color: var(--color-rd-border-hover);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
+}
+
+/* Gradient progress bars */
+.progress-bar-blue {
+  background: linear-gradient(90deg, #2563eb, #38bdf8);
+  border-radius: 9999px;
+}
+
+.progress-bar-green {
+  background: linear-gradient(90deg, #78be20, #9adf3a);
+  border-radius: 9999px;
+}
+
+/* Glow dot animations */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 4px currentColor, 0 0 8px currentColor; opacity: 1; }
+  50% { box-shadow: 0 0 8px currentColor, 0 0 16px currentColor; opacity: 0.7; }
+}
+
+.glow-dot-active {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-rd-card) 25%, var(--color-rd-card-hover) 50%, var(--color-rd-card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* Modal transitions */
+.modal-backdrop {
+  animation: fade-in 0.2s ease;
+}
+
+.modal-content {
+  animation: slide-up 0.25s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
