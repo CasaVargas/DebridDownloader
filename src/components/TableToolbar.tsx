@@ -18,11 +18,11 @@ export default function TableToolbar({
   return (
     <div className="flex justify-between items-center px-7 py-5 shrink-0" style={{ paddingRight: "80px" }}>
       <div className="min-w-0">
-        <h2 className="text-[22px] font-bold text-[#f1f5f9] tracking-[-0.3px] m-0">
+        <h2 className="text-[22px] font-bold text-[var(--theme-text-primary)] tracking-[-0.3px] m-0">
           {title}
         </h2>
         {subtitle && (
-          <p className="text-[13px] text-[#475569] mt-1">{subtitle}</p>
+          <p className="text-[13px] text-[var(--theme-text-muted)] mt-1">{subtitle}</p>
         )}
       </div>
       <div className="flex items-center gap-4 shrink-0">
@@ -33,14 +33,14 @@ export default function TableToolbar({
             onChange={(e) => onFilterChange(e.target.value)}
             placeholder={filterPlaceholder}
             style={{ paddingLeft: "40px" }}
-            className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] rounded-lg py-3 pr-5 text-[15px] text-[#f1f5f9] w-[280px] outline-none placeholder:text-[#374151] focus:border-[rgba(16,185,129,0.3)] transition-colors"
+            className="bg-[var(--theme-selected)] border border-[var(--theme-border)] rounded-lg py-3 pr-5 text-[15px] text-[var(--theme-text-primary)] w-[280px] outline-none placeholder:text-[var(--theme-text-ghost)] focus:border-[rgba(16,185,129,0.3)] transition-colors"
           />
           <svg
             width="16"
             height="16"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#374151"
+            stroke="var(--theme-text-ghost)"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"

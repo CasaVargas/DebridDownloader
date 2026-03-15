@@ -27,7 +27,7 @@ export default function SlideOverPanel({
       {/* Scrim */}
       <div
         className="fixed inset-0 z-40"
-        style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+        style={{ backgroundColor: "var(--theme-scrim)" }}
         onClick={onClose}
       />
 
@@ -36,9 +36,9 @@ export default function SlideOverPanel({
         className="fixed top-0 right-0 bottom-0 z-50 flex flex-col overflow-hidden"
         style={{
           width: "420px",
-          backgroundColor: "#0e0e18",
-          borderLeft: "1px solid rgba(255,255,255,0.08)",
-          boxShadow: "-8px 0 40px rgba(0,0,0,0.5)",
+          backgroundColor: "var(--theme-bg-surface)",
+          borderLeft: "1px solid var(--theme-border)",
+          boxShadow: "-8px 0 40px var(--theme-shadow)",
           animation: "slide-in-right 0.2s ease-out",
         }}
       >

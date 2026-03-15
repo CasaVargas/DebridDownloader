@@ -50,7 +50,7 @@ export default function DataTable<T>({
 
   const sortArrow = (col: Column<T>) => {
     if (!col.sortable) return null;
-    if (sortKey !== col.key) return <span style={{ color: "#374151" }}> ↕</span>;
+    if (sortKey !== col.key) return <span style={{ color: "var(--theme-text-ghost)" }}> ↕</span>;
     return <span style={{ color: "var(--accent)" }}> {sortDirection === "asc" ? "↑" : "↓"}</span>;
   };
 
@@ -65,9 +65,9 @@ export default function DataTable<T>({
   if (data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24">
-        <p className="text-[#475569] text-[15px]">{emptyMessage}</p>
+        <p className="text-[var(--theme-text-muted)] text-[15px]">{emptyMessage}</p>
         {emptySubtext && (
-          <p className="text-[#374151] text-[14px] mt-1">{emptySubtext}</p>
+          <p className="text-[var(--theme-text-ghost)] text-[14px] mt-1">{emptySubtext}</p>
         )}
       </div>
     );
@@ -82,15 +82,15 @@ export default function DataTable<T>({
           display: "grid",
           gridTemplateColumns,
           gap: "16px",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          background: "#0a0a12",
+          borderBottom: "1px solid var(--theme-border)",
+          background: "var(--theme-bg-content)",
         }}
       >
         {columns.map((col) => (
           <div
             key={col.key}
             onClick={() => handleHeaderClick(col)}
-            className="text-[12px] text-[#475569] uppercase tracking-[0.5px] py-3 select-none"
+            className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] py-3 select-none"
             style={{ cursor: col.sortable ? "pointer" : "default" }}
           >
             {col.header}
@@ -117,7 +117,7 @@ export default function DataTable<T>({
               gap: "16px",
               alignItems: "center",
               padding: "14px 0",
-              borderBottom: "1px solid rgba(255,255,255,0.03)",
+              borderBottom: "1px solid var(--theme-hover)",
               background:
                 selectedId === id
                   ? "var(--accent-bg)0.04)"
@@ -126,7 +126,7 @@ export default function DataTable<T>({
             onMouseEnter={(e) => {
               if (selectedId !== id) {
                 (e.currentTarget as HTMLElement).style.background =
-                  "rgba(255,255,255,0.02)";
+                  "var(--theme-hover)";
               }
             }}
             onMouseLeave={(e) => {

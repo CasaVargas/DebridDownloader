@@ -9,6 +9,7 @@ interface FrontendSettings {
   auto_start_downloads: boolean;
   launch_at_login: boolean;
   accent_color: string;
+  app_theme: string;
   default_sort_key: string;
   default_sort_direction: "asc" | "desc";
   notify_on_complete: boolean;
@@ -18,6 +19,7 @@ const DEFAULT_FRONTEND: FrontendSettings = {
   auto_start_downloads: false,
   launch_at_login: false,
   accent_color: "emerald",
+  app_theme: "dark",
   default_sort_key: "added",
   default_sort_direction: "desc",
   notify_on_complete: true,
@@ -73,6 +75,9 @@ export default function SettingsPage() {
     if (patch.accent_color) {
       window.dispatchEvent(new Event("accent-changed"));
     }
+    if (patch.app_theme) {
+      window.dispatchEvent(new Event("theme-changed"));
+    }
   }
 
   async function handleBrowse() {
@@ -96,10 +101,10 @@ export default function SettingsPage() {
   return (
     <div className="flex-1 overflow-y-auto">
       <div style={{ paddingLeft: "60px", paddingRight: "120px", paddingTop: "40px", paddingBottom: "60px", maxWidth: "900px" }}>
-        <h2 className="text-[24px] font-bold text-[#f1f5f9] tracking-[-0.3px] mb-2">
+        <h2 className="text-[24px] font-bold text-[var(--theme-text-primary)] tracking-[-0.3px] mb-2">
           Settings
         </h2>
-        <p className="text-[14px] text-[#475569] mb-16">
+        <p className="text-[14px] text-[var(--theme-text-muted)] mb-16">
           Configure downloads, behavior, and appearance
         </p>
 
@@ -107,29 +112,29 @@ export default function SettingsPage() {
           <>
             {/* ── Downloads ── */}
             <section className="mb-20">
-              <h3 className="text-[12px] text-[#475569] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[rgba(255,255,255,0.04)]">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
                 Downloads
               </h3>
 
               {/* Download folder */}
               <div className="mb-12">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-[15px] text-[#f1f5f9]">Download Folder</span>
+                  <span className="text-[15px] text-[var(--theme-text-primary)]">Download Folder</span>
                   {savedField === "download_folder" && (
                     <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-4 text-[15px] truncate flex-1 min-w-0">
+                  <div className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] truncate flex-1 min-w-0">
                     {settings.download_folder ? (
-                      <span className="text-[#94a3b8]">{settings.download_folder}</span>
+                      <span className="text-[var(--theme-text-secondary)]">{settings.download_folder}</span>
                     ) : (
-                      <span className="text-[#374151]">Not set — you'll be asked each time</span>
+                      <span className="text-[var(--theme-text-ghost)]">Not set — you'll be asked each time</span>
                     )}
                   </div>
                   <button
                     onClick={handleBrowse}
-                    className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[rgba(255,255,255,0.1)] rounded-lg px-6 py-3.5 text-[14px] font-medium transition-colors shrink-0"
+                    className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg px-6 py-3.5 text-[14px] font-medium transition-colors shrink-0"
                   >
                     Browse
                   </button>
@@ -139,7 +144,7 @@ export default function SettingsPage() {
               {/* Max concurrent */}
               <div className="mb-12">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-[15px] text-[#f1f5f9]">Max Concurrent Downloads</span>
+                  <span className="text-[15px] text-[var(--theme-text-primary)]">Max Concurrent Downloads</span>
                   {savedField === "max_concurrent_downloads" && (
                     <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
                   )}
@@ -150,7 +155,7 @@ export default function SettingsPage() {
                     await applyChange({ max_concurrent_downloads: Number(e.target.value) });
                     markSaved("max_concurrent_downloads");
                   }}
-                  className="w-full bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-4 text-[15px] text-[#f1f5f9] focus:outline-none transition-colors"
+                  className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] focus:outline-none transition-colors"
                 >
                   {[1, 2, 3, 4, 5, 8, 10].map((n) => (
                     <option key={n} value={n}>
@@ -185,7 +190,7 @@ export default function SettingsPage() {
 
             {/* ── Behavior ── */}
             <section className="mb-20">
-              <h3 className="text-[12px] text-[#475569] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[rgba(255,255,255,0.04)]">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
                 Behavior
               </h3>
 
@@ -217,15 +222,15 @@ export default function SettingsPage() {
 
               {/* Default sort */}
               <div className="mb-12">
-                <span className="text-[15px] text-[#f1f5f9] block mb-1.5">Default sort order</span>
-                <p className="text-[14px] text-[#475569] mb-4">
+                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Default sort order</span>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
                   How torrents are sorted when you open the app
                 </p>
                 <div className="flex gap-4">
                   <select
                     value={frontend.default_sort_key}
                     onChange={(e) => applyFrontend({ default_sort_key: e.target.value })}
-                    className="flex-1 bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-4 text-[15px] text-[#f1f5f9] focus:outline-none transition-colors"
+                    className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] focus:outline-none transition-colors"
                   >
                     <option value="added">Date Added</option>
                     <option value="filename">Name</option>
@@ -234,7 +239,7 @@ export default function SettingsPage() {
                   <select
                     value={frontend.default_sort_direction}
                     onChange={(e) => applyFrontend({ default_sort_direction: e.target.value as "asc" | "desc" })}
-                    className="w-[180px] bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-4 text-[15px] text-[#f1f5f9] focus:outline-none transition-colors"
+                    className="w-[180px] bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] focus:outline-none transition-colors"
                   >
                     <option value="desc">Newest first</option>
                     <option value="asc">Oldest first</option>
@@ -245,13 +250,56 @@ export default function SettingsPage() {
 
             {/* ── Appearance ── */}
             <section className="mb-20">
-              <h3 className="text-[12px] text-[#475569] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[rgba(255,255,255,0.04)]">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
                 Appearance
               </h3>
 
+              {/* Theme mode */}
               <div className="mb-12">
-                <span className="text-[15px] text-[#f1f5f9] block mb-1.5">Accent Color</span>
-                <p className="text-[14px] text-[#475569] mb-5">
+                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Theme</span>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-5">
+                  Choose between dark and light appearance
+                </p>
+                <div className="flex gap-4">
+                  {[
+                    { id: "dark", label: "Dark" },
+                    { id: "light", label: "Light" },
+                  ].map((opt) => {
+                    const isSelected = frontend.app_theme === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => applyFrontend({ app_theme: opt.id })}
+                        className="flex-1 flex items-center justify-center gap-3 py-4 rounded-xl transition-all text-[15px] font-medium"
+                        style={{
+                          background: isSelected ? "var(--accent-bg)0.1)" : "var(--theme-bg)",
+                          border: isSelected ? `2px solid var(--accent)` : "2px solid var(--theme-border)",
+                          color: isSelected ? "var(--accent)" : "var(--theme-text-muted)",
+                        }}
+                      >
+                        {opt.id === "dark" ? (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                          </svg>
+                        ) : (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="5" />
+                            <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                            <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                          </svg>
+                        )}
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mb-12">
+                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Accent Color</span>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-5">
                   Highlight color used for active states and buttons
                 </p>
                 <div className="flex gap-4">
@@ -271,7 +319,7 @@ export default function SettingsPage() {
                         onClick={() => applyFrontend({ accent_color: opt.id })}
                         className="flex flex-col items-center gap-3 p-4 rounded-xl transition-all"
                         style={{
-                          background: isSelected ? "rgba(255,255,255,0.04)" : "transparent",
+                          background: isSelected ? "var(--theme-selected)" : "transparent",
                           border: isSelected ? `2px solid ${color}` : "2px solid transparent",
                         }}
                       >
@@ -284,7 +332,7 @@ export default function SettingsPage() {
                         />
                         <span
                           className="text-[13px] font-medium"
-                          style={{ color: isSelected ? color : "#64748b" }}
+                          style={{ color: isSelected ? color : "var(--theme-text-muted)" }}
                         >
                           {opt.label}
                         </span>
@@ -297,10 +345,10 @@ export default function SettingsPage() {
 
             {/* ── About ── */}
             <section className="mb-20">
-              <h3 className="text-[12px] text-[#475569] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[rgba(255,255,255,0.04)]">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
                 About
               </h3>
-              <div className="bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-xl p-6">
+              <div className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl p-6">
                 <div className="flex items-center gap-4 mb-4">
                   <div
                     className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
@@ -309,11 +357,11 @@ export default function SettingsPage() {
                     <span className="text-white font-bold text-[20px]">D</span>
                   </div>
                   <div>
-                    <div className="text-[17px] text-[#f1f5f9] font-semibold">DebridDownloader</div>
-                    <div className="text-[14px] text-[#475569]">Version 0.1.0</div>
+                    <div className="text-[17px] text-[var(--theme-text-primary)] font-semibold">DebridDownloader</div>
+                    <div className="text-[14px] text-[var(--theme-text-muted)]">Version 0.1.0</div>
                   </div>
                 </div>
-                <p className="text-[14px] text-[#475569] leading-relaxed">
+                <p className="text-[14px] text-[var(--theme-text-muted)] leading-relaxed">
                   Desktop client for managing torrents and downloads via the Real-Debrid API.
                   Built with Tauri, React, and Rust.
                 </p>
@@ -351,16 +399,16 @@ function ToggleRow({
     <div className="mb-12 flex items-start justify-between gap-6">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-[15px] text-[#f1f5f9]">{label}</span>
+          <span className="text-[15px] text-[var(--theme-text-primary)]">{label}</span>
           {saved && <span style={{ color: accentColor }} className="text-[13px]">Saved</span>}
         </div>
-        <p className="text-[14px] text-[#475569] mt-1">{description}</p>
+        <p className="text-[14px] text-[var(--theme-text-muted)] mt-1">{description}</p>
       </div>
       <button
         onClick={() => onChange(!checked)}
         className="shrink-0 mt-0.5 w-12 h-7 rounded-full transition-colors duration-200 relative"
         style={{
-          backgroundColor: checked ? accentColor : "rgba(255,255,255,0.08)",
+          backgroundColor: checked ? accentColor : "var(--theme-border)",
         }}
       >
         <div

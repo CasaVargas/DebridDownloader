@@ -91,7 +91,7 @@ export default function DownloadsPage() {
         const pct = t.total_bytes > 0 ? (t.downloaded_bytes / t.total_bytes) * 100 : 0;
         return (
           <div>
-            <div className="text-[15px] font-medium text-[#f1f5f9] truncate">{t.filename}</div>
+            <div className="text-[15px] font-medium text-[var(--theme-text-primary)] truncate">{t.filename}</div>
             {active && pct > 0 && (
               <div className="mt-1.5 h-[3px] rounded-full bg-[rgba(59,130,246,0.08)]">
                 <div className="h-full bg-[#3b82f6] rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -106,14 +106,14 @@ export default function DownloadsPage() {
       header: "Size",
       width: "100px",
       sortable: true,
-      render: (t) => <span className="text-[14px] text-[#94a3b8]">{formatBytes(t.total_bytes)}</span>,
+      render: (t) => <span className="text-[14px] text-[var(--theme-text-secondary)]">{formatBytes(t.total_bytes)}</span>,
     },
     {
       key: "speed",
       header: "Speed",
       width: "100px",
       render: (t) => (
-        <span className="text-[13px] text-[#64748b]">
+        <span className="text-[13px] text-[var(--theme-text-muted)]">
           {isActive(t.status) && t.speed > 0 ? formatSpeed(t.speed) : "--"}
         </span>
       ),
@@ -155,8 +155,8 @@ export default function DownloadsPage() {
                 e.stopPropagation();
                 setContextMenu({ x: e.clientX, y: e.clientY, taskId: t.id });
               }}
-              className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[#64748b]"
-              style={{ background: "rgba(255,255,255,0.04)" }}
+              className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[var(--theme-text-muted)]"
+              style={{ background: "var(--theme-selected)" }}
             >
               ···
             </button>
@@ -202,16 +202,16 @@ export default function DownloadsPage() {
           return (
             <>
               {/* Header */}
-              <div className="px-6 py-5 border-b border-[rgba(255,255,255,0.06)] flex justify-between items-start gap-3">
+              <div className="px-6 py-5 border-b border-[var(--theme-border)] flex justify-between items-start gap-3">
                 <div className="min-w-0">
-                  <h3 className="text-[18px] font-bold text-[#f1f5f9] leading-snug break-words">
+                  <h3 className="text-[18px] font-bold text-[var(--theme-text-primary)] leading-snug break-words">
                     {task.filename}
                   </h3>
                 </div>
                 <button
                   onClick={() => setSelectedId(null)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[#64748b] hover:text-[#f1f5f9] shrink-0"
-                  style={{ background: "rgba(255,255,255,0.04)" }}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] shrink-0"
+                  style={{ background: "var(--theme-selected)" }}
                 >
                   ×
                 </button>
@@ -228,21 +228,21 @@ export default function DownloadsPage() {
                       <div className="h-full rounded-full bg-[#3b82f6] transition-all duration-300" style={{ width: `${Math.min(pct, 100)}%` }} />
                     </div>
                     <div className="grid grid-cols-2 gap-2.5">
-                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
-                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Speed</div>
-                        <div className="text-[15px] text-[#f1f5f9] font-medium">{task.speed > 0 ? formatSpeed(task.speed) : "--"}</div>
+                      <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Speed</div>
+                        <div className="text-[15px] text-[var(--theme-text-primary)] font-medium">{task.speed > 0 ? formatSpeed(task.speed) : "--"}</div>
                       </div>
-                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
-                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">ETA</div>
-                        <div className="text-[15px] text-[#f1f5f9] font-medium">{formatEta(task.total_bytes, task.downloaded_bytes, task.speed)}</div>
+                      <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">ETA</div>
+                        <div className="text-[15px] text-[var(--theme-text-primary)] font-medium">{formatEta(task.total_bytes, task.downloaded_bytes, task.speed)}</div>
                       </div>
-                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
-                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Downloaded</div>
-                        <div className="text-[15px] text-[#f1f5f9] font-medium">{formatBytes(task.downloaded_bytes)} <span className="text-[#475569]">of</span> {formatBytes(task.total_bytes)}</div>
+                      <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Downloaded</div>
+                        <div className="text-[15px] text-[var(--theme-text-primary)] font-medium">{formatBytes(task.downloaded_bytes)} <span className="text-[var(--theme-text-muted)]">of</span> {formatBytes(task.total_bytes)}</div>
                       </div>
-                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
-                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Destination</div>
-                        <div className="text-[14px] text-[#f1f5f9] font-medium truncate">{task.destination || "--"}</div>
+                      <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Destination</div>
+                        <div className="text-[14px] text-[var(--theme-text-primary)] font-medium truncate">{task.destination || "--"}</div>
                       </div>
                     </div>
                   </>
@@ -252,9 +252,9 @@ export default function DownloadsPage() {
                   <div className="flex flex-col gap-3">
                     <p className="text-[#ef4444] text-[15px]">{getDownloadStatusText(task.status)}</p>
                     {task.destination && (
-                      <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
-                        <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Destination</div>
-                        <div className="text-[15px] text-[#f1f5f9] font-medium break-all">{task.destination}</div>
+                      <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
+                        <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Destination</div>
+                        <div className="text-[15px] text-[var(--theme-text-primary)] font-medium break-all">{task.destination}</div>
                       </div>
                     )}
                   </div>
@@ -262,7 +262,7 @@ export default function DownloadsPage() {
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 border-t border-[rgba(255,255,255,0.06)] flex gap-2.5">
+              <div className="px-6 py-4 border-t border-[var(--theme-border)] flex gap-2.5">
                 {active && (
                   <button
                     onClick={() => handleCancel(task.id)}
@@ -284,7 +284,7 @@ export default function DownloadsPage() {
         const menuActive = menuTask ? isActive(menuTask.status) : false;
         return (
           <div
-            className="fixed bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-lg py-1.5 w-52 z-[60] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+            className="fixed bg-[var(--theme-bg-surface)] border border-[var(--theme-border)] rounded-lg py-1.5 w-52 z-[60] shadow-[0_8px_32px_var(--theme-shadow)]"
             style={{
               left: Math.min(contextMenu.x, window.innerWidth - 240),
               top: Math.min(contextMenu.y, window.innerHeight - 120),
@@ -293,14 +293,14 @@ export default function DownloadsPage() {
           >
             {menuActive ? (
               <button
-                className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
                 onClick={() => { setContextMenu(null); handleCancel(contextMenu.taskId); }}
               >
                 Cancel
               </button>
             ) : (
               <button
-                className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
                 onClick={() => { setContextMenu(null); /* hide from list client-side */ }}
               >
                 Remove

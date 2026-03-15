@@ -173,13 +173,13 @@ export default function SearchPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Search input */}
-      <div className="flex items-center gap-4 px-8 py-6 border-b border-[rgba(255,255,255,0.06)] shrink-0" style={{ paddingRight: "80px" }}>
+      <div className="flex items-center gap-4 px-8 py-6 border-b border-[var(--theme-border)] shrink-0" style={{ paddingRight: "80px" }}>
         <svg
           width="24"
           height="24"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#475569"
+          stroke="var(--theme-text-muted)"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -195,18 +195,18 @@ export default function SearchPage() {
           onChange={(e) => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Search torrents or paste magnet link..."
-          className="text-[20px] text-[#f1f5f9] bg-transparent flex-1 outline-none placeholder:text-[#374151]"
+          className="text-[20px] text-[var(--theme-text-primary)] bg-transparent flex-1 outline-none placeholder:text-[var(--theme-text-ghost)]"
         />
       </div>
 
       {/* Mode tabs */}
-      <div className="flex gap-2 px-8 py-3 border-b border-[rgba(255,255,255,0.04)] shrink-0">
+      <div className="flex gap-2 px-8 py-3 border-b border-[var(--theme-border-subtle)] shrink-0">
         <button
           onClick={() => setMode("search")}
           className={`px-5 py-2.5 rounded-lg text-[15px] font-medium cursor-pointer transition-colors ${
             mode === "search"
               ? "bg-[rgba(16,185,129,0.1)] text-[#10b981]"
-              : "text-[#475569] hover:text-[#94a3b8] hover:bg-[rgba(255,255,255,0.03)]"
+              : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)] hover:bg-[var(--theme-hover)]"
           }`}
         >
           Search Trackers
@@ -216,7 +216,7 @@ export default function SearchPage() {
           className={`px-5 py-2.5 rounded-lg text-[15px] font-medium cursor-pointer transition-colors ${
             mode === "local"
               ? "bg-[rgba(16,185,129,0.1)] text-[#10b981]"
-              : "text-[#475569] hover:text-[#94a3b8] hover:bg-[rgba(255,255,255,0.03)]"
+              : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)] hover:bg-[var(--theme-hover)]"
           }`}
         >
           My Torrents
@@ -253,7 +253,7 @@ export default function SearchPage() {
               height="48"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#1e293b"
+              stroke="var(--theme-text-faint)"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -262,14 +262,14 @@ export default function SearchPage() {
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            <span className="text-[#374151] text-[18px]">Search trackers for torrents</span>
-            <span className="text-[#1e293b] text-[15px] mt-2">or paste a magnet link to add directly</span>
+            <span className="text-[var(--theme-text-ghost)] text-[18px]">Search trackers for torrents</span>
+            <span className="text-[var(--theme-text-faint)] text-[15px] mt-2">or paste a magnet link to add directly</span>
           </div>
         )}
 
         {!loading && !error && query.trim() !== "" && displayResults.length === 0 && (
           <div className="flex items-center justify-center py-32">
-            <span className="text-[#475569] text-[18px]">No results found</span>
+            <span className="text-[var(--theme-text-muted)] text-[18px]">No results found</span>
           </div>
         )}
 
@@ -308,18 +308,18 @@ export default function SearchPage() {
                   onClick={() => !isAdding && handleAddTorrent(result)}
                   className={`flex items-center gap-5 px-8 py-5 cursor-pointer transition-colors ${
                     index === selectedIndex
-                      ? "bg-[rgba(255,255,255,0.04)]"
-                      : "hover:bg-[rgba(255,255,255,0.02)]"
+                      ? "bg-[var(--theme-selected)]"
+                      : "hover:bg-[var(--theme-hover)]"
                   }`}
                   style={{ paddingRight: "80px" }}
                 >
-                  <span className="text-[16px] text-[#f1f5f9] truncate flex-1">
+                  <span className="text-[16px] text-[var(--theme-text-primary)] truncate flex-1">
                     {result.title}
                   </span>
                   <span className="text-[13px] bg-[rgba(16,185,129,0.08)] text-[#10b981] rounded-md px-3 py-1 shrink-0 font-medium">
                     {result.source}
                   </span>
-                  <span className="text-[15px] text-[#475569] shrink-0">
+                  <span className="text-[15px] text-[var(--theme-text-muted)] shrink-0">
                     {result.size_display}
                   </span>
                   <span className={`text-[15px] ${seederColor} shrink-0 font-medium`}>
@@ -335,15 +335,15 @@ export default function SearchPage() {
                   onClick={() => handleSelectTorrent(torrent.id)}
                   className={`flex items-center gap-5 px-8 py-5 cursor-pointer transition-colors ${
                     index === selectedIndex
-                      ? "bg-[rgba(255,255,255,0.04)]"
-                      : "hover:bg-[rgba(255,255,255,0.02)]"
+                      ? "bg-[var(--theme-selected)]"
+                      : "hover:bg-[var(--theme-hover)]"
                   }`}
                   style={{ paddingRight: "80px" }}
                 >
-                  <span className="text-[16px] text-[#f1f5f9] truncate flex-1">
+                  <span className="text-[16px] text-[var(--theme-text-primary)] truncate flex-1">
                     {torrent.filename}
                   </span>
-                  <span className="text-[15px] text-[#475569] shrink-0">
+                  <span className="text-[15px] text-[var(--theme-text-muted)] shrink-0">
                     {formatBytes(torrent.bytes)}
                   </span>
                   <span className="text-[13px] bg-[rgba(16,185,129,0.08)] text-[#10b981] rounded-md px-3 py-1 shrink-0 font-medium">
@@ -367,17 +367,17 @@ export default function SearchPage() {
       </div>
 
       {/* Footer hint */}
-      <div className="px-8 py-3 border-t border-[rgba(255,255,255,0.04)] flex items-center gap-5 shrink-0">
-        <span className="text-[13px] text-[#1e293b]">
-          <kbd className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] rounded px-1.5 py-0.5 mx-0.5">Tab</kbd>
+      <div className="px-8 py-3 border-t border-[var(--theme-border-subtle)] flex items-center gap-5 shrink-0">
+        <span className="text-[13px] text-[var(--theme-text-faint)]">
+          <kbd className="bg-[var(--theme-selected)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 mx-0.5">Tab</kbd>
           {" "}switch mode
         </span>
-        <span className="text-[13px] text-[#1e293b]">
-          <kbd className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] rounded px-1.5 py-0.5 mx-0.5">↑↓</kbd>
+        <span className="text-[13px] text-[var(--theme-text-faint)]">
+          <kbd className="bg-[var(--theme-selected)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 mx-0.5">↑↓</kbd>
           {" "}navigate
         </span>
-        <span className="text-[13px] text-[#1e293b]">
-          <kbd className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] rounded px-1.5 py-0.5 mx-0.5">Enter</kbd>
+        <span className="text-[13px] text-[var(--theme-text-faint)]">
+          <kbd className="bg-[var(--theme-selected)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 mx-0.5">Enter</kbd>
           {" "}select
         </span>
       </div>

@@ -113,8 +113,8 @@ export default function Sidebar({
     <aside
       className="w-[200px] h-full flex flex-col shrink-0"
       style={{
-        backgroundColor: "#07070d",
-        borderRight: "1px solid rgba(255,255,255,0.06)",
+        backgroundColor: "var(--theme-bg-sidebar)",
+        borderRight: "1px solid var(--theme-border)",
       }}
     >
       {/* Logo */}
@@ -125,14 +125,14 @@ export default function Sidebar({
         >
           <span className="text-white font-bold text-[15px] leading-none">D</span>
         </div>
-        <span className="text-[#f1f5f9] text-[15px] font-semibold">Debrid</span>
+        <span className="text-[var(--theme-text-primary)] text-[15px] font-semibold">Debrid</span>
       </div>
 
       {/* Nav sections */}
       <nav className="flex-1 px-3 overflow-y-auto">
         {navItems.map((section) => (
           <div key={section.section} className="mb-6">
-            <div className="text-[11px] text-[#475569] uppercase tracking-[1px] px-2 mb-2">
+            <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[1px] px-2 mb-2">
               {section.section}
             </div>
             {section.items.map((item) => {
@@ -149,12 +149,12 @@ export default function Sidebar({
                     backgroundColor: isActive
                       ? "var(--accent-bg)0.08)"
                       : "transparent",
-                    color: isActive ? "var(--accent)" : "#64748b",
+                    color: isActive ? "var(--accent)" : "var(--theme-text-muted)",
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
                       (e.currentTarget as HTMLElement).style.backgroundColor =
-                        "rgba(255,255,255,0.03)";
+                        "var(--theme-hover)";
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -174,7 +174,7 @@ export default function Sidebar({
       </nav>
 
       {/* User section */}
-      <div className="relative px-5 py-3.5 border-t border-[rgba(255,255,255,0.04)]">
+      <div className="relative px-5 py-3.5 border-t border-[var(--theme-border-subtle)]">
         <button
           ref={avatarRef}
           onClick={() => setPopoverOpen((prev) => !prev)}
@@ -199,10 +199,10 @@ export default function Sidebar({
             </div>
           )}
           <div className="min-w-0">
-            <div className="text-[14px] text-[#e2e8f0] font-medium truncate">
+            <div className="text-[14px] text-[var(--theme-text-primary)] font-medium truncate">
               {user?.username}
             </div>
-            <div className="text-[12px] text-[#475569]">
+            <div className="text-[12px] text-[var(--theme-text-muted)]">
               {premiumDays} days left
             </div>
           </div>
@@ -216,16 +216,16 @@ export default function Sidebar({
               bottom: "100%",
               left: "12px",
               marginBottom: "8px",
-              backgroundColor: "#0f0f18",
-              border: "1px solid rgba(255,255,255,0.06)",
+              backgroundColor: "var(--theme-bg-surface)",
+              border: "1px solid var(--theme-border)",
               zIndex: 50,
             }}
           >
-            <p className="text-[15px] text-[#f1f5f9] font-medium truncate">
+            <p className="text-[15px] text-[var(--theme-text-primary)] font-medium truncate">
               {user?.username}
             </p>
             {user?.expiration && (
-              <p className="text-[13px] text-[#475569]">
+              <p className="text-[13px] text-[var(--theme-text-muted)]">
                 Premium until{" "}
                 {new Date(user.expiration).toLocaleDateString()}
               </p>

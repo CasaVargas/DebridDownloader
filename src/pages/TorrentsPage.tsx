@@ -223,7 +223,7 @@ export default function TorrentsPage() {
       width: "1fr",
       sortable: true,
       render: (t) => (
-        <div className="text-[15px] font-medium text-[#f1f5f9] truncate">{t.filename}</div>
+        <div className="text-[15px] font-medium text-[var(--theme-text-primary)] truncate">{t.filename}</div>
       ),
     },
     {
@@ -231,14 +231,14 @@ export default function TorrentsPage() {
       header: "Size",
       width: "100px",
       sortable: true,
-      render: (t) => <span className="text-[14px] text-[#94a3b8]">{formatBytes(t.bytes)}</span>,
+      render: (t) => <span className="text-[14px] text-[var(--theme-text-secondary)]">{formatBytes(t.bytes)}</span>,
     },
     {
       key: "added",
       header: "Added",
       width: "110px",
       sortable: true,
-      render: (t) => <span className="text-[13px] text-[#64748b]">{formatRelativeTime(t.added)}</span>,
+      render: (t) => <span className="text-[13px] text-[var(--theme-text-muted)]">{formatRelativeTime(t.added)}</span>,
     },
     {
       key: "status",
@@ -275,8 +275,8 @@ export default function TorrentsPage() {
               e.stopPropagation();
               setContextMenu({ x: e.clientX, y: e.clientY, torrentId: t.id });
             }}
-            className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[#64748b]"
-            style={{ background: "rgba(255,255,255,0.04)" }}
+            className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[var(--theme-text-muted)]"
+            style={{ background: "var(--theme-selected)" }}
             title="More"
           >
             ···
@@ -337,19 +337,19 @@ export default function TorrentsPage() {
         ) : detailInfo ? (
           <>
             {/* Header */}
-            <div className="px-6 py-5 border-b border-[rgba(255,255,255,0.06)] flex justify-between items-start gap-3">
+            <div className="px-6 py-5 border-b border-[var(--theme-border)] flex justify-between items-start gap-3">
               <div className="min-w-0">
                 <span className={`text-[12px] px-2.5 py-1 rounded-full font-medium inline-block mb-2 ${statusBadgeClass(detailInfo.status)}`}>
                   {torrentStatusLabel(detailInfo.status)}
                 </span>
-                <h3 className="text-[18px] font-bold text-[#f1f5f9] leading-snug break-words">
+                <h3 className="text-[18px] font-bold text-[var(--theme-text-primary)] leading-snug break-words">
                   {detailInfo.filename}
                 </h3>
               </div>
               <button
                 onClick={() => setSelectedId(null)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#64748b] hover:text-[#f1f5f9] shrink-0"
-                style={{ background: "rgba(255,255,255,0.04)" }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] shrink-0"
+                style={{ background: "var(--theme-selected)" }}
               >
                 ×
               </button>
@@ -361,35 +361,35 @@ export default function TorrentsPage() {
 
               {/* Info grid */}
               <div className="grid grid-cols-2 gap-2.5 mb-5">
-                <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
-                  <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Size</div>
-                  <div className="text-[17px] text-[#f1f5f9] font-semibold">{formatBytes(detailInfo.bytes)}</div>
+                <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
+                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Size</div>
+                  <div className="text-[17px] text-[var(--theme-text-primary)] font-semibold">{formatBytes(detailInfo.bytes)}</div>
                 </div>
-                <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
-                  <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Added</div>
-                  <div className="text-[15px] text-[#f1f5f9] font-medium">{new Date(detailInfo.added).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
+                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Added</div>
+                  <div className="text-[15px] text-[var(--theme-text-primary)] font-medium">{new Date(detailInfo.added).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
                 </div>
-                <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
-                  <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Links</div>
-                  <div className="text-[17px] text-[#f1f5f9] font-semibold">{detailInfo.links.length}</div>
+                <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
+                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Links</div>
+                  <div className="text-[17px] text-[var(--theme-text-primary)] font-semibold">{detailInfo.links.length}</div>
                 </div>
-                <div className="bg-[rgba(255,255,255,0.03)] rounded-[10px] p-3.5">
-                  <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-1.5">Hash</div>
-                  <div className="text-[12px] text-[#94a3b8] font-mono truncate">{detailInfo.hash}</div>
+                <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
+                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Hash</div>
+                  <div className="text-[12px] text-[var(--theme-text-secondary)] font-mono truncate">{detailInfo.hash}</div>
                 </div>
               </div>
 
               {/* Files */}
               {detailInfo.files.length > 0 && (
                 <div>
-                  <div className="text-[11px] text-[#475569] uppercase tracking-[0.5px] mb-2.5">
+                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-2.5">
                     Files ({detailInfo.files.length})
                   </div>
-                  <div className="rounded-[10px] border border-[rgba(255,255,255,0.04)] overflow-hidden max-h-64 overflow-y-auto">
+                  <div className="rounded-[10px] border border-[var(--theme-border-subtle)] overflow-hidden max-h-64 overflow-y-auto">
                     {detailInfo.files.map((file) => (
                       <label
                         key={file.id}
-                        className="flex items-center gap-2.5 px-3.5 py-3 cursor-pointer border-b border-[rgba(255,255,255,0.04)] last:border-b-0 hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                        className="flex items-center gap-2.5 px-3.5 py-3 cursor-pointer border-b border-[var(--theme-border-subtle)] last:border-b-0 hover:bg-[var(--theme-hover)] transition-colors"
                       >
                         <input
                           type="checkbox"
@@ -404,10 +404,10 @@ export default function TorrentsPage() {
                           }}
                           className="accent-[#10b981]"
                         />
-                        <span className="flex-1 text-[14px] text-[#f1f5f9] truncate min-w-0">
+                        <span className="flex-1 text-[14px] text-[var(--theme-text-primary)] truncate min-w-0">
                           {file.path.startsWith("/") ? file.path.slice(1) : file.path}
                         </span>
-                        <span className="text-[12px] text-[#475569] shrink-0">
+                        <span className="text-[12px] text-[var(--theme-text-muted)] shrink-0">
                           {formatBytes(file.bytes)}
                         </span>
                       </label>
@@ -418,7 +418,7 @@ export default function TorrentsPage() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-[rgba(255,255,255,0.06)] flex gap-2.5">
+            <div className="px-6 py-4 border-t border-[var(--theme-border)] flex gap-2.5">
               {detailInfo.status === "waiting_files_selection" && (
                 <button
                   onClick={handleSelectFiles}
@@ -466,7 +466,7 @@ export default function TorrentsPage() {
       {/* Context menu */}
       {contextMenu && (
         <div
-          className="fixed bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-lg py-1.5 w-52 z-[60] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+          className="fixed bg-[var(--theme-bg-surface)] border border-[var(--theme-border)] rounded-lg py-1.5 w-52 z-[60] shadow-[0_8px_32px_var(--theme-shadow)]"
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 220),
             top: Math.min(contextMenu.y, window.innerHeight - 160),
@@ -474,19 +474,19 @@ export default function TorrentsPage() {
           onMouseDown={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full text-left px-4 py-2.5 text-[15px] text-[#f1f5f9] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+            className="w-full text-left px-4 py-2.5 text-[15px] text-[var(--theme-text-primary)] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
             onClick={() => { const id = contextMenu.torrentId; setContextMenu(null); handleDownloadTorrent(id); }}
           >
             Download
           </button>
           <button
-            className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+            className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
             onClick={() => { const id = contextMenu.torrentId; setContextMenu(null); if (window.confirm("Delete this torrent?")) handleDelete(id); }}
           >
             Delete
           </button>
           <button
-            className="w-full text-left px-4 py-2.5 text-[15px] text-[#f1f5f9] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+            className="w-full text-left px-4 py-2.5 text-[15px] text-[var(--theme-text-primary)] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
             onClick={() => {
               const torrent = torrents.find((t) => t.id === contextMenu.torrentId);
               setContextMenu(null);

@@ -28,6 +28,27 @@
   --accent: #10b981;
   --accent-hover: #34d399;
   --accent-bg: rgba(16,185,129,;
+
+  /* Theme defaults (dark) */
+  --theme-bg: #08080f;
+  --theme-bg-content: #0a0a12;
+  --theme-bg-sidebar: #07070d;
+  --theme-bg-surface: #0f0f18;
+  --theme-bg-input: #08080f;
+  --theme-border: rgba(255,255,255,0.06);
+  --theme-border-subtle: rgba(255,255,255,0.04);
+  --theme-border-hover: rgba(255,255,255,0.1);
+  --theme-hover: rgba(255,255,255,0.03);
+  --theme-selected: rgba(255,255,255,0.04);
+  --theme-text-primary: #f1f5f9;
+  --theme-text-secondary: #94a3b8;
+  --theme-text-muted: #475569;
+  --theme-text-ghost: #374151;
+  --theme-text-faint: #1e293b;
+  --theme-shadow: rgba(0,0,0,0.5);
+  --theme-scrim: rgba(0,0,0,0.4);
+  --theme-scrollbar: #1e293b;
+  --theme-scrollbar-hover: #334155;
 }
 
 * {
@@ -37,8 +58,8 @@
 }
 
 body {
-  background: #08080f;
-  color: #f1f5f9;
+  background: var(--theme-bg);
+  color: var(--theme-text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -56,16 +77,16 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--theme-scrollbar);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: var(--theme-scrollbar-hover);
 }
 
 ::selection {
-  background: rgba(16, 185, 129, 0.3);
+  background: var(--accent-bg)0.3);
 }
 
 /* Custom checkbox */
@@ -73,9 +94,9 @@ input[type="checkbox"] {
   appearance: none;
   width: 20px;
   height: 20px;
-  border: 2px solid #374151;
+  border: 2px solid var(--theme-text-ghost);
   border-radius: 5px;
-  background: #08080f;
+  background: var(--theme-bg-input);
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
@@ -83,8 +104,8 @@ input[type="checkbox"] {
 }
 
 input[type="checkbox"]:checked {
-  background: #10b981;
-  border-color: #10b981;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 input[type="checkbox"]:checked::after {
@@ -94,13 +115,13 @@ input[type="checkbox"]:checked::after {
   top: 1px;
   width: 6px;
   height: 10px;
-  border: solid #000;
+  border: solid #fff;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
 
 input[type="checkbox"]:hover {
-  border-color: #10b981;
+  border-color: var(--accent);
 }
 
 /* Select styling */

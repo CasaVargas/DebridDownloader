@@ -90,8 +90,8 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-[#08080f]">
-      <div className="w-full max-w-lg px-12 py-14 bg-[#0f0f18] border border-[rgba(255,255,255,0.06)] rounded-2xl">
+    <div className="flex items-center justify-center h-screen bg-[var(--theme-bg)]">
+      <div className="w-full max-w-lg px-12 py-14 bg-[var(--theme-bg-surface)] border border-[var(--theme-border)] rounded-2xl">
         {/* Logo + Header */}
         <div className="flex flex-col items-center mb-12 gap-4">
           <div className="flex items-center gap-3">
@@ -101,22 +101,22 @@ export default function AuthPage() {
             >
               <span className="text-white text-[18px] font-bold">D</span>
             </div>
-            <span className="text-[20px] font-semibold text-[#f1f5f9]">
+            <span className="text-[20px] font-semibold text-[var(--theme-text-primary)]">
               DebridDownloader
             </span>
           </div>
-          <p className="text-[#94a3b8] text-[15px]">
+          <p className="text-[var(--theme-text-secondary)] text-[15px]">
             Connect your Real-Debrid account
           </p>
         </div>
 
         {/* Mode toggle */}
-        <div className="flex mb-10 bg-[#08080f] rounded-lg p-1.5">
+        <div className="flex mb-10 bg-[var(--theme-bg)] rounded-lg p-1.5">
           <button
             className={`flex-1 py-2.5 text-[15px] rounded-lg transition-colors ${
               mode === "token"
                 ? "bg-[rgba(16,185,129,0.12)] text-[#10b981] border border-[rgba(16,185,129,0.2)] font-semibold"
-                : "text-[#475569] hover:text-[#94a3b8]"
+                : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)]"
             }`}
             onClick={() => {
               setMode("token");
@@ -131,7 +131,7 @@ export default function AuthPage() {
             className={`flex-1 py-2.5 text-[15px] rounded-lg transition-colors ${
               mode === "oauth"
                 ? "bg-[rgba(16,185,129,0.12)] text-[#10b981] border border-[rgba(16,185,129,0.2)] font-semibold"
-                : "text-[#475569] hover:text-[#94a3b8]"
+                : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)]"
             }`}
             onClick={() => {
               setMode("oauth");
@@ -144,7 +144,7 @@ export default function AuthPage() {
 
         {mode === "token" ? (
           <div>
-            <label className="block text-[15px] text-[#94a3b8] mb-3">
+            <label className="block text-[15px] text-[var(--theme-text-secondary)] mb-3">
               API Token
             </label>
             <input
@@ -153,9 +153,9 @@ export default function AuthPage() {
               onChange={(e) => setToken(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleTokenLogin()}
               placeholder="Paste your token from real-debrid.com/apitoken"
-              className="w-full px-4 py-3.5 bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg text-[#f1f5f9] placeholder-[#374151] text-[15px] focus:outline-none focus:border-[rgba(16,185,129,0.3)] transition-all duration-150"
+              className="w-full px-4 py-3.5 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg text-[var(--theme-text-primary)] placeholder-[var(--theme-text-ghost)] text-[15px] focus:outline-none focus:border-[rgba(16,185,129,0.3)] transition-all duration-150"
             />
-            <p className="text-[14px] text-[#475569] mt-3">
+            <p className="text-[14px] text-[var(--theme-text-muted)] mt-3">
               Get your token at{" "}
               <span className="text-[#10b981]">real-debrid.com/apitoken</span>
             </p>
@@ -170,15 +170,15 @@ export default function AuthPage() {
           </div>
         ) : (
           <div>
-            <p className="text-[15px] text-[#94a3b8] mb-7">
+            <p className="text-[15px] text-[var(--theme-text-secondary)] mb-7">
               Authenticate via Real-Debrid's device authorization. A browser
               will open for you to approve access.
             </p>
 
             {/* User code display */}
             {userCode && (
-              <div className="mb-7 p-6 bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-xl text-center">
-                <p className="text-[14px] text-[#475569] mb-3">
+              <div className="mb-7 p-6 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl text-center">
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-3">
                   Enter this code on the Real-Debrid page:
                 </p>
                 <p className="text-[#10b981] text-3xl font-mono tracking-widest">

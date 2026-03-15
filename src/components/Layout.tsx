@@ -65,14 +65,14 @@ export default function Layout() {
 
   return (
     <DownloadTasksProvider>
-      <div className="flex h-screen overflow-hidden bg-[#08080f]">
+      <div className="flex h-screen overflow-hidden bg-[var(--theme-bg)]">
         <Sidebar
           activeView={activeView}
           onNavigate={handleNavigate}
           onSearchOpen={() => navigate("/search")}
           onSettingsOpen={() => navigate("/settings")}
         />
-        <main className="flex-1 overflow-hidden flex flex-col" style={{ background: "#0a0a12" }}>
+        <main className="flex-1 overflow-hidden flex flex-col" style={{ background: "var(--theme-bg-content)" }}>
           <Outlet />
         </main>
       </div>
