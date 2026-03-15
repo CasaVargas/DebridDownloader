@@ -2,8 +2,10 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import Sidebar from "./Sidebar";
 import { DownloadTasksProvider } from "../hooks/useDownloadTasks";
+import { useAccentColor } from "../hooks/useAccentColor";
 
 export default function Layout() {
+  useAccentColor();
   const navigate = useNavigate();
   const location = useLocation();
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { getSettings, updateSettings } from "../api/settings";
 import type { AppSettings } from "../types";
 import { open } from "@tauri-apps/plugin-dialog";
+import { ACCENT_COLORS } from "../hooks/useAccentColor";
 
 interface FrontendSettings {
   auto_start_downloads: boolean;
@@ -63,6 +64,9 @@ export default function SettingsPage() {
     const next = { ...frontend, ...patch };
     setFrontend(next);
     saveFrontendSettings(next);
+    if (patch.accent_color) {
+      window.dispatchEvent(new Event("accent-changed"));
+    }
   }
 
   async function handleBrowse() {
@@ -81,34 +85,36 @@ export default function SettingsPage() {
     );
   }
 
+  const accentColor = ACCENT_COLORS[frontend.accent_color]?.primary ?? "#10b981";
+
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-8 py-6" style={{ paddingRight: "80px", maxWidth: "800px" }}>
-        <h2 className="text-[22px] font-bold text-[#f1f5f9] tracking-[-0.3px] mb-1">
+      <div className="px-10 py-8" style={{ paddingRight: "100px", maxWidth: "860px" }}>
+        <h2 className="text-[24px] font-bold text-[#f1f5f9] tracking-[-0.3px] mb-2">
           Settings
         </h2>
-        <p className="text-[13px] text-[#475569] mb-8">
+        <p className="text-[14px] text-[#475569] mb-12">
           Configure downloads, behavior, and appearance
         </p>
 
         {settings && (
           <>
             {/* ── Downloads ── */}
-            <div className="mb-10">
-              <h3 className="text-[13px] text-[#475569] uppercase tracking-[1px] mb-5 flex items-center gap-2">
+            <section className="mb-14">
+              <h3 className="text-[12px] text-[#475569] uppercase tracking-[1.5px] mb-7 pb-3 border-b border-[rgba(255,255,255,0.04)]">
                 Downloads
               </h3>
 
               {/* Download folder */}
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[15px] text-[#94a3b8]">Download Folder</span>
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[15px] text-[#f1f5f9]">Download Folder</span>
                   {savedField === "download_folder" && (
-                    <span className="text-[#10b981] text-[13px]">Saved</span>
+                    <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-3.5 text-[15px] truncate flex-1 min-w-0">
+                  <div className="bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-4 text-[15px] truncate flex-1 min-w-0">
                     {settings.download_folder ? (
                       <span className="text-[#94a3b8]">{settings.download_folder}</span>
                     ) : (
@@ -117,7 +123,7 @@ export default function SettingsPage() {
                   </div>
                   <button
                     onClick={handleBrowse}
-                    className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[rgba(255,255,255,0.1)] rounded-lg px-5 py-3 text-[14px] font-medium transition-colors shrink-0"
+                    className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[rgba(255,255,255,0.1)] rounded-lg px-6 py-3.5 text-[14px] font-medium transition-colors shrink-0"
                   >
                     Browse
                   </button>
@@ -125,11 +131,11 @@ export default function SettingsPage() {
               </div>
 
               {/* Max concurrent */}
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[15px] text-[#94a3b8]">Max Concurrent Downloads</span>
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[15px] text-[#f1f5f9]">Max Concurrent Downloads</span>
                   {savedField === "max_concurrent_downloads" && (
-                    <span className="text-[#10b981] text-[13px]">Saved</span>
+                    <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
                   )}
                 </div>
                 <select
@@ -138,7 +144,7 @@ export default function SettingsPage() {
                     await applyChange({ max_concurrent_downloads: Number(e.target.value) });
                     markSaved("max_concurrent_downloads");
                   }}
-                  className="w-full bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-3.5 text-[15px] text-[#f1f5f9] focus:outline-none focus:border-[rgba(16,185,129,0.3)] transition-colors"
+                  className="w-full bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-4 text-[15px] text-[#f1f5f9] focus:outline-none transition-colors"
                 >
                   {[1, 2, 3, 4, 5, 8, 10].map((n) => (
                     <option key={n} value={n}>
@@ -154,6 +160,7 @@ export default function SettingsPage() {
                 description="Organize downloads into folders named after each torrent"
                 checked={settings.create_torrent_subfolders}
                 saved={savedField === "create_torrent_subfolders"}
+                accentColor={accentColor}
                 onChange={async (v) => {
                   await applyChange({ create_torrent_subfolders: v });
                   markSaved("create_torrent_subfolders");
@@ -165,13 +172,14 @@ export default function SettingsPage() {
                 label="Auto-start downloads"
                 description="Automatically download torrents when they finish processing on Real-Debrid"
                 checked={frontend.auto_start_downloads}
+                accentColor={accentColor}
                 onChange={(v) => applyFrontend({ auto_start_downloads: v })}
               />
-            </div>
+            </section>
 
             {/* ── Behavior ── */}
-            <div className="mb-10">
-              <h3 className="text-[13px] text-[#475569] uppercase tracking-[1px] mb-5">
+            <section className="mb-14">
+              <h3 className="text-[12px] text-[#475569] uppercase tracking-[1.5px] mb-7 pb-3 border-b border-[rgba(255,255,255,0.04)]">
                 Behavior
               </h3>
 
@@ -180,6 +188,7 @@ export default function SettingsPage() {
                 label="Launch at login"
                 description="Start DebridDownloader when you log in to your computer"
                 checked={frontend.launch_at_login}
+                accentColor={accentColor}
                 onChange={(v) => applyFrontend({ launch_at_login: v })}
               />
 
@@ -188,20 +197,21 @@ export default function SettingsPage() {
                 label="Notify when download completes"
                 description="Show a system notification when a file finishes downloading"
                 checked={frontend.notify_on_complete}
+                accentColor={accentColor}
                 onChange={(v) => applyFrontend({ notify_on_complete: v })}
               />
 
               {/* Default sort */}
-              <div className="mb-6">
-                <span className="text-[15px] text-[#f1f5f9] block mb-1">Default sort order</span>
-                <p className="text-[14px] text-[#475569] mb-3">
+              <div className="mb-8">
+                <span className="text-[15px] text-[#f1f5f9] block mb-1.5">Default sort order</span>
+                <p className="text-[14px] text-[#475569] mb-4">
                   How torrents are sorted when you open the app
                 </p>
-                <div className="flex gap-3">
+                <div className="flex gap-4">
                   <select
                     value={frontend.default_sort_key}
                     onChange={(e) => applyFrontend({ default_sort_key: e.target.value })}
-                    className="flex-1 bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-3.5 text-[15px] text-[#f1f5f9] focus:outline-none focus:border-[rgba(16,185,129,0.3)] transition-colors"
+                    className="flex-1 bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-4 text-[15px] text-[#f1f5f9] focus:outline-none transition-colors"
                   >
                     <option value="added">Date Added</option>
                     <option value="filename">Name</option>
@@ -210,74 +220,83 @@ export default function SettingsPage() {
                   <select
                     value={frontend.default_sort_direction}
                     onChange={(e) => applyFrontend({ default_sort_direction: e.target.value as "asc" | "desc" })}
-                    className="w-[160px] bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-3.5 text-[15px] text-[#f1f5f9] focus:outline-none focus:border-[rgba(16,185,129,0.3)] transition-colors"
+                    className="w-[180px] bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-lg p-4 text-[15px] text-[#f1f5f9] focus:outline-none transition-colors"
                   >
                     <option value="desc">Newest first</option>
                     <option value="asc">Oldest first</option>
                   </select>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* ── Appearance ── */}
-            <div className="mb-10">
-              <h3 className="text-[13px] text-[#475569] uppercase tracking-[1px] mb-5">
+            <section className="mb-14">
+              <h3 className="text-[12px] text-[#475569] uppercase tracking-[1.5px] mb-7 pb-3 border-b border-[rgba(255,255,255,0.04)]">
                 Appearance
               </h3>
 
-              <div className="mb-6">
-                <span className="text-[15px] text-[#f1f5f9] block mb-1">Accent Color</span>
-                <p className="text-[14px] text-[#475569] mb-3">
+              <div className="mb-8">
+                <span className="text-[15px] text-[#f1f5f9] block mb-1.5">Accent Color</span>
+                <p className="text-[14px] text-[#475569] mb-5">
                   Highlight color used for active states and buttons
                 </p>
-                <div className="flex gap-3">
+                <div className="flex gap-4">
                   {[
-                    { id: "emerald", color: "#10b981", label: "Emerald" },
-                    { id: "blue", color: "#3b82f6", label: "Blue" },
-                    { id: "violet", color: "#8b5cf6", label: "Violet" },
-                    { id: "rose", color: "#f43f5e", label: "Rose" },
-                    { id: "amber", color: "#f59e0b", label: "Amber" },
-                    { id: "cyan", color: "#06b6d4", label: "Cyan" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      onClick={() => applyFrontend({ accent_color: opt.id })}
-                      className="flex flex-col items-center gap-2 p-3 rounded-xl transition-all"
-                      style={{
-                        background: frontend.accent_color === opt.id ? "rgba(255,255,255,0.04)" : "transparent",
-                        border: frontend.accent_color === opt.id ? `1px solid ${opt.color}40` : "1px solid transparent",
-                      }}
-                    >
-                      <div
-                        className="w-8 h-8 rounded-full"
+                    { id: "emerald", label: "Emerald" },
+                    { id: "blue", label: "Blue" },
+                    { id: "violet", label: "Violet" },
+                    { id: "rose", label: "Rose" },
+                    { id: "amber", label: "Amber" },
+                    { id: "cyan", label: "Cyan" },
+                  ].map((opt) => {
+                    const color = ACCENT_COLORS[opt.id]?.primary ?? "#10b981";
+                    const isSelected = frontend.accent_color === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => applyFrontend({ accent_color: opt.id })}
+                        className="flex flex-col items-center gap-3 p-4 rounded-xl transition-all"
                         style={{
-                          background: opt.color,
-                          boxShadow: frontend.accent_color === opt.id ? `0 0 12px ${opt.color}40` : "none",
+                          background: isSelected ? "rgba(255,255,255,0.04)" : "transparent",
+                          border: isSelected ? `2px solid ${color}` : "2px solid transparent",
                         }}
-                      />
-                      <span className="text-[12px] text-[#64748b]">{opt.label}</span>
-                    </button>
-                  ))}
+                      >
+                        <div
+                          className="w-10 h-10 rounded-full transition-shadow"
+                          style={{
+                            background: color,
+                            boxShadow: isSelected ? `0 0 20px ${color}50` : "none",
+                          }}
+                        />
+                        <span
+                          className="text-[13px] font-medium"
+                          style={{ color: isSelected ? color : "#64748b" }}
+                        >
+                          {opt.label}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* ── About ── */}
-            <div className="mb-10">
-              <h3 className="text-[13px] text-[#475569] uppercase tracking-[1px] mb-5">
+            <section className="mb-14">
+              <h3 className="text-[12px] text-[#475569] uppercase tracking-[1.5px] mb-7 pb-3 border-b border-[rgba(255,255,255,0.04)]">
                 About
               </h3>
-              <div className="bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-xl p-5">
-                <div className="flex items-center gap-3 mb-4">
+              <div className="bg-[#08080f] border border-[rgba(255,255,255,0.06)] rounded-xl p-6">
+                <div className="flex items-center gap-4 mb-4">
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+                    className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)` }}
                   >
-                    <span className="text-white font-bold text-[18px]">D</span>
+                    <span className="text-white font-bold text-[20px]">D</span>
                   </div>
                   <div>
-                    <div className="text-[16px] text-[#f1f5f9] font-semibold">DebridDownloader</div>
-                    <div className="text-[13px] text-[#475569]">Version 0.1.0</div>
+                    <div className="text-[17px] text-[#f1f5f9] font-semibold">DebridDownloader</div>
+                    <div className="text-[14px] text-[#475569]">Version 0.1.0</div>
                   </div>
                 </div>
                 <p className="text-[14px] text-[#475569] leading-relaxed">
@@ -285,7 +304,7 @@ export default function SettingsPage() {
                   Built with Tauri, React, and Rust.
                 </p>
               </div>
-            </div>
+            </section>
           </>
         )}
 
@@ -304,34 +323,37 @@ function ToggleRow({
   description,
   checked,
   saved,
+  accentColor,
   onChange,
 }: {
   label: string;
   description: string;
   checked: boolean;
   saved?: boolean;
+  accentColor: string;
   onChange: (value: boolean) => void;
 }) {
   return (
-    <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="mb-8 flex items-start justify-between gap-6">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-[15px] text-[#f1f5f9]">{label}</span>
-          {saved && <span className="text-[#10b981] text-[13px]">Saved</span>}
+          {saved && <span style={{ color: accentColor }} className="text-[13px]">Saved</span>}
         </div>
-        <p className="text-[14px] text-[#475569] mt-0.5">{description}</p>
+        <p className="text-[14px] text-[#475569] mt-1">{description}</p>
       </div>
       <button
         onClick={() => onChange(!checked)}
-        className="shrink-0 mt-0.5 w-11 h-6 rounded-full transition-colors duration-200 relative"
+        className="shrink-0 mt-0.5 w-12 h-7 rounded-full transition-colors duration-200 relative"
         style={{
-          backgroundColor: checked ? "#10b981" : "rgba(255,255,255,0.08)",
+          backgroundColor: checked ? accentColor : "rgba(255,255,255,0.08)",
         }}
       >
         <div
-          className="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all duration-200"
+          className="w-[22px] h-[22px] rounded-full bg-white absolute transition-all duration-200"
           style={{
-            left: checked ? "22px" : "2px",
+            top: "3px",
+            left: checked ? "25px" : "3px",
             boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
           }}
         />

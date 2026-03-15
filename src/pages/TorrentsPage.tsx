@@ -298,7 +298,7 @@ export default function TorrentsPage() {
           <button
             onClick={() => setShowAdd(true)}
             className="text-white rounded-lg px-8 py-3 text-[15px] font-semibold transition-colors shrink-0 whitespace-nowrap"
-            style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+            style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
           >
             + Add Torrent
           </button>
@@ -434,7 +434,7 @@ export default function TorrentsPage() {
                   onClick={handleDetailDownload}
                   disabled={downloading}
                   className="flex-1 py-3 rounded-[10px] text-white text-[15px] font-semibold disabled:opacity-40 transition-colors"
-                  style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+                  style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
                 >
                   {downloading ? "Starting..." : "Download"}
                 </button>

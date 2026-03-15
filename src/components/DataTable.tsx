@@ -51,13 +51,13 @@ export default function DataTable<T>({
   const sortArrow = (col: Column<T>) => {
     if (!col.sortable) return null;
     if (sortKey !== col.key) return <span style={{ color: "#374151" }}> ↕</span>;
-    return <span style={{ color: "#10b981" }}> {sortDirection === "asc" ? "↑" : "↓"}</span>;
+    return <span style={{ color: "var(--accent)" }}> {sortDirection === "asc" ? "↑" : "↓"}</span>;
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="w-6 h-6 border-2 border-[rgba(16,185,129,0.3)] border-t-[#10b981] rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-[rgba(16,185,129,0.3)] border-t-[var(--accent)] rounded-full animate-spin" />
       </div>
     );
   }
@@ -120,7 +120,7 @@ export default function DataTable<T>({
               borderBottom: "1px solid rgba(255,255,255,0.03)",
               background:
                 selectedId === id
-                  ? "rgba(16,185,129,0.04)"
+                  ? "var(--accent-bg)0.04)"
                   : undefined,
             }}
             onMouseEnter={(e) => {
@@ -132,7 +132,7 @@ export default function DataTable<T>({
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.background =
                 selectedId === id
-                  ? "rgba(16,185,129,0.04)"
+                  ? "var(--accent-bg)0.04)"
                   : "transparent";
             }}
           >

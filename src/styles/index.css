@@ -24,6 +24,12 @@
   --animate-slide-up: slide-up 0.2s ease-out both;
 }
 
+:root {
+  --accent: #10b981;
+  --accent-hover: #34d399;
+  --accent-bg: rgba(16,185,129,;
+}
+
 * {
   margin: 0;
   padding: 0;

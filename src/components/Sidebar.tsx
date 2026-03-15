@@ -121,7 +121,7 @@ export default function Sidebar({
       <div className="flex items-center gap-2.5 px-5 py-5">
         <div
           className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0"
-          style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+          style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
         >
           <span className="text-white font-bold text-[15px] leading-none">D</span>
         </div>
@@ -147,9 +147,9 @@ export default function Sidebar({
                     fontSize: "14px",
                     fontWeight: isActive ? 500 : 400,
                     backgroundColor: isActive
-                      ? "rgba(16,185,129,0.08)"
+                      ? "var(--accent-bg)0.08)"
                       : "transparent",
-                    color: isActive ? "#10b981" : "#64748b",
+                    color: isActive ? "var(--accent)" : "#64748b",
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {

@@ -97,7 +97,7 @@ export default function AuthPage() {
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+              style={{ background: "linear-gradient(135deg, var(--accent, #10b981), var(--accent, #10b981)cc)" }}
             >
               <span className="text-white text-[18px] font-bold">D</span>
             </div>
@@ -163,7 +163,7 @@ export default function AuthPage() {
               onClick={handleTokenLogin}
               disabled={loading}
               className="w-full mt-8 py-3.5 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 text-[15px]"
-              style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+              style={{ background: "linear-gradient(135deg, var(--accent, #10b981), var(--accent, #10b981)cc)" }}
             >
               {loading ? "Connecting..." : "Connect"}
             </button>
@@ -197,7 +197,7 @@ export default function AuthPage() {
               onClick={handleOAuthLogin}
               disabled={loading}
               className="w-full py-3.5 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 text-[15px]"
-              style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+              style={{ background: "linear-gradient(135deg, var(--accent, #10b981), var(--accent, #10b981)cc)" }}
             >
               {loading ? "Waiting for authorization..." : "Start OAuth Login"}
             </button>

@@ -193,7 +193,7 @@ export default function CompletedPage() {
                 <button
                   onClick={() => openPath(selectedTask.destination).catch(() => {})}
                   className="flex-1 py-3 rounded-[10px] text-white text-[15px] font-semibold transition-colors"
-                  style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+                  style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
                 >
                   Reveal in Finder
                 </button>
