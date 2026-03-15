@@ -44,9 +44,9 @@
   --theme-selected: rgba(255,255,255,0.04);
   --theme-text-primary: #f1f5f9;
   --theme-text-secondary: #94a3b8;
-  --theme-text-muted: #475569;
-  --theme-text-ghost: #374151;
-  --theme-text-faint: #1e293b;
+  --theme-text-muted: #64748b;
+  --theme-text-ghost: #4b5563;
+  --theme-text-faint: #374151;
   --theme-shadow: rgba(0,0,0,0.5);
   --theme-scrim: rgba(0,0,0,0.4);
   --theme-scrollbar: #1e293b;
