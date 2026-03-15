@@ -47,7 +47,7 @@ pub struct TrackerConfig {
     pub id: String,
     pub name: String,
     pub url: String,
-    pub tracker_type: String, // "piratebay_api" or "1337x"
+    pub tracker_type: String, // "piratebay_api"
     pub enabled: bool,
 }
 
