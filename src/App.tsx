@@ -15,6 +15,7 @@ import TorrentsPage from "./pages/TorrentsPage";
 import DownloadsPage from "./pages/DownloadsPage";
 import CompletedPage from "./pages/CompletedPage";
 import SearchPage from "./pages/SearchPage";
+import SettingsPage from "./pages/SettingsPage";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -125,6 +126,7 @@ function App() {
                 <Route path="/downloads" element={<DownloadsPage />} />
                 <Route path="/completed" element={<CompletedPage />} />
                 <Route path="/search" element={<SearchPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route path="*" element={<Navigate to="/torrents" replace />} />
               </Route>
             </>

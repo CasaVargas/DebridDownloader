@@ -1,12 +1,9 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import Sidebar from "./Sidebar";
-import SettingsModal from "./SettingsModal";
 import { DownloadTasksProvider } from "../hooks/useDownloadTasks";
 
 export default function Layout() {
-  const [showSettings, setShowSettings] = useState(false);
-
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -16,6 +13,8 @@ export default function Layout() {
     ? "completed"
     : location.pathname.startsWith("/search")
     ? "search"
+    : location.pathname.startsWith("/settings")
+    ? "settings"
     : "torrents";
 
   const handleNavigate = (view: string) => {
@@ -37,11 +36,7 @@ export default function Layout() {
       }
 
       if (e.key === "Escape") {
-        if (showSettings) {
-          setShowSettings(false);
-        } else {
-          window.dispatchEvent(new Event("deselect-item"));
-        }
+        window.dispatchEvent(new Event("deselect-item"));
         return;
       }
 
@@ -64,7 +59,7 @@ export default function Layout() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showSettings, navigate]);
+  }, [navigate]);
 
   return (
     <DownloadTasksProvider>
@@ -73,14 +68,11 @@ export default function Layout() {
           activeView={activeView}
           onNavigate={handleNavigate}
           onSearchOpen={() => navigate("/search")}
-          onSettingsOpen={() => setShowSettings(true)}
+          onSettingsOpen={() => navigate("/settings")}
         />
         <main className="flex-1 overflow-hidden flex flex-col" style={{ background: "#0a0a12" }}>
           <Outlet />
         </main>
-        {showSettings && (
-          <SettingsModal onClose={() => setShowSettings(false)} />
-        )}
       </div>
     </DownloadTasksProvider>
   );

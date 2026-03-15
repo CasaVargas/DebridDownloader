@@ -136,9 +136,7 @@ export default function Sidebar({
               {section.section}
             </div>
             {section.items.map((item) => {
-              const isActive =
-                item.id === activeView &&
-                item.id !== "settings";
+              const isActive = item.id === activeView;
               return (
                 <button
                   key={item.id}
