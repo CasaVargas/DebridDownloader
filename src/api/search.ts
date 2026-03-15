@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { SearchResponse } from "../types";
+import type { SearchResponse, TrackerConfig } from "../types";
 
 export async function searchTorrents(
   query: string,
@@ -13,4 +13,12 @@ export async function searchTorrents(
     sort_by: sortBy ?? null,
     page: page ?? null,
   });
+}
+
+export async function getTrackerConfigs(): Promise<TrackerConfig[]> {
+  return invoke("get_tracker_configs");
+}
+
+export async function saveTrackerConfigs(configs: TrackerConfig[]): Promise<void> {
+  return invoke("save_tracker_configs", { configs });
 }

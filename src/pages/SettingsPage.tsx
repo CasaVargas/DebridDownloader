@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { getSettings, updateSettings } from "../api/settings";
-import type { AppSettings } from "../types";
+import { getTrackerConfigs, saveTrackerConfigs } from "../api/search";
+import type { AppSettings, TrackerConfig } from "../types";
 import { open } from "@tauri-apps/plugin-dialog";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { ACCENT_COLORS } from "../hooks/useAccentColor";
@@ -40,18 +41,26 @@ function saveFrontendSettings(s: FrontendSettings) {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [frontend, setFrontend] = useState<FrontendSettings>(loadFrontendSettings);
+  const [trackers, setTrackers] = useState<TrackerConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [savedField, setSavedField] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load backend settings + autostart status
+  // Add tracker form
+  const [newTrackerName, setNewTrackerName] = useState("");
+  const [newTrackerUrl, setNewTrackerUrl] = useState("");
+  const [newTrackerType, setNewTrackerType] = useState("piratebay_api");
+
+  // Load backend settings + autostart status + trackers
   useEffect(() => {
     Promise.all([
       getSettings(),
       isAutostartEnabled().catch(() => false),
-    ]).then(([s, autostart]) => {
+      getTrackerConfigs().catch(() => [] as TrackerConfig[]),
+    ]).then(([s, autostart, configs]) => {
       setSettings(s);
       setFrontend((prev) => ({ ...prev, launch_at_login: autostart }));
+      setTrackers(configs);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -78,6 +87,36 @@ export default function SettingsPage() {
     if (patch.app_theme) {
       window.dispatchEvent(new Event("theme-changed"));
     }
+  }
+
+  async function handleAddTracker() {
+    if (!newTrackerName.trim() || !newTrackerUrl.trim()) return;
+    const config: TrackerConfig = {
+      id: crypto.randomUUID(),
+      name: newTrackerName.trim(),
+      url: newTrackerUrl.trim().replace(/\/+$/, ""),
+      tracker_type: newTrackerType,
+      enabled: true,
+    };
+    const next = [...trackers, config];
+    setTrackers(next);
+    await saveTrackerConfigs(next).catch(() => {});
+    setNewTrackerName("");
+    setNewTrackerUrl("");
+    markSaved("trackers");
+  }
+
+  async function handleRemoveTracker(id: string) {
+    const next = trackers.filter((t) => t.id !== id);
+    setTrackers(next);
+    await saveTrackerConfigs(next).catch(() => {});
+    markSaved("trackers");
+  }
+
+  async function handleToggleTracker(id: string) {
+    const next = trackers.map((t) => t.id === id ? { ...t, enabled: !t.enabled } : t);
+    setTrackers(next);
+    await saveTrackerConfigs(next).catch(() => {});
   }
 
   async function handleBrowse() {
@@ -186,6 +225,114 @@ export default function SettingsPage() {
                 accentColor={accentColor}
                 onChange={(v) => applyFrontend({ auto_start_downloads: v })}
               />
+            </section>
+
+            {/* ── Trackers ── */}
+            <section className="mb-20">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
+                Trackers
+                {savedField === "trackers" && <span style={{ color: accentColor }} className="ml-2 normal-case tracking-normal">Saved</span>}
+              </h3>
+
+              {/* Existing trackers */}
+              {trackers.length > 0 && (
+                <div className="mb-12 space-y-3">
+                  {trackers.map((tracker) => (
+                    <div
+                      key={tracker.id}
+                      className="flex items-center gap-4 p-4 rounded-xl border"
+                      style={{
+                        background: "var(--theme-bg)",
+                        borderColor: tracker.enabled ? "var(--theme-border)" : "var(--theme-border-subtle)",
+                        opacity: tracker.enabled ? 1 : 0.5,
+                      }}
+                    >
+                      <button
+                        onClick={() => handleToggleTracker(tracker.id)}
+                        className="shrink-0 w-10 h-6 rounded-full transition-colors duration-200 relative"
+                        style={{ backgroundColor: tracker.enabled ? accentColor : "var(--theme-border)" }}
+                      >
+                        <div
+                          className="w-[18px] h-[18px] rounded-full bg-white absolute transition-all duration-200"
+                          style={{
+                            top: "3px",
+                            left: tracker.enabled ? "21px" : "3px",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                          }}
+                        />
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[15px] text-[var(--theme-text-primary)] font-medium">{tracker.name}</div>
+                        <div className="text-[13px] text-[var(--theme-text-muted)] truncate">{tracker.url}</div>
+                      </div>
+                      <span className="text-[12px] text-[var(--theme-text-ghost)] shrink-0 px-2 py-1 rounded-md" style={{ background: "var(--theme-selected)" }}>
+                        {tracker.tracker_type === "piratebay_api" ? "API" : "HTML"}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveTracker(tracker.id)}
+                        className="shrink-0 text-[#ef4444] text-[13px] px-3 py-1.5 rounded-lg transition-colors"
+                        style={{ background: "rgba(239,68,68,0.06)" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.12)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.06)"; }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {trackers.length === 0 && (
+                <div className="mb-12 p-6 rounded-xl text-center" style={{ background: "var(--theme-bg)", border: "1px dashed var(--theme-border)" }}>
+                  <p className="text-[15px] text-[var(--theme-text-muted)]">No trackers configured</p>
+                  <p className="text-[14px] text-[var(--theme-text-ghost)] mt-1">Add a tracker below to enable search</p>
+                </div>
+              )}
+
+              {/* Add new tracker */}
+              <div className="p-5 rounded-xl" style={{ background: "var(--theme-bg)", border: "1px solid var(--theme-border)" }}>
+                <div className="text-[14px] text-[var(--theme-text-primary)] font-medium mb-4">Add Tracker</div>
+                <div className="flex flex-col gap-3">
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={newTrackerName}
+                      onChange={(e) => setNewTrackerName(e.target.value)}
+                      placeholder="Tracker name"
+                      className="flex-1 bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors"
+                    />
+                    <select
+                      value={newTrackerType}
+                      onChange={(e) => setNewTrackerType(e.target.value)}
+                      className="w-[160px] bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] outline-none"
+                    >
+                      <option value="piratebay_api">API (TPB-style)</option>
+                      <option value="1337x">HTML (1337x-style)</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={newTrackerUrl}
+                      onChange={(e) => setNewTrackerUrl(e.target.value)}
+                      placeholder="Base URL (e.g., https://example.org)"
+                      onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
+                      className="flex-1 bg-[var(--theme-bg-content)] border border-[var(--theme-border)] rounded-lg p-3 text-[14px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
+                    />
+                    <button
+                      onClick={handleAddTracker}
+                      disabled={!newTrackerName.trim() || !newTrackerUrl.trim()}
+                      className="px-6 py-3 rounded-lg text-white text-[14px] font-medium disabled:opacity-30 transition-colors shrink-0"
+                      style={{ background: `linear-gradient(135deg, var(--accent), var(--accent)cc)` }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[13px] text-[var(--theme-text-ghost)] mt-3">
+                  <strong>API</strong> — sites with a TPB-compatible JSON API &nbsp;·&nbsp; <strong>HTML</strong> — sites with 1337x-style HTML tables
+                </p>
+              </div>
             </section>
 
             {/* ── Behavior ── */}

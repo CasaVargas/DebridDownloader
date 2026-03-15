@@ -172,3 +172,11 @@ export interface SearchResponse {
   results: SearchResult[];
   tracker_status: TrackerStatus[];
 }
+
+export interface TrackerConfig {
+  id: string;
+  name: string;
+  url: string;
+  tracker_type: string;
+  enabled: boolean;
+}

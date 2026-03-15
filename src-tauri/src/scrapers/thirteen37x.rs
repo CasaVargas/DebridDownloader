@@ -3,19 +3,19 @@ use scraper::{Html, Selector};
 use std::future::Future;
 use std::pin::Pin;
 
-const BASE_URL: &str = "https://www.1337x.to";
-
 pub struct Thirteen37xScraper {
     client: reqwest::Client,
+    base_url: String,
 }
 
 impl Thirteen37xScraper {
-    pub fn new() -> Self {
+    pub fn new(base_url: String) -> Self {
         Self {
             client: reqwest::Client::builder()
                 .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
                 .build()
                 .expect("Failed to create HTTP client"),
+            base_url,
         }
     }
 
@@ -30,21 +30,21 @@ impl Thirteen37xScraper {
         }
     }
 
-    fn build_search_url(query: &str, category: Option<&str>, sort_by: Option<&str>, page: u32) -> String {
+    fn build_search_url(&self, query: &str, category: Option<&str>, sort_by: Option<&str>, page: u32) -> String {
         let cat = Self::category_path(category);
         let encoded_query = query.replace(' ', "+");
 
         if cat.is_empty() {
             match sort_by {
-                Some("size") => format!("{}/sort-search/{}/size/desc/{}/", BASE_URL, encoded_query, page),
-                Some("date") => format!("{}/sort-search/{}/time/desc/{}/", BASE_URL, encoded_query, page),
-                Some("seeders") | _ => format!("{}/sort-search/{}/seeders/desc/{}/", BASE_URL, encoded_query, page),
+                Some("size") => format!("{}/sort-search/{}/size/desc/{}/", self.base_url, encoded_query, page),
+                Some("date") => format!("{}/sort-search/{}/time/desc/{}/", self.base_url, encoded_query, page),
+                Some("seeders") | _ => format!("{}/sort-search/{}/seeders/desc/{}/", self.base_url, encoded_query, page),
             }
         } else {
             match sort_by {
-                Some("size") => format!("{}/sort-category-search/{}/{}/size/desc/{}/", BASE_URL, encoded_query, cat, page),
-                Some("date") => format!("{}/sort-category-search/{}/{}/time/desc/{}/", BASE_URL, encoded_query, cat, page),
-                Some("seeders") | _ => format!("{}/sort-category-search/{}/{}/seeders/desc/{}/", BASE_URL, encoded_query, cat, page),
+                Some("size") => format!("{}/sort-category-search/{}/{}/size/desc/{}/", self.base_url, encoded_query, cat, page),
+                Some("date") => format!("{}/sort-category-search/{}/{}/time/desc/{}/", self.base_url, encoded_query, cat, page),
+                Some("seeders") | _ => format!("{}/sort-category-search/{}/{}/seeders/desc/{}/", self.base_url, encoded_query, cat, page),
             }
         }
     }
@@ -119,7 +119,7 @@ impl Thirteen37xScraper {
     }
 
     async fn fetch_magnet(&self, detail_path: &str) -> Result<String, ScraperError> {
-        let url = format!("{}{}", BASE_URL, detail_path);
+        let url = format!("{}{}", self.base_url, detail_path);
         let resp = self.client.get(&url).send().await?;
         let html = resp.text().await?;
         let document = Html::parse_document(&html);
@@ -174,7 +174,7 @@ impl TorrentScraper for Thirteen37xScraper {
         let params = params.clone();
         Box::pin(async move {
             let page = params.page.unwrap_or(1);
-            let url = Self::build_search_url(
+            let url = self.build_search_url(
                 &params.query,
                 params.category.as_deref(),
                 params.sort_by.as_deref(),
@@ -186,6 +186,7 @@ impl TorrentScraper for Thirteen37xScraper {
             let partial_results = Self::parse_search_results(&html)?;
 
             let mut results = Vec::new();
+            let source = self.base_url.clone();
 
             for partial in partial_results {
                 match self.fetch_magnet(&partial.detail_path).await {
@@ -205,7 +206,7 @@ impl TorrentScraper for Thirteen37xScraper {
                             seeders: partial.seeders,
                             leechers: partial.leechers,
                             date: partial.date,
-                            source: "1337x".to_string(),
+                            source: source.clone(),
                             category: "Other".to_string(),
                         });
                     }

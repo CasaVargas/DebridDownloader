@@ -3,8 +3,6 @@ use serde::Deserialize;
 use std::future::Future;
 use std::pin::Pin;
 
-const API_BASE: &str = "https://apibay.org";
-
 const TRACKERS: &[&str] = &[
     "udp://tracker.opentrackr.org:1337/announce",
     "udp://open.stealth.si:80/announce",
@@ -36,15 +34,17 @@ struct ApiResult {
 
 pub struct PirateBayScraper {
     client: reqwest::Client,
+    base_url: String,
 }
 
 impl PirateBayScraper {
-    pub fn new() -> Self {
+    pub fn new(base_url: String) -> Self {
         Self {
             client: reqwest::Client::builder()
                 .user_agent("DebridDownloader/0.1.0")
                 .build()
                 .expect("Failed to create HTTP client"),
+            base_url,
         }
     }
 
@@ -86,7 +86,7 @@ impl PirateBayScraper {
 
 impl TorrentScraper for PirateBayScraper {
     fn name(&self) -> &str {
-        "The Pirate Bay"
+        "Pirate Bay API"
     }
 
     fn search(
@@ -96,7 +96,7 @@ impl TorrentScraper for PirateBayScraper {
         let params = params.clone();
         Box::pin(async move {
             let cat = Self::category_code(params.category.as_deref());
-            let url = format!("{}/q.php?q={}&cat={}", API_BASE, urlencoding::encode(&params.query), cat);
+            let url = format!("{}/q.php?q={}&cat={}", self.base_url, urlencoding::encode(&params.query), cat);
 
             let resp = self.client.get(&url).send().await?;
             let text = resp.text().await?;
@@ -108,6 +108,7 @@ impl TorrentScraper for PirateBayScraper {
             let api_results: Vec<ApiResult> = serde_json::from_str(&text)
                 .map_err(|e| ScraperError::ParseError(e.to_string()))?;
 
+            let source = self.base_url.clone();
             let results: Vec<SearchResult> = api_results
                 .into_iter()
                 .filter(|r| r.name != "No results returned" && !r.info_hash.is_empty())
@@ -133,7 +134,7 @@ impl TorrentScraper for PirateBayScraper {
                         seeders,
                         leechers,
                         date,
-                        source: "The Pirate Bay".to_string(),
+                        source: source.clone(),
                         category: Self::map_category(&r.category),
                     }
                 })

@@ -42,6 +42,16 @@ pub struct SearchResponse {
     pub tracker_status: Vec<TrackerStatus>,
 }
 
+/// User-configured tracker
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrackerConfig {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub tracker_type: String, // "piratebay_api" or "1337x"
+    pub enabled: bool,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ScraperError {
     #[error("HTTP request failed: {0}")]
@@ -88,11 +98,34 @@ pub fn format_size(bytes: u64) -> String {
 
 const SCRAPER_TIMEOUT_SECS: u64 = 10;
 
-pub async fn search_all(params: &SearchParams) -> SearchResponse {
-    let scrapers: Vec<Box<dyn TorrentScraper>> = vec![
-        Box::new(piratebay::PirateBayScraper::new()),
-        Box::new(thirteen37x::Thirteen37xScraper::new()),
-    ];
+/// Build scrapers from user-configured tracker list
+fn build_scrapers(configs: &[TrackerConfig]) -> Vec<Box<dyn TorrentScraper>> {
+    configs
+        .iter()
+        .filter(|c| c.enabled)
+        .filter_map(|config| -> Option<Box<dyn TorrentScraper>> {
+            match config.tracker_type.as_str() {
+                "piratebay_api" => Some(Box::new(piratebay::PirateBayScraper::new(config.url.clone()))),
+                "1337x" => Some(Box::new(thirteen37x::Thirteen37xScraper::new(config.url.clone()))),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+pub async fn search_all(params: &SearchParams, tracker_configs: &[TrackerConfig]) -> SearchResponse {
+    let scrapers = build_scrapers(tracker_configs);
+
+    if scrapers.is_empty() {
+        return SearchResponse {
+            results: vec![],
+            tracker_status: vec![TrackerStatus {
+                name: "No trackers".to_string(),
+                ok: false,
+                error: Some("No trackers configured. Add trackers in Settings.".to_string()),
+            }],
+        };
+    }
 
     let futures: Vec<_> = scrapers
         .into_iter()
