@@ -182,15 +182,14 @@ a:focus-visible, .btn-primary:focus-visible, .btn-secondary:focus-visible, .dl-c
 .dot-y { background: #ffbd2e; }
 .dot-g { background: #28c840; }
 .app-body {
-  height: 400px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
-  font-size: 14px;
-  border: 2px dashed var(--border-card);
-  margin: 1rem;
-  border-radius: 8px;
+}
+.app-body img {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 /* Sections */
@@ -360,7 +359,7 @@ footer a:hover { color: var(--green); }
   .features-grid { grid-template-columns: repeat(2, 1fr); }
   .steps { grid-template-columns: 1fr; gap: 1.5rem; }
   .downloads-grid { grid-template-columns: 1fr; max-width: 300px; }
-  .app-body { height: 250px; }
+  .app-body img { width: 100%; }
 }
 @media (max-width: 480px) {
   .features-grid { grid-template-columns: 1fr; }
@@ -414,7 +413,7 @@ footer a:hover { color: var(--green); }
           <span class="dot dot-y"></span>
           <span class="dot dot-g"></span>
         </div>
-        <div class="app-body">Screenshot coming soon</div>
+        <div class="app-body"><img src="screenshot.png" alt="DebridDownloader app showing the torrents view with sidebar navigation, file list, and download status" /></div>
       </div>
     </div>
   </header>
