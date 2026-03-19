@@ -3,6 +3,7 @@ mod commands;
 mod downloader;
 mod scrapers;
 mod state;
+mod streaming;
 
 use state::AppState;
 use tauri::{
@@ -69,6 +70,16 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // Start streaming proxy server
+            let state: tauri::State<'_, AppState> = app.state();
+            let sessions = state.stream_sessions.clone();
+            let port_holder = state.streaming_port.clone();
+            tokio::spawn(async move {
+                if let Err(e) = streaming::start_streaming_server(sessions, port_holder).await {
+                    log::error!("Streaming server failed: {}", e);
+                }
+            });
+
             Ok(())
         })
         .manage(AppState::new())
@@ -104,6 +115,9 @@ pub fn run() {
             commands::search::search_torrents,
             commands::search::get_tracker_configs,
             commands::search::save_tracker_configs,
+            // Streaming
+            commands::streaming::get_stream_url,
+            commands::streaming::cleanup_stream_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
