@@ -180,3 +180,9 @@ export interface TrackerConfig {
   tracker_type: string;
   enabled: boolean;
 }
+
+// Streaming
+export interface StreamUrlResponse {
+  stream_url: string;
+  session_id: string;
+}
