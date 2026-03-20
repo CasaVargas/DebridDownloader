@@ -35,8 +35,15 @@ export default function AuthPage() {
     setSwitchingProvider(true);
     setError("");
     setToken("");
+    setUserCode("");
+    setOauthStatus("");
     try {
-      await switchProvider(id);
+      const hasCredentials = await switchProvider(id);
+      if (hasCredentials) {
+        // Provider already has saved credentials — reload to log in
+        window.location.reload();
+        return;
+      }
       setActiveProviderId(id);
       const method = await getAuthMethod();
       setAuthMethod(method);
