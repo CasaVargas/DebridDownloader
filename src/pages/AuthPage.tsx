@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAuth } from "../hooks/useAuth";
 import * as authApi from "../api/auth";
-import { getAuthMethod, getActiveProvider } from "../api/providers";
+import { getAuthMethod, getActiveProvider, switchProvider } from "../api/providers";
 
 export default function AuthPage() {
   const { login } = useAuth();
@@ -12,6 +12,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState<"token" | "oauth">("token");
   const [authMethod, setAuthMethod] = useState<"api_key" | "oauth_device">("oauth_device");
   const [providerName, setProviderName] = useState("Real-Debrid");
+  const [previousProvider, setPreviousProvider] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([getAuthMethod(), getActiveProvider()]).then(([method, id]) => {
@@ -19,6 +20,8 @@ export default function AuthPage() {
       const names: Record<string, string> = { "real-debrid": "Real-Debrid", "torbox": "TorBox" };
       setProviderName(names[id] ?? id);
     }).catch(() => {});
+    const prev = localStorage.getItem("previous-provider");
+    if (prev) setPreviousProvider(prev);
   }, []);
 
   // OAuth state
@@ -220,6 +223,19 @@ export default function AuthPage() {
 
         {error && (
           <p className="mt-8 text-[#ef4444] text-[15px] text-center">{error}</p>
+        )}
+
+        {previousProvider && (
+          <button
+            onClick={async () => {
+              localStorage.removeItem("previous-provider");
+              await switchProvider(previousProvider);
+              window.location.reload();
+            }}
+            className="w-full mt-6 py-3 text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)] text-[14px] transition-colors"
+          >
+            Cancel and go back
+          </button>
         )}
       </div>
     </div>

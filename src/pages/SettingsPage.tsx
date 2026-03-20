@@ -145,9 +145,11 @@ export default function SettingsPage() {
     if (id === activeProvider) return;
     setSwitching(true);
     try {
+      const previousProvider = activeProvider;
       const hasCredentials = await switchProvider(id);
       setActiveProvider(id);
       if (!hasCredentials) {
+        localStorage.setItem("previous-provider", previousProvider);
         window.location.reload();
       }
     } catch (e) {
