@@ -1,4 +1,5 @@
 pub mod real_debrid;
+pub mod torbox;
 pub mod types;
 
 use async_trait::async_trait;

@@ -166,7 +166,7 @@ use crate::providers::types::ProviderInfo;
 pub fn create_provider(provider_id: &str) -> Result<Arc<dyn crate::providers::DebridProvider>, String> {
     match provider_id {
         "real-debrid" => Ok(Arc::new(RdClient::new())),
-        // "torbox" arm added in Task 7
+        "torbox" => Ok(Arc::new(crate::providers::torbox::client::TorBoxClient::new())),
         _ => Err(format!("Unknown provider: {}", provider_id)),
     }
 }

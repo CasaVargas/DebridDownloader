@@ -22,7 +22,7 @@ tauri-plugin-store = "2"
 tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", features = ["json", "stream", "multipart"] }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
