@@ -1,4 +1,4 @@
-use crate::api::client::RdClient;
+use crate::providers::DebridProvider;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,6 +11,12 @@ pub struct AppSettings {
     pub max_concurrent_downloads: u32,
     pub create_torrent_subfolders: bool,
     pub theme: String,
+    #[serde(default = "default_provider")]
+    pub provider: String,
+}
+
+fn default_provider() -> String {
+    "real-debrid".to_string()
 }
 
 impl Default for AppSettings {
@@ -20,6 +26,7 @@ impl Default for AppSettings {
             max_concurrent_downloads: 3,
             create_torrent_subfolders: true,
             theme: "dark".to_string(),
+            provider: default_provider(),
         }
     }
 }
@@ -52,7 +59,11 @@ pub struct StreamSession {
 }
 
 pub struct AppState {
-    pub client: RdClient,
+    /// Legacy field — kept temporarily so existing commands compile during migration.
+    /// Remove after Task 5 migrates all commands to use `provider`.
+    pub client: crate::api::client::RdClient,
+    pub provider: Arc<RwLock<Arc<dyn DebridProvider>>>,
+    pub provider_id: Arc<RwLock<String>>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub active_downloads: Arc<RwLock<HashMap<String, DownloadTask>>>,
     pub cancel_tokens: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
@@ -62,13 +73,23 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
+        use crate::providers::real_debrid::client::RdClient;
+        let provider: Arc<dyn DebridProvider> = Arc::new(RdClient::new());
         Self {
-            client: RdClient::new(),
+            client: crate::api::client::RdClient::new(),
+            provider: Arc::new(RwLock::new(provider)),
+            provider_id: Arc::new(RwLock::new("real-debrid".to_string())),
             settings: Arc::new(RwLock::new(AppSettings::default())),
             active_downloads: Arc::new(RwLock::new(HashMap::new())),
             cancel_tokens: Arc::new(RwLock::new(HashMap::new())),
             streaming_port: Arc::new(RwLock::new(None)),
             stream_sessions: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// Get a cloneable reference to the current provider.
+    /// Use this instead of holding the RwLock across async operations.
+    pub async fn get_provider(&self) -> Arc<dyn DebridProvider> {
+        self.provider.read().await.clone()
     }
 }
