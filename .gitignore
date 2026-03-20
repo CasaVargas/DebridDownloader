@@ -28,3 +28,4 @@ dist-ssr
 .env.local
 *.p12
 .superpowers/
+CLAUDE.md
