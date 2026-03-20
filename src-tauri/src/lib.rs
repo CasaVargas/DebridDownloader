@@ -1,5 +1,6 @@
 mod api;
 mod commands;
+mod providers;
 mod downloader;
 mod scrapers;
 mod state;
