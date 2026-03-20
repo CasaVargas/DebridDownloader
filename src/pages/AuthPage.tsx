@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAuth } from "../hooks/useAuth";
 import * as authApi from "../api/auth";
-import { getAuthMethod, getActiveProvider, switchProvider } from "../api/providers";
+import { getAuthMethod, getActiveProvider, getAvailableProviders, switchProvider } from "../api/providers";
+import type { ProviderInfo } from "../types";
 
 export default function AuthPage() {
   const { login } = useAuth();
@@ -12,17 +13,42 @@ export default function AuthPage() {
   const [mode, setMode] = useState<"token" | "oauth">("token");
   const [authMethod, setAuthMethod] = useState<"api_key" | "oauth_device">("oauth_device");
   const [providerName, setProviderName] = useState("Real-Debrid");
+  const [activeProviderId, setActiveProviderId] = useState("real-debrid");
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [previousProvider, setPreviousProvider] = useState<string | null>(null);
+  const [switchingProvider, setSwitchingProvider] = useState(false);
 
   useEffect(() => {
     Promise.all([getAuthMethod(), getActiveProvider()]).then(([method, id]) => {
       setAuthMethod(method);
+      setActiveProviderId(id);
       const names: Record<string, string> = { "real-debrid": "Real-Debrid", "torbox": "TorBox" };
       setProviderName(names[id] ?? id);
     }).catch(() => {});
+    getAvailableProviders().then(setProviders).catch(() => {});
     const prev = localStorage.getItem("previous-provider");
     if (prev) setPreviousProvider(prev);
   }, []);
+
+  const handleProviderSelect = async (id: string) => {
+    if (id === activeProviderId || switchingProvider) return;
+    setSwitchingProvider(true);
+    setError("");
+    setToken("");
+    try {
+      await switchProvider(id);
+      setActiveProviderId(id);
+      const method = await getAuthMethod();
+      setAuthMethod(method);
+      const names: Record<string, string> = { "real-debrid": "Real-Debrid", "torbox": "TorBox" };
+      setProviderName(names[id] ?? id);
+      setMode("token");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSwitchingProvider(false);
+    }
+  };
 
   // OAuth state
   const [userCode, setUserCode] = useState("");
@@ -123,6 +149,31 @@ export default function AuthPage() {
             Connect your {providerName} account
           </p>
         </div>
+
+        {/* Provider picker */}
+        {providers.length > 1 && (
+          <div className="flex gap-3 mb-10">
+            {providers.map((p) => {
+              const isSelected = activeProviderId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handleProviderSelect(p.id)}
+                  disabled={switchingProvider}
+                  className="flex-1 py-3 rounded-lg transition-all text-[14px] font-medium"
+                  style={{
+                    background: isSelected ? "var(--accent-bg-medium, rgba(16,185,129,0.15))" : "var(--theme-bg)",
+                    border: isSelected ? "2px solid var(--accent, #10b981)" : "2px solid var(--theme-border)",
+                    color: isSelected ? "var(--accent, #10b981)" : "var(--theme-text-muted)",
+                    opacity: switchingProvider ? 0.5 : 1,
+                  }}
+                >
+                  {p.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Mode toggle */}
         {authMethod === "oauth_device" && (<div className="flex mb-10 bg-[var(--theme-bg)] rounded-lg p-1.5">
