@@ -17,7 +17,7 @@ Two related issues with tracker search:
 - Add a native Torznab scraper as a first-class tracker type
 - Extract shared utilities used by both scrapers
 - Update the Settings UI to support Torznab tracker configuration
-- Add 3 new Rust dependencies: `quick-xml`, `serde_bencode`, `sha1`
+- Add 3 new Rust dependencies: `quick-xml`, `bendy`, `sha1`
 
 ## Design Decisions
 
@@ -37,15 +37,15 @@ Two related issues with tracker search:
 |------|--------|
 | `src-tauri/src/scrapers/utils.rs` | **New.** Shared utilities |
 | `src-tauri/src/scrapers/torznab.rs` | **New.** Torznab scraper implementation |
-| `src-tauri/src/scrapers/piratebay.rs` | Fix `ApiResult` to use flexible deserializer; extract size formatting to utils |
-| `src-tauri/src/scrapers/mod.rs` | Add `api_key` to `TrackerConfig`; add `torznab` match arm in `build_scrapers`; `pub mod` declarations |
+| `src-tauri/src/scrapers/piratebay.rs` | Fix `ApiResult` to use flexible deserializer; remove `build_magnet` and `TRACKERS` (moved to utils) |
+| `src-tauri/src/scrapers/mod.rs` | Add `api_key` to `TrackerConfig`; add `torznab` match arm in `build_scrapers`; `pub mod` declarations; move `format_size` to utils |
 | `src-tauri/Cargo.toml` | Add `quick-xml`, `serde_bencode`, `sha1` |
 | `src/types/index.ts` | Add `api_key?` to `TrackerConfig` |
 | `src/pages/SettingsPage.tsx` | Tracker type dropdown, API key field, adaptive placeholders |
 
 ### Component 1: Shared Utilities (`scrapers/utils.rs`)
 
-Four responsibilities:
+Five responsibilities:
 
 **1. Flexible numeric deserialization:**
 ```rust
@@ -58,19 +58,22 @@ Accepts a JSON value that is either a string or a number, always returns `String
 ```rust
 pub async fn extract_info_hash_from_torrent(url: &str, client: &reqwest::Client) -> Result<String, ScraperError>
 ```
-Downloads a `.torrent` file, parses bencoded data, SHA1-hashes the `info` dictionary, returns the 40-char hex info hash.
+Downloads a `.torrent` file, parses bencoded data, SHA1-hashes the raw `info` dictionary bytes (not re-serialized), returns the 40-char hex info hash. Note: must hash the original bytes from the bencoded stream, not a re-serialized version, to get a correct info hash.
 
 **3. Magnet link construction:**
 ```rust
 pub fn build_magnet(info_hash: &str, name: &str) -> String
 ```
-Constructs a magnet URI with common public trackers as `&tr=` parameters.
+Moved from `PirateBayScraper::build_magnet` in `piratebay.rs`. Constructs a magnet URI with the `TRACKERS` constant (also moved here) appended as `&tr=` parameters. `piratebay.rs` switches to calling `utils::build_magnet`.
 
 **4. Size formatting:**
 ```rust
 pub fn format_size(bytes: u64) -> String
 ```
-Extracted from the existing inline logic in `piratebay.rs`. Converts bytes to human-readable string (e.g., "1.5 GB").
+Moved from `mod.rs` (currently at line 87). Converts bytes to human-readable string (e.g., "1.5 GB").
+
+**5. Common tracker list (`TRACKERS` constant):**
+Moved from `piratebay.rs` (lines 6-15). Used by `build_magnet`.
 
 ### Component 2: Bug Fix in `piratebay.rs`
 
@@ -98,7 +101,7 @@ struct ApiResult {
 
 Backwards-compatible: APIs returning strings continue to work. APIs returning integers now work too.
 
-Replace inline size formatting with call to `utils::format_size`.
+Remove `build_magnet` method and `TRACKERS` constant (now in `utils.rs`). Call `utils::build_magnet` instead.
 
 ### Component 3: TrackerConfig Update
 
@@ -120,13 +123,25 @@ pub struct TrackerConfig {
 ```rust
 match config.tracker_type.as_str() {
     "piratebay_api" => Some(Box::new(piratebay::PirateBayScraper::new(config.url.clone()))),
-    "torznab" => Some(Box::new(torznab::TorznabScraper::new(
-        config.url.clone(),
-        config.api_key.clone().unwrap_or_default(),
-    ))),
+    "torznab" => {
+        if let Some(ref api_key) = config.api_key {
+            if !api_key.is_empty() {
+                Some(Box::new(torznab::TorznabScraper::new(
+                    config.url.clone(),
+                    api_key.clone(),
+                )))
+            } else {
+                // Return None — tracker status will show "missing API key" error
+                None
+            }
+        } else {
+            None
+        }
+    }
     _ => None,
 }
 ```
+When a Torznab tracker has no API key, it is skipped during search and its `TrackerStatus` reports a configuration error rather than making a doomed HTTP request.
 
 **Frontend (`types/index.ts`):**
 ```typescript
@@ -158,7 +173,7 @@ pub struct TorznabScraper {
 {base_url}/api?t=search&apikey={api_key}&q={query}&cat={torznab_cats}
 ```
 
-Category mapping for outgoing requests: Movies=2000, TV=5000, Games=1000, Software=4000, Music=3000. No category filter when unspecified.
+Category mapping for outgoing requests: Movies=2000, TV=5000, Games=1000, Software=4000, Music=3000. For unspecified or unrecognized categories, omit the `&cat=` parameter entirely (search all).
 
 **XML parsing flow (using `quick-xml`):**
 
@@ -166,15 +181,15 @@ For each `<item>` in the RSS response:
 1. Extract `<title>` → title
 2. Extract `<size>` or `<enclosure length="">` → size_bytes
 3. Extract `<torznab:attr name="seeders" value="">` → seeders
-4. Extract `<torznab:attr name="peers" value="">` → leechers
+4. Extract `<torznab:attr name="peers" value="">` → compute leechers as `peers - seeders` (Torznab `peers` = total connected, not just leechers)
 5. Extract `<torznab:attr name="infohash" value="">` → info_hash (if present)
 6. Extract `<torznab:attr name="magneturl" value="">` → magnet (if present)
 7. Extract `<link>` → torrent download URL (fallback for magnet resolution)
 8. Extract `<torznab:attr name="category" value="">` → category (pass-through)
-9. Extract `<pubDate>` → date
+9. Extract `<pubDate>` → date (parse RFC 2822 via `chrono::DateTime::parse_from_rfc2822`, format as `YYYY-MM-DD` to match existing `SearchResult.date` field used for sorting)
 
 **Magnet resolution for results without info_hash/magnet:**
-Call `utils::extract_info_hash_from_torrent` on the `<link>` URL, then `utils::build_magnet` to construct the magnet URI.
+Call `utils::extract_info_hash_from_torrent` on the `<link>` URL, then `utils::build_magnet` to construct the magnet URI. To avoid timeout issues (the scraper has a 10-second timeout), `.torrent` downloads run concurrently with a concurrency limit of 5, and a maximum of 10 fallback downloads per search. Results exceeding this cap are dropped.
 
 **Error handling:**
 - Torznab error XML (`<error code="..." description="...">`) → descriptive `ScraperError`
@@ -197,6 +212,12 @@ Changes to the Add/Edit Tracker form:
 
 4. **Validation:** Inline warning when saving a Torznab tracker without an API key (non-blocking).
 
+5. **Tracker type badge:** Update the existing badge display (currently shows "API" / "HTML") to show "API" for `piratebay_api` and "Torznab" for `torznab`.
+
+6. **Help text:** The existing TPB-specific help text (mentions `/q.php?q=search_term`) should adapt when "Torznab" is selected, describing the Torznab API format instead.
+
+7. **New state:** Add `newTrackerApiKey` and `newTrackerType` state variables for the form, include `api_key` and `tracker_type` in the `handleAddTracker` config construction.
+
 No changes to SearchPage, results display, or other UI.
 
 ### Component 6: New Dependencies
@@ -206,7 +227,7 @@ Added to `src-tauri/Cargo.toml`:
 | Crate | Version | Purpose |
 |-------|---------|---------|
 | `quick-xml` | latest | Torznab XML response parsing |
-| `serde_bencode` | latest | Parse `.torrent` files for info hash extraction |
+| `bendy` | latest | Parse `.torrent` files for info hash extraction (preferred over `serde_bencode` for raw byte access needed for correct SHA1 hashing) |
 | `sha1` | latest | Hash info dictionary to produce info hash |
 
 All lightweight, well-maintained, pure Rust.
