@@ -10,13 +10,16 @@ export default function Toast({ message, onDismiss, duration = 3000 }: ToastProp
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Trigger enter animation
     requestAnimationFrame(() => setVisible(true));
-    const timer = setTimeout(() => {
+    let inner: ReturnType<typeof setTimeout>;
+    const outer = setTimeout(() => {
       setVisible(false);
-      setTimeout(onDismiss, 200); // Wait for exit animation
+      inner = setTimeout(onDismiss, 200);
     }, duration);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(outer);
+      clearTimeout(inner);
+    };
   }, [duration, onDismiss]);
 
   return (

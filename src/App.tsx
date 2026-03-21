@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -35,6 +35,21 @@ function MiniPlayerToast() {
   const { toastMessage, dismissToast } = useMiniPlayer();
   if (!toastMessage) return null;
   return <Toast message={toastMessage} onDismiss={dismissToast} />;
+}
+
+function MiniPlayerLogoutCleanup() {
+  const auth = useContext(AuthContext);
+  const { closePreview } = useMiniPlayer();
+  const prevAuth = useRef(auth?.isAuthenticated);
+
+  useEffect(() => {
+    if (prevAuth.current && !auth?.isAuthenticated) {
+      closePreview();
+    }
+    prevAuth.current = auth?.isAuthenticated;
+  }, [auth?.isAuthenticated, closePreview]);
+
+  return null;
 }
 
 function App() {
@@ -184,6 +199,7 @@ function App() {
         </BrowserRouter>
         <MiniPlayer />
         <MiniPlayerToast />
+        <MiniPlayerLogoutCleanup />
       </AuthContext.Provider>
     </MiniPlayerProvider>
   );

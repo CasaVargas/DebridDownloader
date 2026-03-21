@@ -15,7 +15,7 @@ interface MiniPlayerState {
   streamUrl: string | null;
   sessionId: string | null;
   filename: string;
-  isLoading: boolean;
+  loadingTorrentId: string | null;
   torrentId: string | null;
   fileId: number | null;
   isInlinePlayable: boolean;
@@ -38,7 +38,7 @@ const initialState: MiniPlayerState = {
   streamUrl: null,
   sessionId: null,
   filename: "",
-  isLoading: false,
+  loadingTorrentId: null,
   torrentId: null,
   fileId: null,
   isInlinePlayable: true,
@@ -58,7 +58,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   sessionIdRef.current = state.sessionId;
   torrentIdRef.current = state.torrentId;
   fileIdRef.current = state.fileId;
-  loadingRef.current = state.isLoading;
+  loadingRef.current = state.loadingTorrentId !== null;
 
   const cleanupSession = useCallback(async (sid: string | null) => {
     if (sid) {
@@ -78,7 +78,8 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     async (torrentId: string, fileId?: number, filename?: string) => {
       // Prevent duplicate requests using ref for immediate check
       if (loadingRef.current) return;
-      setState((s) => ({ ...s, isLoading: true }));
+      loadingRef.current = true;
+      setState((s) => ({ ...s, loadingTorrentId: torrentId }));
 
       try {
         // Cleanup any existing session using ref for current value
@@ -97,7 +98,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
 
           if (videoFiles.length === 0) {
             showToast("No video files found");
-            setState((s) => ({ ...s, isLoading: false }));
+            setState((s) => ({ ...s, loadingTorrentId: null }));
             return;
           }
 
@@ -117,7 +118,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
           streamUrl: result.stream_url,
           sessionId: result.session_id,
           filename: targetFilename || "Video",
-          isLoading: false,
+          loadingTorrentId: null,
           torrentId,
           fileId: targetFileId!,
           isInlinePlayable: inlinePlayable,
@@ -125,7 +126,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         });
       } catch (e) {
         showToast("Not available for streaming yet");
-        setState((s) => ({ ...s, isLoading: false }));
+        setState((s) => ({ ...s, loadingTorrentId: null }));
       }
     },
     [cleanupSession, showToast]
@@ -142,7 +143,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     if (!tid || fid === null) return;
 
     await cleanupSession(sessionIdRef.current);
-    setState((s) => ({ ...s, isLoading: true, streamUrl: null }));
+    setState((s) => ({ ...s, loadingTorrentId: tid, streamUrl: null }));
 
     try {
       const result = await getStreamUrl(tid, fid);
@@ -150,11 +151,11 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         ...s,
         streamUrl: result.stream_url,
         sessionId: result.session_id,
-        isLoading: false,
+        loadingTorrentId: null,
       }));
     } catch {
       showToast("Still not available for streaming");
-      setState((s) => ({ ...s, isLoading: false }));
+      setState((s) => ({ ...s, loadingTorrentId: null }));
     }
   }, [cleanupSession, showToast]);
 

@@ -13,7 +13,7 @@ export default function MiniPlayer() {
     isOpen,
     streamUrl,
     filename,
-    isLoading,
+    loadingTorrentId,
     isInlinePlayable,
     closePreview,
     retryPreview,
@@ -24,6 +24,11 @@ export default function MiniPlayer() {
   const [size, setSize] = useState({ w: DEFAULT_WIDTH, h: DEFAULT_HEIGHT });
   const [videoError, setVideoError] = useState(false);
   const [initialized, setInitialized] = useState(false);
+
+  const posRef = useRef(pos);
+  posRef.current = pos;
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -75,9 +80,9 @@ export default function MiniPlayer() {
   // Drag handlers
   const handleDragStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
-    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: posRef.current.x, origY: posRef.current.y };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [pos.x, pos.y]);
+  }, []);
 
   const handleDragMove = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current) return;
@@ -100,13 +105,13 @@ export default function MiniPlayer() {
     resizeRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      origW: size.w,
-      origH: size.h,
-      origX: pos.x,
-      origY: pos.y,
+      origW: sizeRef.current.w,
+      origH: sizeRef.current.h,
+      origX: posRef.current.x,
+      origY: posRef.current.y,
     };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [size.w, size.h, pos.x, pos.y]);
+  }, []);
 
   const handleResizeMove = useCallback((e: React.PointerEvent) => {
     if (!resizeRef.current) return;
@@ -169,7 +174,7 @@ export default function MiniPlayer() {
 
       {/* Body */}
       <div className="flex-1 relative min-h-0">
-        {isLoading ? (
+        {loadingTorrentId ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
           </div>
