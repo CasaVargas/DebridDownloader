@@ -24,6 +24,7 @@ export default function MiniPlayer() {
   const [size, setSize] = useState({ w: DEFAULT_WIDTH, h: DEFAULT_HEIGHT });
   const [videoError, setVideoError] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const posRef = useRef(pos);
   posRef.current = pos;
@@ -67,15 +68,40 @@ export default function MiniPlayer() {
     return () => window.removeEventListener("resize", handleResize);
   }, [size.w, size.h]);
 
-  // Escape key to close
+  // Store pre-fullscreen position/size so we can restore on exit
+  const preFullscreenRef = useRef<{ pos: typeof pos; size: typeof size } | null>(null);
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((fs) => {
+      if (fs) {
+        if (preFullscreenRef.current) {
+          setPos(preFullscreenRef.current.pos);
+          setSize(preFullscreenRef.current.size);
+          preFullscreenRef.current = null;
+        }
+        return false;
+      } else {
+        preFullscreenRef.current = { pos: posRef.current, size: sizeRef.current };
+        return true;
+      }
+    });
+  }, []);
+
+  // Escape key: exit fullscreen first, then close player
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePreview();
+      if (e.key === "Escape") {
+        if (isFullscreen) {
+          toggleFullscreen();
+        } else {
+          closePreview();
+        }
+      }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [isOpen, closePreview]);
+  }, [isOpen, isFullscreen, closePreview, toggleFullscreen]);
 
   // Drag handlers
   const handleDragStart = useCallback((e: React.PointerEvent) => {
@@ -144,8 +170,14 @@ export default function MiniPlayer() {
   return (
     <div
       ref={containerRef}
-      className="fixed rounded-xl overflow-hidden shadow-2xl flex flex-col"
-      style={{
+      className={`fixed overflow-hidden shadow-2xl flex flex-col ${isFullscreen ? "" : "rounded-xl"}`}
+      style={isFullscreen ? {
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 100,
+        background: "#000",
+      } : {
         left: pos.x,
         top: pos.y,
         width: size.w,
@@ -157,19 +189,44 @@ export default function MiniPlayer() {
     >
       {/* Header — drag handle */}
       <div
-        className="flex items-center justify-between px-3 py-2 cursor-grab active:cursor-grabbing select-none shrink-0"
+        className={`flex items-center justify-between px-3 py-2 select-none shrink-0 ${isFullscreen ? "" : "cursor-grab active:cursor-grabbing"}`}
         style={{ background: "rgba(0,0,0,0.85)" }}
-        onPointerDown={handleDragStart}
-        onPointerMove={handleDragMove}
-        onPointerUp={handleDragEnd}
+        onPointerDown={isFullscreen ? undefined : handleDragStart}
+        onPointerMove={isFullscreen ? undefined : handleDragMove}
+        onPointerUp={isFullscreen ? undefined : handleDragEnd}
       >
         <span className="text-[12px] text-white/70 truncate mr-2">{filename}</span>
-        <button
-          onClick={(e) => { e.stopPropagation(); closePreview(); }}
-          className="w-6 h-6 rounded-md flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer"
-        >
-          ×
-        </button>
+        <div className="flex items-center gap-1">
+          {isInlinePlayable && !videoError && streamUrl && (
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+              className="w-6 h-6 rounded-md flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer"
+              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+            >
+              {isFullscreen ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="4 14 10 14 10 20" />
+                  <polyline points="20 10 14 10 14 4" />
+                  <line x1="14" y1="10" x2="21" y2="3" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              )}
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); closePreview(); }}
+            className="w-6 h-6 rounded-md flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       {/* Body */}
@@ -213,8 +270,8 @@ export default function MiniPlayer() {
         ) : null}
       </div>
 
-      {/* Resize handle — bottom-left corner */}
-      <div
+      {/* Resize handle — bottom-left corner (hidden in fullscreen) */}
+      {!isFullscreen && <div
         className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize"
         style={{ zIndex: 10 }}
         onPointerDown={handleResizeStart}
@@ -225,7 +282,7 @@ export default function MiniPlayer() {
           <line x1="0" y1="10" x2="10" y2="0" stroke="currentColor" strokeWidth="1" />
           <line x1="0" y1="6" x2="6" y2="0" stroke="currentColor" strokeWidth="1" />
         </svg>
-      </div>
+      </div>}
     </div>
   );
 }
