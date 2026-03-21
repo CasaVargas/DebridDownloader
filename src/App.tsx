@@ -12,6 +12,9 @@ import * as authApi from "./api/auth";
 import * as torrentsApi from "./api/torrents";
 import type { User } from "./types";
 
+import { MiniPlayerProvider, useMiniPlayer } from "./contexts/MiniPlayerContext";
+import MiniPlayer from "./components/MiniPlayer";
+import Toast from "./components/Toast";
 import Layout from "./components/Layout";
 import AuthPage from "./pages/AuthPage";
 import TorrentsPage from "./pages/TorrentsPage";
@@ -26,6 +29,12 @@ const navigateRef: { current: ReturnType<typeof useNavigate> | null } = { curren
 function NavigateRefSetter() {
   navigateRef.current = useNavigate();
   return null;
+}
+
+function MiniPlayerToast() {
+  const { toastMessage, dismissToast } = useMiniPlayer();
+  if (!toastMessage) return null;
+  return <Toast message={toastMessage} onDismiss={dismissToast} />;
 }
 
 function App() {
@@ -148,8 +157,9 @@ function App() {
   }
 
   return (
-    <AuthContext.Provider value={authState}>
-      <BrowserRouter>
+    <MiniPlayerProvider>
+      <AuthContext.Provider value={authState}>
+        <BrowserRouter>
         <NavigateRefSetter />
         <Routes>
           {!isAuthenticated ? (
@@ -171,8 +181,11 @@ function App() {
             </>
           )}
         </Routes>
-      </BrowserRouter>
-    </AuthContext.Provider>
+        </BrowserRouter>
+        <MiniPlayer />
+        <MiniPlayerToast />
+      </AuthContext.Provider>
+    </MiniPlayerProvider>
   );
 }
 
