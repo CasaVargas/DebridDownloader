@@ -165,6 +165,7 @@ export interface TrackerConfig {
   url: string;
   tracker_type: string;
   enabled: boolean;
+  api_key?: string;
 }
 
 // Streaming
