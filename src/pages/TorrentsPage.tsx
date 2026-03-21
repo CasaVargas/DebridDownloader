@@ -332,7 +332,7 @@ export default function TorrentsPage() {
     {
       key: "actions",
       header: "",
-      width: "120px",
+      width: "155px",
       render: (t) => (
         <div className="flex gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
           <button
