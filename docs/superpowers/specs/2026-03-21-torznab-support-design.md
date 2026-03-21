@@ -39,7 +39,7 @@ Two related issues with tracker search:
 | `src-tauri/src/scrapers/torznab.rs` | **New.** Torznab scraper implementation |
 | `src-tauri/src/scrapers/piratebay.rs` | Fix `ApiResult` to use flexible deserializer; remove `build_magnet` and `TRACKERS` (moved to utils) |
 | `src-tauri/src/scrapers/mod.rs` | Add `api_key` to `TrackerConfig`; add `torznab` match arm in `build_scrapers`; `pub mod` declarations; move `format_size` to utils |
-| `src-tauri/Cargo.toml` | Add `quick-xml`, `serde_bencode`, `sha1` |
+| `src-tauri/Cargo.toml` | Add `quick-xml`, `bendy`, `sha1` |
 | `src/types/index.ts` | Add `api_key?` to `TrackerConfig` |
 | `src/pages/SettingsPage.tsx` | Tracker type dropdown, API key field, adaptive placeholders |
 
@@ -181,7 +181,7 @@ For each `<item>` in the RSS response:
 1. Extract `<title>` → title
 2. Extract `<size>` or `<enclosure length="">` → size_bytes
 3. Extract `<torznab:attr name="seeders" value="">` → seeders
-4. Extract `<torznab:attr name="peers" value="">` → compute leechers as `peers - seeders` (Torznab `peers` = total connected, not just leechers)
+4. Extract `<torznab:attr name="peers" value="">` → compute leechers as `peers.saturating_sub(seeders)` (Torznab `peers` = total connected, not just leechers; use saturating subtraction to handle inconsistent data where seeders > peers)
 5. Extract `<torznab:attr name="infohash" value="">` → info_hash (if present)
 6. Extract `<torznab:attr name="magneturl" value="">` → magnet (if present)
 7. Extract `<link>` → torrent download URL (fallback for magnet resolution)
