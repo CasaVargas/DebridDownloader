@@ -111,7 +111,6 @@ jobs:
             | Linux | ARM64 | `.deb` / `.rpm` / `.AppImage` |
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
           args: --target ${{ matrix.target }}
 
   # After all builds finish, generate a single latest.json from the release assets
