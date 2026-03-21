@@ -118,6 +118,14 @@ where
         fn visit_f64<E: de::Error>(self, v: f64) -> Result<String, E> {
             Ok(v.to_string())
         }
+
+        fn visit_unit<E: de::Error>(self) -> Result<String, E> {
+            Ok(String::new())
+        }
+
+        fn visit_none<E: de::Error>(self) -> Result<String, E> {
+            Ok(String::new())
+        }
     }
 
     deserializer.deserialize_any(StringOrNumber)
@@ -185,7 +193,7 @@ fn extract_info_hash_from_bytes(data: &[u8]) -> Result<String, ScraperError> {
 
     use sha1::{Digest, Sha1};
     let hash = Sha1::digest(info_bytes);
-    Ok(hex::encode(hash))
+    Ok(hash.iter().map(|b| format!("{:02x}", b)).collect())
 }
 
 /// Given bencoded data starting at `start`, find the complete bencoded value
@@ -258,20 +266,6 @@ fn find_bencode_value_end(data: &[u8], start: usize) -> Result<&[u8], ScraperErr
         ))),
     }
 }
-```
-
-Note: This uses `hex::encode` — we need to also add `hex` to Cargo.toml since it is not currently a dependency. Alternative: use `format!("{:02x}", b)` manually. Let's use the manual approach to avoid adding another dep:
-
-Replace the `hex::encode(hash)` line with:
-```rust
-Ok(hash.iter().map(|b| format!("{:02x}", b)).collect())
-```
-
-And remove the `hex` reference. The final `extract_info_hash_from_bytes` return becomes:
-```rust
-    use sha1::{Digest, Sha1};
-    let hash = Sha1::digest(info_bytes);
-    Ok(hash.iter().map(|b| format!("{:02x}", b)).collect())
 ```
 
 - [ ] **Step 2: Add `pub mod utils;` to `mod.rs`**
@@ -393,17 +387,7 @@ pub struct TrackerConfig {
 }
 ```
 
-- [ ] **Step 3: Add `torznab` module declaration**
-
-Add after `pub mod utils;` (added in Task 2):
-
-```rust
-pub mod torznab;
-```
-
-Note: This will cause a compile error until Task 5 creates the file. If you need to verify Tasks 1-4 compile independently, temporarily comment this out.
-
-- [ ] **Step 4: Update `build_scrapers` factory**
+- [ ] **Step 3: Update `build_scrapers` factory**
 
 Replace the `build_scrapers` function (lines 101-112) with:
 
@@ -495,7 +479,7 @@ fn build_scrapers(configs: &[TrackerConfig]) -> (Vec<Box<dyn TorrentScraper>>, V
 }
 ```
 
-- [ ] **Step 5: Update `search_all` to use new `build_scrapers` signature**
+- [ ] **Step 4: Update `search_all` to use new `build_scrapers` signature**
 
 In `search_all`, replace:
 ```rust
@@ -547,7 +531,7 @@ if scrapers.is_empty() {
 }
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/scrapers/mod.rs
@@ -560,14 +544,24 @@ git commit -m "feat: add api_key to TrackerConfig and torznab factory support"
 
 **Files:**
 - Create: `src-tauri/src/scrapers/torznab.rs`
+- Modify: `src-tauri/src/scrapers/mod.rs:2` (add `pub mod torznab;`)
 
-- [ ] **Step 1: Create the complete Torznab scraper**
+- [ ] **Step 1: Add `pub mod torznab;` to `mod.rs`**
+
+In `src-tauri/src/scrapers/mod.rs`, add after `pub mod utils;`:
+
+```rust
+pub mod torznab;
+```
+
+- [ ] **Step 2: Create the complete Torznab scraper**
 
 Create `src-tauri/src/scrapers/torznab.rs` with:
 
 ```rust
 use super::{SearchParams, SearchResult, ScraperError, TorrentScraper};
 use super::utils;
+use futures::stream::{self, StreamExt};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::future::Future;
@@ -637,10 +631,9 @@ impl TorrentScraper for TorznabScraper {
 
             let items = parse_torznab_items(&text)?;
 
-            // Resolve magnets for items that lack info_hash
+            // Split items into those with info_hash (ready) and those needing fallback
             let mut results = Vec::new();
-            let mut fallback_count = 0;
-            const MAX_FALLBACK: usize = 10;
+            let mut need_fallback: Vec<TorznabItem> = Vec::new();
 
             for item in items {
                 if !item.info_hash.is_empty() {
@@ -661,12 +654,27 @@ impl TorrentScraper for TorznabScraper {
                         source: self.name.clone(),
                         category: item.category,
                     });
-                } else if !item.link.is_empty() && fallback_count < MAX_FALLBACK {
-                    fallback_count += 1;
-                    match utils::extract_info_hash_from_torrent(&item.link, &self.client).await {
+                } else if !item.link.is_empty() {
+                    need_fallback.push(item);
+                }
+                // Items with no info_hash and no link are dropped
+            }
+
+            // Resolve .torrent fallbacks concurrently (max 10 items, 5 concurrent)
+            const MAX_FALLBACK: usize = 10;
+            const CONCURRENCY: usize = 5;
+
+            let fallback_results: Vec<Option<SearchResult>> = stream::iter(
+                need_fallback.into_iter().take(MAX_FALLBACK)
+            )
+            .map(|item| {
+                let client = &self.client;
+                let source = self.name.clone();
+                async move {
+                    match utils::extract_info_hash_from_torrent(&item.link, client).await {
                         Ok(hash) => {
                             let magnet = utils::build_magnet(&hash, &item.title);
-                            results.push(SearchResult {
+                            Some(SearchResult {
                                 title: item.title,
                                 magnet,
                                 info_hash: hash.to_lowercase(),
@@ -675,17 +683,22 @@ impl TorrentScraper for TorznabScraper {
                                 seeders: item.seeders,
                                 leechers: item.peers.saturating_sub(item.seeders),
                                 date: item.pub_date,
-                                source: self.name.clone(),
+                                source,
                                 category: item.category,
-                            });
+                            })
                         }
                         Err(e) => {
                             log::warn!("Failed to extract info hash from {}: {}", item.link, e);
+                            None
                         }
                     }
                 }
-                // Items with no info_hash and no link (or over fallback cap) are dropped
-            }
+            })
+            .buffer_unordered(CONCURRENCY)
+            .collect()
+            .await;
+
+            results.extend(fallback_results.into_iter().flatten());
 
             Ok(results)
         })
@@ -694,6 +707,7 @@ impl TorrentScraper for TorznabScraper {
 
 // ── XML Parsing ──────────────────────────────────────────────────────
 
+#[derive(Default)]
 struct TorznabItem {
     title: String,
     link: String,
@@ -704,22 +718,6 @@ struct TorznabItem {
     magnet_url: String,
     category: String,
     pub_date: String,
-}
-
-impl Default for TorznabItem {
-    fn default() -> Self {
-        Self {
-            title: String::new(),
-            link: String::new(),
-            size: 0,
-            seeders: 0,
-            peers: 0,
-            info_hash: String::new(),
-            magnet_url: String::new(),
-            category: String::new(),
-            pub_date: String::new(),
-        }
-    }
 }
 
 fn parse_torznab_error(xml: &str) -> Option<ScraperError> {
@@ -884,29 +882,6 @@ fn parse_torznab_items(xml: &str) -> Result<Vec<TorznabItem>, ScraperError> {
 }
 ```
 
-Note on the `.torrent` fallback: The spec calls for concurrent downloads with a limit of 5. For simplicity in this first implementation, we do sequential downloads with a cap of 10. This is pragmatic — most Prowlarr/Jackett results include `infohash`, so the fallback path is rarely hit. We can add concurrency later if needed.
-
-- [ ] **Step 2: Implement `Default` for `TorznabItem` via derive**
-
-Actually, all the fields have sensible defaults already. Replace `impl Default for TorznabItem` with `#[derive(Default)]` on the struct to simplify:
-
-```rust
-#[derive(Default)]
-struct TorznabItem {
-    title: String,
-    link: String,
-    size: u64,
-    seeders: u32,
-    peers: u32,
-    info_hash: String,
-    magnet_url: String,
-    category: String,
-    pub_date: String,
-}
-```
-
-(Remove the manual `impl Default`.)
-
 - [ ] **Step 3: Verify it compiles**
 
 Run: `cd src-tauri && cargo check`
@@ -915,7 +890,7 @@ Expected: Compiles with no errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src-tauri/src/scrapers/torznab.rs
+git add src-tauri/src/scrapers/torznab.rs src-tauri/src/scrapers/mod.rs
 git commit -m "feat: add Torznab scraper with XML parsing and .torrent fallback"
 ```
 
