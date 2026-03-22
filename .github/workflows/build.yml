@@ -197,9 +197,16 @@ jobs:
           # Now generate latest.json from uploaded assets
           ASSETS=$(gh api "repos/${REPO}/releases/${RELEASE_ID}/assets?per_page=100")
 
+          # Construct download URL from tag + filename (not browser_download_url which has untagged-xxx for drafts)
           asset_url() {
-            echo "$ASSETS" | jq -r --arg suffix "$1" \
-              '[.[] | select(.name | endswith($suffix)) | .browser_download_url][0] // ""'
+            local filename
+            filename=$(echo "$ASSETS" | jq -r --arg suffix "$1" \
+              '[.[] | select(.name | endswith($suffix)) | .name][0] // ""')
+            if [ -n "$filename" ]; then
+              echo "https://github.com/${REPO}/releases/download/${TAG}/${filename}"
+            else
+              echo ""
+            fi
           }
 
           sig_content() {
