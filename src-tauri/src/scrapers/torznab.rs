@@ -18,7 +18,7 @@ impl TorznabScraper {
         Self {
             name,
             client: reqwest::Client::builder()
-                .user_agent("DebridDownloader/1.1.2")
+                .user_agent("DebridDownloader/1.1.8")
                 .build()
                 .expect("Failed to create HTTP client"),
             base_url,
@@ -61,7 +61,28 @@ impl TorrentScraper for TorznabScraper {
             }
 
             let resp = self.client.get(&url).send().await?;
+            let status = resp.status();
             let text = resp.text().await?;
+
+            // Check for non-XML responses (HTML login pages, redirects, error pages)
+            if !status.is_success() {
+                return Err(ScraperError::ParseError(format!(
+                    "Server returned HTTP {}", status.as_u16()
+                )));
+            }
+
+            let trimmed = text.trim_start();
+            if !trimmed.starts_with("<?xml") && !trimmed.starts_with('<') {
+                return Err(ScraperError::ParseError(
+                    "Server returned non-XML response — check your URL and API key".to_string()
+                ));
+            }
+
+            if trimmed.contains("<!DOCTYPE html") || trimmed.contains("<html") {
+                return Err(ScraperError::ParseError(
+                    "Server returned an HTML page instead of XML — check your URL and API key".to_string()
+                ));
+            }
 
             // Check for Torznab error responses
             if let Some(err) = parse_torznab_error(&text) {
