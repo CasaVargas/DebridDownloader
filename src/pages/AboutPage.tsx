@@ -300,6 +300,30 @@ export default function AboutPage() {
           </a>
         </div>
 
+        {/* Streamline teaser */}
+        <a
+          href="https://casavargas.app/streamline"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex items-center gap-4 rounded-xl transition-colors"
+          style={{
+            marginTop: 24,
+            padding: "16px 20px",
+            background: "var(--theme-bg)",
+            border: "1px solid var(--theme-border)",
+            textDecoration: "none",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--theme-border-hover)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--theme-border)"; }}
+        >
+          <div className="text-[28px] shrink-0">📺</div>
+          <div className="flex-1 min-w-0 text-left">
+            <div className="text-[14px] font-semibold text-[var(--theme-text-primary)]">Streamline</div>
+            <div className="text-[12px] text-[var(--theme-text-muted)] mt-0.5">Native IPTV client for iPhone, iPad, Apple TV, and Mac</div>
+          </div>
+          <div className="text-[12px] text-[var(--theme-text-ghost)] shrink-0">Also by Casa Vargas →</div>
+        </a>
+
         <div
           className="flex items-center gap-4"
           style={{ marginTop: 24 }}
