@@ -13,6 +13,12 @@ pub struct AppSettings {
     pub theme: String,
     #[serde(default = "default_provider")]
     pub provider: String,
+    #[serde(default)]
+    pub symlink_mode: bool,
+    #[serde(default)]
+    pub symlink_mount_path: Option<String>,
+    #[serde(default)]
+    pub symlink_library_path: Option<String>,
 }
 
 fn default_provider() -> String {
@@ -27,6 +33,9 @@ impl Default for AppSettings {
             create_torrent_subfolders: true,
             theme: "dark".to_string(),
             provider: default_provider(),
+            symlink_mode: false,
+            symlink_mount_path: None,
+            symlink_library_path: None,
         }
     }
 }
