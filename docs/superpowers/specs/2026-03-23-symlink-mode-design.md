@@ -41,6 +41,14 @@ The `DownloadTask.remote` field is set to `Some("symlink")` to distinguish symli
 
 Uses `PathBuf` (these are local filesystem paths, unlike rclone remotes). The `sanitize_filename` function applies to torrent name and filename components. Respects `create_torrent_subfolders` setting.
 
+**Mount path structure:** The mount path the user configures should point to the directory where torrent folders/files appear. The exact structure depends on the rclone mount configuration and the debrid service. For Real-Debrid WebDAV, this is typically the `/torrents/` subfolder. The user sets their mount path to include this (e.g. `/Volumes/realdebrid/torrents`). The app then looks for `{mount_path}/{torrent_name}/{filename}`. If a file has a common name across torrents, the torrent name subfolder disambiguates.
+
+**`DownloadTask.destination`** is set to the **symlink location** (library path side), not the mount path. This is what the Completed page's "Reveal" button uses to open the file in Finder.
+
+### Serde Compatibility
+
+All new `AppSettings` fields MUST use `#[serde(default)]` to maintain compatibility with existing serialized settings from users who upgrade.
+
 ### Error Handling
 
 | Scenario | Behavior |
@@ -82,8 +90,9 @@ New "Symlink Mode" section after Remote Downloads:
 
 ### Torrents Page
 
-- No changes to download initiation flow
-- `start_downloads` is called the same way — backend checks symlink mode
+- When symlink mode is active, skip the folder picker entirely — the library path from settings is used
+- `start_downloads` is called the same way — backend checks symlink mode and uses `symlink_library_path` instead of `destination_folder`
+- If symlink mode is on but paths aren't configured, show an error toast directing user to Settings
 
 ## What This Does NOT Include
 
