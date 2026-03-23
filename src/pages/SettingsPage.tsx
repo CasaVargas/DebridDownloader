@@ -7,6 +7,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { setMagnetHandler } from "../api/magnet";
 import { ACCENT_COLORS } from "../hooks/useAccentColor";
+import { useRclone, isRclonePath } from "../hooks/useRclone";
+import { validateRcloneRemote } from "../api/rclone";
 
 interface FrontendSettings {
   auto_start_downloads: boolean;
@@ -52,6 +54,8 @@ export default function SettingsPage() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [activeProvider, setActiveProvider] = useState("real-debrid");
   const [switching, setSwitching] = useState(false);
+  const { rcloneInfo, remotes, refreshRemotes } = useRclone();
+  const [pathError, setPathError] = useState<string | null>(null);
 
   // Add tracker form
   const [newTrackerName, setNewTrackerName] = useState("");
@@ -173,6 +177,24 @@ export default function SettingsPage() {
     }
   }
 
+  async function handlePathChange(newPath: string) {
+    setPathError(null);
+    if (isRclonePath(newPath)) {
+      if (!rcloneInfo?.available) {
+        setPathError("This looks like an rclone remote but rclone is not installed");
+        return;
+      }
+      const remoteName = newPath.split(":")[0];
+      const valid = await validateRcloneRemote(remoteName);
+      if (!valid) {
+        setPathError(`Remote "${remoteName}" not found in rclone config`);
+        return;
+      }
+    }
+    await applyChange({ download_folder: newPath || null });
+    markSaved("download_folder");
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center flex-1">
@@ -237,18 +259,28 @@ export default function SettingsPage() {
 
               {/* Download folder */}
               <div className="mb-12">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-[15px] text-[var(--theme-text-primary)]">Download Folder</span>
                   {savedField === "download_folder" && (
                     <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
                   )}
                 </div>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
+                  Local path or rclone remote (e.g. gdrive:Media/Movies)
+                </p>
                 <div className="flex items-center gap-3">
-                  <div className="bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] truncate flex-1 min-w-0">
-                    {settings.download_folder ? (
-                      <span className="text-[var(--theme-text-secondary)]">{settings.download_folder}</span>
-                    ) : (
-                      <span className="text-[var(--theme-text-ghost)]">Not set — you'll be asked each time</span>
+                  <div className="flex items-center gap-2 flex-1 min-w-0 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg overflow-hidden">
+                    <input
+                      type="text"
+                      value={settings.download_folder ?? ""}
+                      onChange={(e) => handlePathChange(e.target.value)}
+                      placeholder="Not set — you'll be asked each time"
+                      className="flex-1 bg-transparent p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none min-w-0"
+                    />
+                    {isRclonePath(settings.download_folder ?? "") && (
+                      <svg className="w-5 h-5 shrink-0 mr-3" style={{ color: "var(--accent)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                      </svg>
                     )}
                   </div>
                   <button
@@ -259,6 +291,9 @@ export default function SettingsPage() {
                     Browse
                   </button>
                 </div>
+                {pathError && (
+                  <p className="text-[#ef4444] text-[13px] mt-2">{pathError}</p>
+                )}
               </div>
 
               {/* Max concurrent */}
@@ -306,6 +341,75 @@ export default function SettingsPage() {
                 accentColor={accentColor}
                 onChange={(v) => applyFrontend({ auto_start_downloads: v })}
               />
+            </section>
+
+            {/* ── rclone ── */}
+            <section className="mb-20">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
+                rclone
+              </h3>
+              {rcloneInfo?.available ? (
+                <div className="mb-12">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[15px] text-[var(--theme-text-primary)]">Status</span>
+                    <span className="text-[13px]" style={{ color: accentColor }}>Detected</span>
+                  </div>
+                  <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">
+                    {rcloneInfo.version}
+                  </p>
+                  <div className="flex items-center gap-3 mb-4">
+                    <button
+                      onClick={refreshRemotes}
+                      className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors"
+                      style={{ padding: "10px 20px" }}
+                    >
+                      List Remotes
+                    </button>
+                  </div>
+                  {remotes.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {remotes.map((remote) => (
+                        <button
+                          key={remote}
+                          onClick={() => handlePathChange(remote)}
+                          className="text-[13px] px-3 py-1.5 rounded-lg transition-colors"
+                          style={{
+                            background: "var(--theme-bg)",
+                            border: "1px solid var(--theme-border)",
+                            color: "var(--theme-text-secondary)",
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
+                            (e.currentTarget as HTMLElement).style.color = "var(--accent)";
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.borderColor = "var(--theme-border)";
+                            (e.currentTarget as HTMLElement).style.color = "var(--theme-text-secondary)";
+                          }}
+                        >
+                          {remote}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="mb-12">
+                  <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Status</span>
+                  <p className="text-[14px] text-[var(--theme-text-muted)]">
+                    rclone not installed — install from{" "}
+                    <a
+                      href="https://rclone.org"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "var(--accent)", textDecoration: "underline" }}
+                    >
+                      rclone.org
+                    </a>
+                    {" "}to enable remote downloads
+                  </p>
+                </div>
+              )}
             </section>
 
             {/* ── Trackers ── */}
