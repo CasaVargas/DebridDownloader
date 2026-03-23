@@ -48,10 +48,25 @@ export default function CompletedPage() {
       render: (t) => (
         <div className="flex items-center gap-1.5">
           <span className="text-[15px] font-medium text-[var(--theme-text-primary)] truncate">{t.filename}</span>
-          {t.remote && (
+          {t.remote && t.remote !== "symlink" && (
             <svg className="w-3.5 h-3.5 shrink-0 text-[var(--theme-text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <title>{t.remote}</title>
               <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+            </svg>
+          )}
+          {t.remote === "symlink" && (
+            <svg
+              className="w-3.5 h-3.5 shrink-0 text-[var(--theme-text-muted)]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <title>Symlinked</title>
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
             </svg>
           )}
         </div>
@@ -76,7 +91,7 @@ export default function CompletedPage() {
       width: "160px",
       render: (t) => (
         <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-          {t.destination && !t.remote && (
+          {t.destination && (!t.remote || t.remote === "symlink") && (
             <button
               onClick={(e) => { e.stopPropagation(); revealItemInDir(t.destination).catch(() => {}); }}
               className="px-3 py-1.5 rounded-md text-[13px] font-medium text-[var(--accent)] hover:bg-[var(--accent-bg-light)] transition-colors"

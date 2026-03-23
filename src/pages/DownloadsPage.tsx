@@ -99,7 +99,7 @@ export default function DownloadsPage() {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-[15px] font-medium text-[var(--theme-text-primary)] truncate">{t.filename}</span>
-              {t.remote && (
+              {t.remote && t.remote !== "symlink" && (
                 <svg
                   className="w-3.5 h-3.5 shrink-0 text-[var(--theme-text-muted)]"
                   viewBox="0 0 24 24"
@@ -111,6 +111,21 @@ export default function DownloadsPage() {
                 >
                   <title>{t.remote}</title>
                   <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                </svg>
+              )}
+              {t.remote === "symlink" && (
+                <svg
+                  className="w-3.5 h-3.5 shrink-0 text-[var(--theme-text-muted)]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <title>Symlinked</title>
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                 </svg>
               )}
             </div>
@@ -290,9 +305,14 @@ export default function DownloadsPage() {
                       <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
                         <div className="flex items-center gap-1.5 mb-1.5">
                           <span className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px]">Destination</span>
-                          {task.remote && (
+                          {task.remote && task.remote !== "symlink" && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded text-[var(--accent)]" style={{ background: "var(--accent-bg-medium)" }}>
                               Remote
+                            </span>
+                          )}
+                          {task.remote === "symlink" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded text-[var(--accent)]" style={{ background: "var(--accent-bg-medium)" }}>
+                              Symlink
                             </span>
                           )}
                         </div>
@@ -309,9 +329,14 @@ export default function DownloadsPage() {
                       <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
                         <div className="flex items-center gap-1.5 mb-1.5">
                           <span className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px]">Destination</span>
-                          {task.remote && (
+                          {task.remote && task.remote !== "symlink" && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded text-[var(--accent)]" style={{ background: "var(--accent-bg-medium)" }}>
                               Remote
+                            </span>
+                          )}
+                          {task.remote === "symlink" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded text-[var(--accent)]" style={{ background: "var(--accent-bg-medium)" }}>
+                              Symlink
                             </span>
                           )}
                         </div>

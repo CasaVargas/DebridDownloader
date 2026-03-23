@@ -236,10 +236,15 @@ export default function TorrentsPage() {
     const torrent = torrents.find((t) => t.id === id);
     if (!torrent) return;
     try {
-      // Supports both local paths and rclone remotes (e.g. "gdrive:Media/Movies")
-      // Backend detects rclone paths and routes to rclone rcat automatically
+      // Symlink mode: backend uses library path from settings, no folder picker needed
       let folder = settings?.download_folder ?? null;
-      if (!folder) {
+      if (settings?.symlink_mode) {
+        if (!settings?.symlink_mount_path || !settings?.symlink_library_path) {
+          setError("Symlink mode is on but mount path or library folder is not configured. Check Settings.");
+          return;
+        }
+        folder = settings.symlink_library_path;
+      } else if (!folder) {
         const picked = await open({ directory: true, title: "Select download folder" });
         if (!picked) return;
         folder = picked as string;
@@ -265,10 +270,15 @@ export default function TorrentsPage() {
     setDownloading(true);
     try {
       const s = await getSettings();
-      // Supports both local paths and rclone remotes (e.g. "gdrive:Media/Movies")
-      // Backend detects rclone paths and routes to rclone rcat automatically
       let folder = s.download_folder;
-      if (!folder) {
+      if (s.symlink_mode) {
+        if (!s.symlink_mount_path || !s.symlink_library_path) {
+          setDetailError("Symlink mode is on but mount path or library folder is not configured. Check Settings.");
+          setDownloading(false);
+          return;
+        }
+        folder = s.symlink_library_path;
+      } else if (!folder) {
         const picked = await open({ directory: true, title: "Select download folder" });
         if (!picked) { setDownloading(false); return; }
         folder = picked as string;
