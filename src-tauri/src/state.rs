@@ -41,6 +41,8 @@ pub struct DownloadTask {
     pub downloaded_bytes: i64,
     pub speed: f64,
     pub status: DownloadStatus,
+    #[serde(default)]
+    pub remote: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

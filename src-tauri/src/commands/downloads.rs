@@ -1,5 +1,6 @@
 use crate::providers::types::{DownloadItem, DownloadLink};
 use crate::downloader;
+use crate::rclone;
 use crate::state::{AppState, DownloadStatus, DownloadTask};
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
@@ -35,27 +36,51 @@ pub async fn start_downloads(
 
     for link in &links {
         let id = uuid::Uuid::new_v4().to_string();
-        let dest = if create_subfolders {
-            if let Some(ref name) = torrent_name {
-                PathBuf::from(&destination_folder)
-                    .join(sanitize_filename(name))
-                    .join(sanitize_filename(&link.filename))
+        let is_remote = rclone::is_rclone_path(&destination_folder);
+
+        let dest = if is_remote {
+            // rclone paths: string concatenation, NOT PathBuf
+            let base = destination_folder.trim_end_matches('/');
+            if create_subfolders {
+                if let Some(ref name) = torrent_name {
+                    format!("{}/{}/{}", base, sanitize_filename(name), sanitize_filename(&link.filename))
+                } else {
+                    format!("{}/{}", base, sanitize_filename(&link.filename))
+                }
+            } else {
+                format!("{}/{}", base, sanitize_filename(&link.filename))
+            }
+        } else {
+            // Local paths: use PathBuf as before
+            if create_subfolders {
+                if let Some(ref name) = torrent_name {
+                    PathBuf::from(&destination_folder)
+                        .join(sanitize_filename(name))
+                        .join(sanitize_filename(&link.filename))
+                } else {
+                    PathBuf::from(&destination_folder).join(sanitize_filename(&link.filename))
+                }
             } else {
                 PathBuf::from(&destination_folder).join(sanitize_filename(&link.filename))
             }
-        } else {
-            PathBuf::from(&destination_folder).join(sanitize_filename(&link.filename))
+            .to_string_lossy()
+            .to_string()
         };
 
         let task = DownloadTask {
             id: id.clone(),
             filename: link.filename.clone(),
             url: link.download.clone(),
-            destination: dest.to_string_lossy().to_string(),
+            destination: dest,
             total_bytes: link.filesize,
             downloaded_bytes: 0,
             speed: 0.0,
             status: DownloadStatus::Pending,
+            remote: if is_remote {
+                Some(destination_folder.clone())
+            } else {
+                None
+            },
         };
 
         let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);

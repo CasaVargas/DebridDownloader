@@ -112,6 +112,7 @@ export interface DownloadTask {
   downloaded_bytes: number;
   speed: number;
   status: DownloadStatus;
+  remote?: string | null;
 }
 
 export interface DownloadProgress {
@@ -121,6 +122,7 @@ export interface DownloadProgress {
   total_bytes: number;
   speed: number;
   status: DownloadStatus;
+  remote?: string | null;
 }
 
 // ── Settings ──
@@ -172,4 +174,11 @@ export interface TrackerConfig {
 export interface StreamUrlResponse {
   stream_url: string;
   session_id: string;
+}
+
+// ── rclone ──
+
+export interface RcloneInfo {
+  version: string;
+  available: boolean;
 }

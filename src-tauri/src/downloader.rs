@@ -13,6 +13,7 @@ pub struct DownloadProgress {
     pub total_bytes: i64,
     pub speed: f64,
     pub status: DownloadStatus,
+    pub remote: Option<String>,
 }
 
 pub async fn download_file(
@@ -115,6 +116,7 @@ fn emit_progress(app: &AppHandle, task: &DownloadTask) {
         total_bytes: task.total_bytes,
         speed: task.speed,
         status: task.status.clone(),
+        remote: task.remote.clone(),
     };
     let _ = app.emit("download-progress", &progress);
 }
