@@ -53,16 +53,19 @@ pub async fn start_downloads(
             let id = uuid::Uuid::new_v4().to_string();
 
             // Source: file on the rclone mount
-            let source = if create_subfolders {
-                if let Some(ref name) = torrent_name {
-                    PathBuf::from(&mount_path)
-                        .join(sanitize_filename(name))
-                        .join(sanitize_filename(&link.filename))
+            // Try with torrent subfolder first, then flat — mount structure varies
+            let source = if let Some(ref name) = torrent_name {
+                let with_subfolder = PathBuf::from(&mount_path)
+                    .join(name)
+                    .join(&link.filename);
+                if tokio::fs::try_exists(&with_subfolder).await.unwrap_or(false) {
+                    with_subfolder
                 } else {
-                    PathBuf::from(&mount_path).join(sanitize_filename(&link.filename))
+                    // Try flat (single-file torrents or flat mount)
+                    PathBuf::from(&mount_path).join(&link.filename)
                 }
             } else {
-                PathBuf::from(&mount_path).join(sanitize_filename(&link.filename))
+                PathBuf::from(&mount_path).join(&link.filename)
             };
 
             // Destination: symlink in the library folder
