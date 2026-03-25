@@ -511,7 +511,7 @@ footer a:hover { color: var(--green); }
     <img src="icon.png" alt="DebridDownloader" width="80" height="80" style="border-radius: 18px; margin-bottom: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
     <div class="hero-badges">
       <div class="hero-badge" aria-label="Open source software">&#9889; Open Source — GPL 3.0</div>
-      <div class="hero-badge-new" aria-label="Prowlarr support"><span class="new-tag">New</span> Prowlarr Integration + Update Notifications</div>
+      <div class="hero-badge-new" aria-label="Watch list automation"><span class="new-tag">New</span> Watch List — Auto-Download New Releases</div>
     </div>
     <h1>The fastest way to<br><span>download from Real-Debrid</span></h1>
     <p class="subtitle">Native desktop app with multi-threaded downloads, keyboard-first controls, and secure token storage. Now with TorBox support.</p>
@@ -566,6 +566,22 @@ footer a:hover { color: var(--green); }
     <div class="section-label">What's New</div>
     <h2 class="section-title">Latest updates</h2>
     <div class="changelog">
+      <div class="changelog-entry">
+        <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
+        <div class="changelog-content">
+          <div class="changelog-header">
+            <span class="changelog-version">v1.3.0</span>
+            <span class="changelog-date">March 2026</span>
+          </div>
+          <div class="changelog-title">Watch List &amp; Native Notifications</div>
+          <ul class="changelog-items">
+            <li>Watch list with automated search rules — auto-add new releases to your debrid service</li>
+            <li>TV show tracking with season/episode awareness and quality filters</li>
+            <li>Native OS notifications when watch list matches are found</li>
+            <li>Sidebar badge for unread watch list matches</li>
+          </ul>
+        </div>
+      </div>
       <div class="changelog-entry">
         <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
         <div class="changelog-content">
@@ -815,7 +831,7 @@ footer a:hover { color: var(--green); }
 
   <script>
 (function() {
-  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.2.0/';
+  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.3.0/';
   var LATEST = 'https://github.com/CasaVargas/DebridDownloader/releases/latest';
 
   var directLinks = {

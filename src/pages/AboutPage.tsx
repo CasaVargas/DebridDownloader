@@ -190,6 +190,26 @@ export default function AboutPage() {
           <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[1px] mb-4">What's New</div>
           {[
             {
+              version: "1.3.0",
+              title: "Watch List & Native Notifications",
+              items: [
+                "Watch list with automated search rules — auto-add new releases",
+                "TV show tracking with season/episode awareness and quality filters",
+                "Native OS notifications when watch list matches are found",
+                "Sidebar badge for unread watch list matches",
+              ],
+            },
+            {
+              version: "1.2.0",
+              title: "rclone Integration & Symlink Mode",
+              items: [
+                "Stream downloads directly to cloud remotes via rclone",
+                "Symlink mode for instant Plex/Jellyfin availability",
+                "Smart destination input with rclone remote paths",
+                "rclone detection and remote listing in Settings",
+              ],
+            },
+            {
               version: "1.1.9",
               title: "Prowlarr Integration & Polish",
               items: [

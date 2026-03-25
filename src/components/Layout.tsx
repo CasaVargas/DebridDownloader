@@ -1,6 +1,7 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import Sidebar from "./Sidebar";
 import Toast from "./Toast";
 import { DownloadTasksProvider } from "../hooks/useDownloadTasks";
@@ -41,12 +42,29 @@ export default function Layout() {
   }, [activeView]);
 
   useEffect(() => {
-    const unlisten = listen<WatchMatch>("watchlist-match", (event) => {
+    const unlisten = listen<WatchMatch>("watchlist-match", async (event) => {
+      const match = event.payload;
+      const statusText = match.status.type === "Failed" ? " (failed)" : "";
+
       if (activeView !== "watchlist") {
         setUnreadWatchCount((c) => c + 1);
-        const match = event.payload;
-        const statusText = match.status.type === "Failed" ? " (failed)" : "";
         setWatchToast(`Watch match: ${match.title}${statusText}`);
+      }
+
+      // Send native OS notification regardless of which page is active
+      try {
+        let permitted = await isPermissionGranted();
+        if (!permitted) {
+          permitted = (await requestPermission()) === "granted";
+        }
+        if (permitted) {
+          sendNotification({
+            title: "Watch List Match",
+            body: `${match.title}${statusText}`,
+          });
+        }
+      } catch {
+        // Notification API unavailable — fall back to in-app toast only
       }
     });
     return () => { unlisten.then((fn) => fn()); };

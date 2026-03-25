@@ -22,6 +22,7 @@
     "autostart:allow-is-enabled",
     "deep-link:default",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "notification:default"
   ]
 }

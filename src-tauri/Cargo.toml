@@ -1,6 +1,6 @@
 [package]
 name = "debriddownloader"
-version = "1.2.0"
+version = "1.3.0"
 description = "Real-Debrid Torrent Downloader"
 authors = ["Jonathan"]
 license = "GPL-3.0-or-later"
@@ -43,6 +43,7 @@ quick-xml = "0.37"
 sha1 = "0.10"
 tauri-plugin-updater = "2.10.0"
 tauri-plugin-process = "2.3.1"
+tauri-plugin-notification = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 dirs = "6"
