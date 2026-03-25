@@ -220,6 +220,14 @@ pub fn run() {
             commands::rclone::check_rclone,
             commands::rclone::list_rclone_remotes,
             commands::rclone::validate_rclone_remote,
+            // Watch list
+            commands::watchlist::get_watch_rules,
+            commands::watchlist::add_watch_rule,
+            commands::watchlist::update_watch_rule,
+            commands::watchlist::delete_watch_rule,
+            commands::watchlist::get_watch_matches,
+            commands::watchlist::clear_watch_matches,
+            commands::watchlist::run_watch_rule_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
