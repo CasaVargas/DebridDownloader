@@ -2,8 +2,10 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import Sidebar from "./Sidebar";
+import Toast from "./Toast";
 import { DownloadTasksProvider } from "../hooks/useDownloadTasks";
 import { useAccentColor } from "../hooks/useAccentColor";
+import type { WatchMatch } from "../types";
 
 export default function Layout() {
   useAccentColor();
@@ -29,6 +31,7 @@ export default function Layout() {
   };
 
   const [unreadWatchCount, setUnreadWatchCount] = useState(0);
+  const [watchToast, setWatchToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeView === "watchlist") {
@@ -38,9 +41,12 @@ export default function Layout() {
   }, [activeView]);
 
   useEffect(() => {
-    const unlisten = listen("watchlist-match", () => {
+    const unlisten = listen<WatchMatch>("watchlist-match", (event) => {
       if (activeView !== "watchlist") {
         setUnreadWatchCount((c) => c + 1);
+        const match = event.payload;
+        const statusText = match.status.type === "Failed" ? " (failed)" : "";
+        setWatchToast(`Watch match: ${match.title}${statusText}`);
       }
     });
     return () => { unlisten.then((fn) => fn()); };
@@ -101,6 +107,12 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      {watchToast && (
+        <Toast
+          message={watchToast}
+          onDismiss={() => setWatchToast(null)}
+        />
+      )}
     </DownloadTasksProvider>
   );
 }
