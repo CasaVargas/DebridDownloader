@@ -22,6 +22,26 @@ pub struct AppSettings {
     pub symlink_mount_path: Option<String>,
     #[serde(default)]
     pub symlink_library_path: Option<String>,
+    #[serde(default)]
+    pub auto_organize: bool,
+    #[serde(default)]
+    pub movies_folder: Option<String>,
+    #[serde(default)]
+    pub tv_folder: Option<String>,
+    #[serde(default)]
+    pub tmdb_api_key: Option<String>,
+    #[serde(default)]
+    pub plex_url: Option<String>,
+    #[serde(default)]
+    pub plex_token: Option<String>,
+    #[serde(default)]
+    pub jellyfin_url: Option<String>,
+    #[serde(default)]
+    pub jellyfin_api_key: Option<String>,
+    #[serde(default)]
+    pub emby_url: Option<String>,
+    #[serde(default)]
+    pub emby_api_key: Option<String>,
 }
 
 fn default_provider() -> String {
@@ -39,6 +59,16 @@ impl Default for AppSettings {
             symlink_mode: false,
             symlink_mount_path: None,
             symlink_library_path: None,
+            auto_organize: false,
+            movies_folder: None,
+            tv_folder: None,
+            tmdb_api_key: None,
+            plex_url: None,
+            plex_token: None,
+            jellyfin_url: None,
+            jellyfin_api_key: None,
+            emby_url: None,
+            emby_api_key: None,
         }
     }
 }

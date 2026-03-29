@@ -136,6 +136,16 @@ export interface AppSettings {
   symlink_mode?: boolean;
   symlink_mount_path?: string | null;
   symlink_library_path?: string | null;
+  auto_organize?: boolean;
+  movies_folder?: string | null;
+  tv_folder?: string | null;
+  tmdb_api_key?: string | null;
+  plex_url?: string | null;
+  plex_token?: string | null;
+  jellyfin_url?: string | null;
+  jellyfin_api_key?: string | null;
+  emby_url?: string | null;
+  emby_api_key?: string | null;
 }
 
 // ── Search ──
