@@ -2,6 +2,7 @@ mod commands;
 mod providers;
 mod downloader;
 mod media_parser;
+mod media_servers;
 mod rclone;
 mod tmdb;
 mod organizer;
@@ -255,6 +256,8 @@ pub fn run() {
             commands::rclone::check_rclone,
             commands::rclone::list_rclone_remotes,
             commands::rclone::validate_rclone_remote,
+            // Media servers
+            commands::media_servers::test_media_server,
             // Watch list
             commands::watchlist::get_watch_rules,
             commands::watchlist::add_watch_rule,
