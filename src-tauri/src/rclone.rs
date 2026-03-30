@@ -86,6 +86,7 @@ pub async fn download_to_rclone(
     app: AppHandle,
     task: &mut DownloadTask,
     cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
+    speed_limit: Option<u64>,
 ) -> Result<(), String> {
     // Start HTTP stream from debrid URL
     let client = reqwest::Client::new();
@@ -157,6 +158,18 @@ pub async fn download_to_rclone(
                             task.speed = speed_bytes as f64 / elapsed;
                             speed_bytes = 0;
                             speed_start = std::time::Instant::now();
+                        }
+
+                        // Throttle if over speed limit
+                        if let Some(limit) = speed_limit {
+                            let el = speed_start.elapsed().as_secs_f64();
+                            if el > 0.0 && speed_bytes as f64 / el > limit as f64 {
+                                let target = speed_bytes as f64 / limit as f64;
+                                let sleep = target - el;
+                                if sleep > 0.0 {
+                                    tokio::time::sleep(std::time::Duration::from_secs_f64(sleep)).await;
+                                }
+                            }
                         }
 
                         if last_emit.elapsed().as_millis() >= 100 {

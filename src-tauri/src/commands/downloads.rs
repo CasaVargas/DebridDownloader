@@ -43,6 +43,7 @@ pub async fn start_downloads(
     let jellyfin_api_key = settings.jellyfin_api_key.clone();
     let emby_url = settings.emby_url.clone();
     let emby_api_key = settings.emby_api_key.clone();
+    let speed_limit_bytes = settings.speed_limit_bytes;
     drop(settings);
 
     // Symlink mode: create symlinks instead of downloading
@@ -272,9 +273,9 @@ pub async fn start_downloads(
                 };
 
                 let result = if task.remote.is_some() {
-                    crate::rclone::download_to_rclone(app, &mut task, &mut cancel_rx).await
+                    crate::rclone::download_to_rclone(app, &mut task, &mut cancel_rx, speed_limit_bytes).await
                 } else {
-                    downloader::download_file(app, &mut task, &mut cancel_rx).await
+                    downloader::download_file(app, &mut task, &mut cancel_rx, speed_limit_bytes).await
                 };
 
                 if let Err(e) = result {

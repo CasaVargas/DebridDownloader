@@ -42,6 +42,8 @@ pub struct AppSettings {
     pub emby_url: Option<String>,
     #[serde(default)]
     pub emby_api_key: Option<String>,
+    #[serde(default)]
+    pub speed_limit_bytes: Option<u64>,
 }
 
 fn default_provider() -> String {
@@ -69,6 +71,7 @@ impl Default for AppSettings {
             jellyfin_api_key: None,
             emby_url: None,
             emby_api_key: None,
+            speed_limit_bytes: None,
         }
     }
 }

@@ -20,6 +20,7 @@ pub async fn download_file(
     app: AppHandle,
     task: &mut DownloadTask,
     cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
+    speed_limit: Option<u64>,
 ) -> Result<(), String> {
     let dest_path = PathBuf::from(&task.destination);
 
@@ -73,6 +74,18 @@ pub async fn download_file(
                             task.speed = speed_bytes as f64 / elapsed;
                             speed_bytes = 0;
                             speed_start = std::time::Instant::now();
+                        }
+
+                        // Throttle if over speed limit
+                        if let Some(limit) = speed_limit {
+                            let el = speed_start.elapsed().as_secs_f64();
+                            if el > 0.0 && speed_bytes as f64 / el > limit as f64 {
+                                let target = speed_bytes as f64 / limit as f64;
+                                let sleep = target - el;
+                                if sleep > 0.0 {
+                                    tokio::time::sleep(std::time::Duration::from_secs_f64(sleep)).await;
+                                }
+                            }
                         }
 
                         if last_emit.elapsed().as_millis() >= 100 {
