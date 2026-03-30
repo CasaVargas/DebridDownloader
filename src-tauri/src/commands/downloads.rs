@@ -33,6 +33,16 @@ pub async fn start_downloads(
     let symlink_mode = settings.symlink_mode;
     let symlink_mount_path = settings.symlink_mount_path.clone();
     let symlink_library_path = settings.symlink_library_path.clone();
+    let auto_organize = settings.auto_organize;
+    let movies_folder = settings.movies_folder.clone();
+    let tv_folder = settings.tv_folder.clone();
+    let tmdb_api_key = settings.tmdb_api_key.clone();
+    let plex_url = settings.plex_url.clone();
+    let plex_token = settings.plex_token.clone();
+    let jellyfin_url = settings.jellyfin_url.clone();
+    let jellyfin_api_key = settings.jellyfin_api_key.clone();
+    let emby_url = settings.emby_url.clone();
+    let emby_api_key = settings.emby_api_key.clone();
     drop(settings);
 
     // Symlink mode: create symlinks instead of downloading
@@ -68,8 +78,17 @@ pub async fn start_downloads(
                 PathBuf::from(&mount_path).join(&link.filename)
             };
 
-            // Destination: symlink in the library folder
-            let dest = if create_subfolders {
+            // Destination: organized path or raw library folder
+            let dest = if auto_organize {
+                if let (Some(ref mf), Some(ref tf)) = (&movies_folder, &tv_folder) {
+                    let result = crate::organizer::organize_path(
+                        &link.filename, mf, tf, tmdb_api_key.as_deref(),
+                    ).await;
+                    result.dest_path
+                } else {
+                    return Err("Auto-organize is on but Movies/TV folder not configured".to_string());
+                }
+            } else if create_subfolders {
                 if let Some(ref name) = torrent_name {
                     PathBuf::from(&library_path)
                         .join(sanitize_filename(name))
@@ -133,6 +152,23 @@ pub async fn start_downloads(
 
             task_ids.push(id);
         }
+
+        // Trigger media server scans
+        let scan_app = app.clone();
+        let s_plex_url = plex_url.clone();
+        let s_plex_token = plex_token.clone();
+        let s_jellyfin_url = jellyfin_url.clone();
+        let s_jellyfin_key = jellyfin_api_key.clone();
+        let s_emby_url = emby_url.clone();
+        let s_emby_key = emby_api_key.clone();
+        tokio::spawn(async move {
+            crate::media_servers::trigger_scans(
+                &scan_app,
+                s_plex_url.as_deref(), s_plex_token.as_deref(),
+                s_jellyfin_url.as_deref(), s_jellyfin_key.as_deref(),
+                s_emby_url.as_deref(), s_emby_key.as_deref(),
+            ).await;
+        });
 
         return Ok(task_ids);
     }
@@ -199,6 +235,17 @@ pub async fn start_downloads(
     let active_downloads = state.active_downloads.clone();
     let cancel_tokens_map = state.cancel_tokens.clone();
 
+    let dl_auto_organize = auto_organize;
+    let dl_movies_folder = movies_folder.clone();
+    let dl_tv_folder = tv_folder.clone();
+    let dl_tmdb_key = tmdb_api_key.clone();
+    let dl_plex_url = plex_url;
+    let dl_plex_token = plex_token;
+    let dl_jellyfin_url = jellyfin_url;
+    let dl_jellyfin_key = jellyfin_api_key;
+    let dl_emby_url = emby_url;
+    let dl_emby_key = emby_api_key;
+
     tokio::spawn(async move {
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrent));
         let mut handles = Vec::new();
@@ -208,6 +255,10 @@ pub async fn start_downloads(
             let app = app.clone();
             let downloads = active_downloads.clone();
             let cancel_map = cancel_tokens_map.clone();
+            let task_organize = dl_auto_organize;
+            let task_movies = dl_movies_folder.clone();
+            let task_tv = dl_tv_folder.clone();
+            let task_tmdb = dl_tmdb_key.clone();
 
             let handle = tokio::spawn(async move {
                 let _permit = sem.acquire().await.unwrap();
@@ -230,6 +281,25 @@ pub async fn start_downloads(
                     task.status = DownloadStatus::Failed(e);
                 }
 
+                // Post-download organize (local downloads only, not rclone)
+                if task.status == DownloadStatus::Completed && task.remote.is_none() && task_organize {
+                    if let (Some(ref mf), Some(ref tf)) = (&task_movies, &task_tv) {
+                        let result = crate::organizer::organize_path(
+                            &task.filename, mf, tf, task_tmdb.as_deref(),
+                        ).await;
+                        let source = PathBuf::from(&task.destination);
+                        match crate::organizer::move_file(&source, &result.dest_path).await {
+                            Ok(()) => {
+                                task.destination = result.dest_path.to_string_lossy().to_string();
+                                log::info!("Organized: {} → {}", task.filename, task.destination);
+                            }
+                            Err(e) => {
+                                log::warn!("Failed to organize {}: {}", task.filename, e);
+                            }
+                        }
+                    }
+                }
+
                 downloads.write().await.insert(id.clone(), task);
                 cancel_map.write().await.remove(&id);
             });
@@ -240,6 +310,14 @@ pub async fn start_downloads(
         for handle in handles {
             let _ = handle.await;
         }
+
+        // Trigger media server scans after all downloads complete
+        crate::media_servers::trigger_scans(
+            &app,
+            dl_plex_url.as_deref(), dl_plex_token.as_deref(),
+            dl_jellyfin_url.as_deref(), dl_jellyfin_key.as_deref(),
+            dl_emby_url.as_deref(), dl_emby_key.as_deref(),
+        ).await;
     });
 
     Ok(ids)

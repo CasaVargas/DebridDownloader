@@ -60,6 +60,16 @@ export default function SettingsPage() {
   const validateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mountPath, setMountPath] = useState("");
   const [libraryPath, setLibraryPath] = useState("");
+  const [moviesFolder, setMoviesFolder] = useState("");
+  const [tvFolder, setTvFolder] = useState("");
+  const [tmdbApiKey, setTmdbApiKey] = useState("");
+  const [plexUrl, setPlexUrl] = useState("");
+  const [plexToken, setPlexToken] = useState("");
+  const [jellyfinUrl, setJellyfinUrl] = useState("");
+  const [jellyfinApiKey, setJellyfinApiKey] = useState("");
+  const [embyUrl, setEmbyUrl] = useState("");
+  const [embyApiKey, setEmbyApiKey] = useState("");
+  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({});
 
   // Add tracker form
   const [newTrackerName, setNewTrackerName] = useState("");
@@ -78,6 +88,15 @@ export default function SettingsPage() {
       setPathInput(s.download_folder ?? "");
       setMountPath(s.symlink_mount_path ?? "");
       setLibraryPath(s.symlink_library_path ?? "");
+      setMoviesFolder(s.movies_folder ?? "");
+      setTvFolder(s.tv_folder ?? "");
+      setTmdbApiKey(s.tmdb_api_key ?? "");
+      setPlexUrl(s.plex_url ?? "");
+      setPlexToken(s.plex_token ?? "");
+      setJellyfinUrl(s.jellyfin_url ?? "");
+      setJellyfinApiKey(s.jellyfin_api_key ?? "");
+      setEmbyUrl(s.emby_url ?? "");
+      setEmbyApiKey(s.emby_api_key ?? "");
       setFrontend((prev) => ({ ...prev, launch_at_login: autostart }));
       setTrackers(configs);
     }).finally(() => setLoading(false));
@@ -198,6 +217,35 @@ export default function SettingsPage() {
       setLibraryPath(selected);
       await applyChange({ symlink_library_path: selected });
       markSaved("symlink_library_path");
+    }
+  }
+
+  async function handleBrowseMovies() {
+    const selected = await open({ directory: true, title: "Select Movies folder" });
+    if (selected && typeof selected === "string") {
+      setMoviesFolder(selected);
+      await applyChange({ movies_folder: selected });
+      markSaved("movies_folder");
+    }
+  }
+
+  async function handleBrowseTv() {
+    const selected = await open({ directory: true, title: "Select TV folder" });
+    if (selected && typeof selected === "string") {
+      setTvFolder(selected);
+      await applyChange({ tv_folder: selected });
+      markSaved("tv_folder");
+    }
+  }
+
+  async function handleTestServer(type: string, url: string, credential: string) {
+    setTestResult((prev) => ({ ...prev, [type]: { ok: false, msg: "Testing..." } }));
+    try {
+      const { testMediaServer } = await import("../api/media_servers");
+      const name = await testMediaServer(type, url, credential);
+      setTestResult((prev) => ({ ...prev, [type]: { ok: true, msg: name } }));
+    } catch (e) {
+      setTestResult((prev) => ({ ...prev, [type]: { ok: false, msg: String(e) } }));
     }
   }
 
@@ -382,6 +430,87 @@ export default function SettingsPage() {
                 accentColor={accentColor}
                 onChange={(v) => applyFrontend({ auto_start_downloads: v })}
               />
+            </section>
+
+            {/* ── Media Library ── */}
+            <section className="mb-20">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
+                Media Library
+              </h3>
+
+              <ToggleRow
+                label="Auto-organize media"
+                description="Sort downloads into Movies and TV folder structures using TMDb metadata"
+                checked={settings.auto_organize ?? false}
+                saved={savedField === "auto_organize"}
+                accentColor={accentColor}
+                onChange={async (v) => {
+                  await applyChange({ auto_organize: v });
+                  markSaved("auto_organize");
+                }}
+              />
+
+              {settings.auto_organize && (
+                <>
+                  <div className="mb-12">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[15px] text-[var(--theme-text-primary)]">Movies Folder</span>
+                      {savedField === "movies_folder" && <span style={{ color: accentColor }} className="text-[13px]">Saved</span>}
+                    </div>
+                    <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">Movies are organized as: Movie Name (Year)/filename</p>
+                    <div className="flex items-center gap-3">
+                      <input type="text" value={moviesFolder}
+                        onChange={(e) => { setMoviesFolder(e.target.value); applyChange({ movies_folder: e.target.value || null }); }}
+                        placeholder="/media/Movies"
+                        className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors min-w-0"
+                      />
+                      <button onClick={handleBrowseMovies}
+                        className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors shrink-0 self-stretch"
+                        style={{ padding: "0 28px" }}>Browse</button>
+                    </div>
+                  </div>
+
+                  <div className="mb-12">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[15px] text-[var(--theme-text-primary)]">TV Folder</span>
+                      {savedField === "tv_folder" && <span style={{ color: accentColor }} className="text-[13px]">Saved</span>}
+                    </div>
+                    <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">TV shows are organized as: Show Name/Season XX/filename</p>
+                    <div className="flex items-center gap-3">
+                      <input type="text" value={tvFolder}
+                        onChange={(e) => { setTvFolder(e.target.value); applyChange({ tv_folder: e.target.value || null }); }}
+                        placeholder="/media/TV"
+                        className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors min-w-0"
+                      />
+                      <button onClick={handleBrowseTv}
+                        className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors shrink-0 self-stretch"
+                        style={{ padding: "0 28px" }}>Browse</button>
+                    </div>
+                  </div>
+
+                  <div className="mb-12">
+                    <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">TMDb API Key</span>
+                    <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">Optional — using default key. Get your own from themoviedb.org</p>
+                    <input type="text" value={tmdbApiKey}
+                      onChange={(e) => { setTmdbApiKey(e.target.value); applyChange({ tmdb_api_key: e.target.value || null }); }}
+                      placeholder="Using default key"
+                      className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
+                    />
+                  </div>
+
+                  {(!moviesFolder || !tvFolder) && (
+                    <div className="p-4 rounded-xl mb-12" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)" }}>
+                      <p className="text-[13px] text-[#f59e0b]">Both Movies and TV folders must be configured for auto-organize to work</p>
+                    </div>
+                  )}
+
+                  {settings.symlink_mode && (
+                    <div className="p-4 rounded-xl mb-12" style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.15)" }}>
+                      <p className="text-[13px] text-[#3b82f6]">Symlink mode active — files will be symlinked to these folders instead of the library folder</p>
+                    </div>
+                  )}
+                </>
+              )}
             </section>
 
             {/* ── rclone ── */}
@@ -570,6 +699,91 @@ export default function SettingsPage() {
                   )}
                 </>
               )}
+            </section>
+
+            {/* ── Media Servers ── */}
+            <section className="mb-20">
+              <h3 className="text-[12px] text-[var(--theme-text-muted)] uppercase tracking-[1.5px] mb-10 pb-4 border-b border-[var(--theme-border-subtle)]">
+                Media Servers
+              </h3>
+
+              <div className="mb-12">
+                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Plex</span>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">Trigger library scan after downloads complete</p>
+                <div className="flex flex-col gap-3">
+                  <input type="text" value={plexUrl}
+                    onChange={(e) => { setPlexUrl(e.target.value); applyChange({ plex_url: e.target.value || null }); }}
+                    placeholder="http://localhost:32400"
+                    className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors"
+                  />
+                  <div className="flex gap-3">
+                    <input type="text" value={plexToken}
+                      onChange={(e) => { setPlexToken(e.target.value); applyChange({ plex_token: e.target.value || null }); }}
+                      placeholder="X-Plex-Token"
+                      className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
+                    />
+                    <button onClick={() => handleTestServer("plex", plexUrl, plexToken)}
+                      disabled={!plexUrl || !plexToken}
+                      className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors shrink-0 disabled:opacity-30"
+                      style={{ padding: "0 20px" }}>Test</button>
+                  </div>
+                  {testResult.plex && (
+                    <p className={`text-[13px] ${testResult.plex.ok ? "text-[var(--accent)]" : "text-[#ef4444]"}`}>{testResult.plex.msg}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mb-12">
+                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Jellyfin</span>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">Trigger library scan after downloads complete</p>
+                <div className="flex flex-col gap-3">
+                  <input type="text" value={jellyfinUrl}
+                    onChange={(e) => { setJellyfinUrl(e.target.value); applyChange({ jellyfin_url: e.target.value || null }); }}
+                    placeholder="http://localhost:8096"
+                    className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors"
+                  />
+                  <div className="flex gap-3">
+                    <input type="text" value={jellyfinApiKey}
+                      onChange={(e) => { setJellyfinApiKey(e.target.value); applyChange({ jellyfin_api_key: e.target.value || null }); }}
+                      placeholder="API Key"
+                      className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
+                    />
+                    <button onClick={() => handleTestServer("jellyfin", jellyfinUrl, jellyfinApiKey)}
+                      disabled={!jellyfinUrl || !jellyfinApiKey}
+                      className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors shrink-0 disabled:opacity-30"
+                      style={{ padding: "0 20px" }}>Test</button>
+                  </div>
+                  {testResult.jellyfin && (
+                    <p className={`text-[13px] ${testResult.jellyfin.ok ? "text-[var(--accent)]" : "text-[#ef4444]"}`}>{testResult.jellyfin.msg}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mb-12">
+                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Emby</span>
+                <p className="text-[14px] text-[var(--theme-text-muted)] mb-4">Trigger library scan after downloads complete</p>
+                <div className="flex flex-col gap-3">
+                  <input type="text" value={embyUrl}
+                    onChange={(e) => { setEmbyUrl(e.target.value); applyChange({ emby_url: e.target.value || null }); }}
+                    placeholder="http://localhost:8096"
+                    className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors"
+                  />
+                  <div className="flex gap-3">
+                    <input type="text" value={embyApiKey}
+                      onChange={(e) => { setEmbyApiKey(e.target.value); applyChange({ emby_api_key: e.target.value || null }); }}
+                      placeholder="API Key"
+                      className="flex-1 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-secondary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
+                    />
+                    <button onClick={() => handleTestServer("emby", embyUrl, embyApiKey)}
+                      disabled={!embyUrl || !embyApiKey}
+                      className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[14px] font-medium transition-colors shrink-0 disabled:opacity-30"
+                      style={{ padding: "0 20px" }}>Test</button>
+                  </div>
+                  {testResult.emby && (
+                    <p className={`text-[13px] ${testResult.emby.ok ? "text-[var(--accent)]" : "text-[#ef4444]"}`}>{testResult.emby.msg}</p>
+                  )}
+                </div>
+              </div>
             </section>
 
             {/* ── Trackers ── */}

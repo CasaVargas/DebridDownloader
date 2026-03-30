@@ -570,6 +570,22 @@ footer a:hover { color: var(--green); }
         <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
         <div class="changelog-content">
           <div class="changelog-header">
+            <span class="changelog-version">v1.4.0</span>
+            <span class="changelog-date">March 2026</span>
+          </div>
+          <div class="changelog-title">Media Intelligence</div>
+          <ul class="changelog-items">
+            <li>Auto-organize downloads into Plex/Jellyfin folder structures (Movies/TV)</li>
+            <li>TMDb metadata lookup for correct titles and years</li>
+            <li>Plex, Jellyfin, and Emby library scan triggers after downloads</li>
+            <li>Test Connection buttons for media server configuration</li>
+          </ul>
+        </div>
+      </div>
+      <div class="changelog-entry">
+        <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
+        <div class="changelog-content">
+          <div class="changelog-header">
             <span class="changelog-version">v1.3.0</span>
             <span class="changelog-date">March 2026</span>
           </div>
@@ -831,13 +847,13 @@ footer a:hover { color: var(--green); }
 
   <script>
 (function() {
-  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.3.0/';
+  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.4.0/';
   var LATEST = 'https://github.com/CasaVargas/DebridDownloader/releases/latest';
 
   var directLinks = {
-    mac: BASE + 'DebridDownloader_1.2.0_aarch64.dmg',
-    win: BASE + 'DebridDownloader_1.2.0_x64-setup.exe',
-    linux: BASE + 'DebridDownloader_1.2.0_amd64.deb'
+    mac: BASE + 'DebridDownloader_1.4.0_aarch64.dmg',
+    win: BASE + 'DebridDownloader_1.4.0_x64-setup.exe',
+    linux: BASE + 'DebridDownloader_1.4.0_amd64.deb'
   };
 
   function detectOS() {
@@ -867,7 +883,7 @@ footer a:hover { color: var(--green); }
   }
 
   // Download cards — direct download links
-  var cardLinks = { mac: BASE + 'DebridDownloader_1.2.0_aarch64.dmg', win: BASE + 'DebridDownloader_1.2.0_x64-setup.exe', linux: BASE + 'DebridDownloader_1.2.0_amd64.deb' };
+  var cardLinks = { mac: BASE + 'DebridDownloader_1.4.0_aarch64.dmg', win: BASE + 'DebridDownloader_1.4.0_x64-setup.exe', linux: BASE + 'DebridDownloader_1.4.0_amd64.deb' };
   var cards = document.querySelectorAll('.dl-card[data-os]');
   var found = false;
   cards.forEach(function(card) {
