@@ -1,6 +1,6 @@
 [package]
 name = "debriddownloader"
-version = "1.4.0"
+version = "1.5.0"
 description = "Real-Debrid Torrent Downloader"
 authors = ["Jonathan"]
 license = "GPL-3.0-or-later"
