@@ -25,6 +25,7 @@ pub struct PendingMagnetUri(pub std::sync::Mutex<Option<String>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let _ = fix_path_env::fix();
     env_logger::init();
 
     tauri::Builder::default()
