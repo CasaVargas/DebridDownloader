@@ -570,6 +570,21 @@ footer a:hover { color: var(--green); }
         <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
         <div class="changelog-content">
           <div class="changelog-header">
+            <span class="changelog-version">v1.6.0</span>
+            <span class="changelog-date">March 2026</span>
+          </div>
+          <div class="changelog-title">Premiumize Support</div>
+          <ul class="changelog-items">
+            <li>Premiumize.me as a third debrid provider alongside Real-Debrid and TorBox</li>
+            <li>Full torrent management, download links, and streaming support</li>
+            <li>API key authentication — enter your key from premiumize.me/account</li>
+          </ul>
+        </div>
+      </div>
+      <div class="changelog-entry">
+        <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
+        <div class="changelog-content">
+          <div class="changelog-header">
             <span class="changelog-version">v1.5.0</span>
             <span class="changelog-date">March 2026</span>
           </div>
@@ -863,13 +878,13 @@ footer a:hover { color: var(--green); }
 
   <script>
 (function() {
-  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.5.0/';
+  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.6.0/';
   var LATEST = 'https://github.com/CasaVargas/DebridDownloader/releases/latest';
 
   var directLinks = {
-    mac: BASE + 'DebridDownloader_1.5.0_aarch64.dmg',
-    win: BASE + 'DebridDownloader_1.5.0_x64-setup.exe',
-    linux: BASE + 'DebridDownloader_1.5.0_amd64.deb'
+    mac: BASE + 'DebridDownloader_1.6.0_aarch64.dmg',
+    win: BASE + 'DebridDownloader_1.6.0_x64-setup.exe',
+    linux: BASE + 'DebridDownloader_1.6.0_amd64.deb'
   };
 
   function detectOS() {
@@ -899,7 +914,7 @@ footer a:hover { color: var(--green); }
   }
 
   // Download cards — direct download links
-  var cardLinks = { mac: BASE + 'DebridDownloader_1.5.0_aarch64.dmg', win: BASE + 'DebridDownloader_1.5.0_x64-setup.exe', linux: BASE + 'DebridDownloader_1.5.0_amd64.deb' };
+  var cardLinks = { mac: BASE + 'DebridDownloader_1.6.0_aarch64.dmg', win: BASE + 'DebridDownloader_1.6.0_x64-setup.exe', linux: BASE + 'DebridDownloader_1.6.0_amd64.deb' };
   var cards = document.querySelectorAll('.dl-card[data-os]');
   var found = false;
   cards.forEach(function(card) {

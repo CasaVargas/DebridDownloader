@@ -1,3 +1,4 @@
+pub mod premiumize;
 pub mod real_debrid;
 pub mod torbox;
 pub mod types;
@@ -53,6 +54,12 @@ pub fn available_providers() -> Vec<ProviderInfo> {
         ProviderInfo {
             id: "torbox".to_string(),
             name: "TorBox".to_string(),
+            auth_method: AuthMethod::ApiKey,
+            supports_streaming: true,
+        },
+        ProviderInfo {
+            id: "premiumize".to_string(),
+            name: "Premiumize".to_string(),
             auth_method: AuthMethod::ApiKey,
             supports_streaming: true,
         },

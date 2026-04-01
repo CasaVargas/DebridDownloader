@@ -190,6 +190,23 @@ export default function AboutPage() {
           <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[1px] mb-4">What's New</div>
           {[
             {
+              version: "1.6.0",
+              title: "Premiumize Support",
+              items: [
+                "Premiumize.me as a third debrid provider",
+                "Full torrent management, download links, and streaming",
+                "API key authentication",
+              ],
+            },
+            {
+              version: "1.5.0",
+              title: "Export/Import & Speed Limiting",
+              items: [
+                "Export/Import settings for backup and migration",
+                "Global download speed limiter",
+              ],
+            },
+            {
               version: "1.4.0",
               title: "Media Intelligence",
               items: [

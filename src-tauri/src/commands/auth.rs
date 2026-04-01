@@ -167,6 +167,7 @@ pub fn create_provider(provider_id: &str) -> Result<Arc<dyn crate::providers::De
     match provider_id {
         "real-debrid" => Ok(Arc::new(RdClient::new())),
         "torbox" => Ok(Arc::new(crate::providers::torbox::client::TorBoxClient::new())),
+        "premiumize" => Ok(Arc::new(crate::providers::premiumize::client::PremiumizeClient::new())),
         _ => Err(format!("Unknown provider: {}", provider_id)),
     }
 }
