@@ -190,6 +190,14 @@ export default function AboutPage() {
           <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[1px] mb-4">What's New</div>
           {[
             {
+              version: "1.6.1",
+              title: "Bug Fixes",
+              items: [
+                "Login now works on Linux — secure token storage was missing a platform backend",
+                "Settings (max concurrent downloads, speed limit, auto-organize folders, active provider) now persist across app restarts",
+              ],
+            },
+            {
               version: "1.6.0",
               title: "Premiumize Support",
               items: [
