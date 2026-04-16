@@ -122,10 +122,12 @@ pub async fn oauth_poll_credentials(
         .await
     {
         Ok(creds) => {
-            let _ = get_entry(&prefixed_key(&provider_id, "oauth_client_id"))
-                .and_then(|e| e.set_password(&creds.client_id).map_err(|e| format!("{}", e)));
-            let _ = get_entry(&prefixed_key(&provider_id, "oauth_client_secret"))
-                .and_then(|e| e.set_password(&creds.client_secret).map_err(|e| format!("{}", e)));
+            get_entry(&prefixed_key(&provider_id, "oauth_client_id"))?
+                .set_password(&creds.client_id)
+                .map_err(|e| format!("Failed to save client_id: {}", e))?;
+            get_entry(&prefixed_key(&provider_id, "oauth_client_secret"))?
+                .set_password(&creds.client_secret)
+                .map_err(|e| format!("Failed to save client_secret: {}", e))?;
             Ok(Some(creds))
         }
         Err(_) => Ok(None),
@@ -148,10 +150,12 @@ pub async fn oauth_get_token(
         .await
         .map_err(|e| format!("{}", e))?;
 
-    let _ = get_entry(&prefixed_key(&provider_id, "api_token"))
-        .and_then(|e| e.set_password(&token.access_token).map_err(|e| format!("{}", e)));
-    let _ = get_entry(&prefixed_key(&provider_id, "refresh_token"))
-        .and_then(|e| e.set_password(&token.refresh_token).map_err(|e| format!("{}", e)));
+    get_entry(&prefixed_key(&provider_id, "api_token"))?
+        .set_password(&token.access_token)
+        .map_err(|e| format!("Failed to save access token: {}", e))?;
+    get_entry(&prefixed_key(&provider_id, "refresh_token"))?
+        .set_password(&token.refresh_token)
+        .map_err(|e| format!("Failed to save refresh token: {}", e))?;
 
     rd.set_token(token.access_token.clone()).await;
 
