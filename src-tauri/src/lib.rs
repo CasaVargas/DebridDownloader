@@ -176,6 +176,25 @@ pub fn run() {
                 }
             });
 
+            // Load persisted AppSettings from store (falls through to defaults on first run)
+            {
+                let state: tauri::State<'_, AppState> = app.state();
+                let store = app.store(commands::settings::SETTINGS_STORE).map_err(|e| e.to_string())?;
+                if let Some(val) = store.get(commands::settings::SETTINGS_KEY) {
+                    match serde_json::from_value::<state::AppSettings>(val.clone()) {
+                        Ok(loaded) => {
+                            *state.settings.blocking_write() = loaded.clone();
+                            *state.provider_id.blocking_write() = loaded.provider.clone();
+                            match commands::auth::create_provider(&loaded.provider) {
+                                Ok(p) => *state.provider.blocking_write() = p,
+                                Err(e) => log::warn!("Persisted provider '{}' invalid, keeping default: {}", loaded.provider, e),
+                            }
+                        }
+                        Err(e) => log::warn!("Failed to deserialize persisted AppSettings, using defaults: {}", e),
+                    }
+                }
+            }
+
             // Load watch list data from store and spawn watch loop
             {
                 let state: tauri::State<'_, AppState> = app.state();

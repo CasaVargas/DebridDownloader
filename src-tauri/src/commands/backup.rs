@@ -81,8 +81,9 @@ pub async fn import_settings(
 
     let mut imported = Vec::new();
 
-    // Import app settings
+    // Import app settings (persist + update in-memory)
     if let Ok(settings) = serde_json::from_value::<crate::state::AppSettings>(data.app_settings) {
+        crate::commands::settings::save_app_settings(&app, &settings)?;
         *state.settings.write().await = settings;
         imported.push("app_settings".to_string());
     }

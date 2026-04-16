@@ -191,6 +191,7 @@ pub async fn get_auth_method(
 
 #[tauri::command]
 pub async fn switch_provider(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     provider_id: String,
 ) -> Result<bool, String> {
@@ -199,9 +200,10 @@ pub async fn switch_provider(
     *state.provider.write().await = new_provider;
     *state.provider_id.write().await = provider_id.clone();
 
-    // Update settings
+    // Update + persist settings
     let mut settings = state.settings.write().await;
     settings.provider = provider_id.clone();
+    crate::commands::settings::save_app_settings(&app, &settings)?;
     drop(settings);
 
     // Try to load saved credentials
