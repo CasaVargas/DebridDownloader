@@ -332,6 +332,9 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+      # build-check only verifies compile — skip bundling so we don't
+      # need the Apple signing cert (which is only imported in the release
+      # `build` job above).
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -339,4 +342,4 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
-          args: --target ${{ matrix.target }}
+          args: --no-bundle --target ${{ matrix.target }}
