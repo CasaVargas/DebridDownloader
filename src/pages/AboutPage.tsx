@@ -190,7 +190,7 @@ export default function AboutPage() {
           <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[1px] mb-4">What's New</div>
           {[
             {
-              version: "1.6.1",
+              version: "1.6.2",
               title: "Bug Fixes",
               items: [
                 "Login now works on Linux — secure token storage was missing a platform backend",
