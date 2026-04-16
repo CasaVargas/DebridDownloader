@@ -20,9 +20,6 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             name: macOS-arm64
-          - platform: macos-latest
-            target: x86_64-apple-darwin
-            name: macOS-x64
           # Windows
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
@@ -141,7 +138,6 @@ jobs:
           | Platform | Architecture | File |
           |----------|-------------|------|
           | macOS | Apple Silicon (M1/M2/M3) | \`.dmg\` (aarch64) |
-          | macOS | Intel | \`.dmg\` (x64) |
           | Windows | x64 | \`.exe\` installer |
           | Windows | ARM64 | \`.exe\` installer |
           | Linux | x64 | \`.deb\` / \`.rpm\` / \`.AppImage\` |
@@ -152,17 +148,14 @@ jobs:
 
           echo "Created draft release ${RELEASE_ID}"
 
-          # Rename macOS .app.tar.gz files to include architecture
-          # (both builds produce DebridDownloader.app.tar.gz with no arch suffix)
-          for dir in artifacts/artifacts-macOS-arm64 artifacts/artifacts-macOS-x64; do
-            [ -d "$dir" ] || continue
-            if [[ "$dir" == *arm64* ]]; then ARCH="_aarch64"; else ARCH="_x64"; fi
-            for f in "$dir"/macos/DebridDownloader.app.tar.gz "$dir"/macos/DebridDownloader.app.tar.gz.sig; do
-              [ -f "$f" ] || continue
-              NEWNAME=$(echo "$(basename "$f")" | sed "s/DebridDownloader/DebridDownloader${ARCH}/")
-              mv "$f" "$(dirname "$f")/${NEWNAME}"
-              echo "Renamed $(basename "$f") -> ${NEWNAME}"
-            done
+          # Rename the macOS .app.tar.gz to include the arch suffix
+          # the updater expects (tauri-action outputs DebridDownloader.app.tar.gz
+          # with no arch tag).
+          for f in artifacts/artifacts-macOS-arm64/macos/DebridDownloader.app.tar.gz artifacts/artifacts-macOS-arm64/macos/DebridDownloader.app.tar.gz.sig; do
+            [ -f "$f" ] || continue
+            NEWNAME=$(echo "$(basename "$f")" | sed "s/DebridDownloader/DebridDownloader_aarch64/")
+            mv "$f" "$(dirname "$f")/${NEWNAME}"
+            echo "Renamed $(basename "$f") -> ${NEWNAME}"
           done
 
           # Collect all files to upload (skip .app bundles and icons)
@@ -224,8 +217,6 @@ jobs:
           # macOS
           DARWIN_AARCH64_URL=$(asset_url "_aarch64.app.tar.gz")
           DARWIN_AARCH64_SIG=$(sig_content "_aarch64.app.tar.gz.sig")
-          DARWIN_X64_URL=$(asset_url "_x64.app.tar.gz")
-          DARWIN_X64_SIG=$(sig_content "_x64.app.tar.gz.sig")
 
           # Windows
           WINDOWS_X64_URL=$(asset_url "_x64-setup.nsis.zip")
@@ -241,7 +232,6 @@ jobs:
 
           echo "=== Platform URLs ==="
           echo "darwin-aarch64: ${DARWIN_AARCH64_URL:-MISSING}"
-          echo "darwin-x86_64:  ${DARWIN_X64_URL:-MISSING}"
           echo "windows-x86_64: ${WINDOWS_X64_URL:-MISSING}"
           echo "windows-aarch64: ${WINDOWS_AARCH64_URL:-MISSING}"
           echo "linux-x86_64:  ${LINUX_X64_URL:-MISSING}"
@@ -252,8 +242,6 @@ jobs:
             --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg darwin_aarch64_url "$DARWIN_AARCH64_URL" \
             --arg darwin_aarch64_sig "$DARWIN_AARCH64_SIG" \
-            --arg darwin_x64_url "$DARWIN_X64_URL" \
-            --arg darwin_x64_sig "$DARWIN_X64_SIG" \
             --arg windows_x64_url "$WINDOWS_X64_URL" \
             --arg windows_x64_sig "$WINDOWS_X64_SIG" \
             --arg windows_aarch64_url "$WINDOWS_AARCH64_URL" \
@@ -268,7 +256,6 @@ jobs:
               platforms: (
                 {}
                 | if $darwin_aarch64_url != "" then . + {"darwin-aarch64": {signature: $darwin_aarch64_sig, url: $darwin_aarch64_url}} else . end
-                | if $darwin_x64_url != "" then . + {"darwin-x86_64": {signature: $darwin_x64_sig, url: $darwin_x64_url}} else . end
                 | if $windows_x64_url != "" then . + {"windows-x86_64": {signature: $windows_x64_sig, url: $windows_x64_url}} else . end
                 | if $windows_aarch64_url != "" then . + {"windows-aarch64": {signature: $windows_aarch64_sig, url: $windows_aarch64_url}} else . end
                 | if $linux_x64_url != "" then . + {"linux-x86_64": {signature: $linux_x64_sig, url: $linux_x64_url}} else . end
