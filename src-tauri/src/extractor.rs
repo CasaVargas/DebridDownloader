@@ -408,6 +408,20 @@ mod count_tests {
     }
 }
 
+fn extract_tar(primary: &Path, dest: &Path, kind: ArchiveKind) -> Result<(), ExtractError> {
+    std::fs::create_dir_all(dest).map_err(ExtractError::Io)?;
+    let file = std::fs::File::open(primary).map_err(ExtractError::Io)?;
+    let reader: Box<dyn std::io::Read> = match kind {
+        ArchiveKind::TarGz => Box::new(flate2::read::GzDecoder::new(file)),
+        ArchiveKind::TarXz => Box::new(xz2::read::XzDecoder::new(file)),
+        ArchiveKind::TarBz2 => Box::new(bzip2::read::BzDecoder::new(file)),
+        _ => return Err(ExtractError::UnsupportedFormat),
+    };
+    let mut archive = tar::Archive::new(reader);
+    archive.unpack(dest).map_err(|e| ExtractError::BadArchive(e.to_string()))?;
+    Ok(())
+}
+
 fn extract_7z(primary: &Path, dest: &Path) -> Result<(), ExtractError> {
     std::fs::create_dir_all(dest).map_err(ExtractError::Io)?;
     sevenz_rust2::decompress_file(primary, dest)
@@ -501,6 +515,40 @@ mod extract_7z_tests {
 
         let dest = d.path().join("out");
         extract_7z(&archive, &dest).unwrap();
+        assert_eq!(fs::read(dest.join("a.txt")).unwrap(), b"A");
+        assert_eq!(fs::read(dest.join("b.txt")).unwrap(), b"BB");
+    }
+}
+
+#[cfg(test)]
+mod extract_tar_tests {
+    use super::*;
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::fs::{self, File};
+    use std::io::Write;
+    use tempfile::tempdir;
+
+    fn build_tar_gz(path: &Path, files: &[(&str, &[u8])]) {
+        let tar_gz = File::create(path).unwrap();
+        let enc = GzEncoder::new(tar_gz, Compression::default());
+        let mut tar = tar::Builder::new(enc);
+        for (name, content) in files {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_cksum();
+            tar.append_data(&mut header, name, *content).unwrap();
+        }
+        tar.into_inner().unwrap().finish().unwrap();
+    }
+
+    #[test]
+    fn extract_tar_gz_files() {
+        let d = tempdir().unwrap();
+        let archive = d.path().join("a.tar.gz");
+        build_tar_gz(&archive, &[("a.txt", b"A"), ("b.txt", b"BB")]);
+        let dest = d.path().join("out");
+        extract_tar(&archive, &dest, ArchiveKind::TarGz).unwrap();
         assert_eq!(fs::read(dest.join("a.txt")).unwrap(), b"A");
         assert_eq!(fs::read(dest.join("b.txt")).unwrap(), b"BB");
     }
