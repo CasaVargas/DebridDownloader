@@ -482,13 +482,15 @@ async fn extract_rar(primary: &Path, dest: &Path, tool: RarTool) -> Result<(), E
     }
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let tail = stderr.chars().rev().take(200).collect::<String>();
-    let tail: String = tail.chars().rev().collect();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let combined_lower = format!("{} {}", stderr.to_lowercase(), stdout.to_lowercase());
 
-    // Heuristic: password prompts show in stderr
-    if stderr.to_lowercase().contains("password") {
+    if combined_lower.contains("password") || combined_lower.contains("encrypted") {
         return Err(ExtractError::PasswordRequired);
     }
+
+    let tail = stderr.chars().rev().take(200).collect::<String>();
+    let tail: String = tail.chars().rev().collect();
     Err(ExtractError::ToolFailed {
         tool: bin,
         stderr: tail,
