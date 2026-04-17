@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getSettings, updateSettings } from "../api/settings";
+import { getSettings, updateSettings, detectRarTool } from "../api/settings";
 import { getTrackerConfigs, saveTrackerConfigs } from "../api/search";
 import { getAvailableProviders, switchProvider, getActiveProvider } from "../api/providers";
 import type { AppSettings, TrackerConfig, ProviderInfo } from "../types";
@@ -70,6 +70,7 @@ export default function SettingsPage() {
   const [embyUrl, setEmbyUrl] = useState("");
   const [embyApiKey, setEmbyApiKey] = useState("");
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const [rarTool, setRarTool] = useState<string | null>(null);
 
   // Add tracker form
   const [newTrackerName, setNewTrackerName] = useState("");
@@ -102,6 +103,7 @@ export default function SettingsPage() {
     }).finally(() => setLoading(false));
     getAvailableProviders().then(setProviders).catch(() => {});
     getActiveProvider().then(setActiveProvider).catch(() => {});
+    detectRarTool().then(setRarTool).catch(() => setRarTool(null));
   }, []);
 
   function markSaved(field: string) {
@@ -457,6 +459,41 @@ export default function SettingsPage() {
                 accentColor={accentColor}
                 onChange={(v) => applyFrontend({ auto_start_downloads: v })}
               />
+
+              {/* Auto-extract toggle */}
+              <ToggleRow
+                label="Auto-extract downloaded archives"
+                description="After download, automatically unpack .rar / .zip / .7z / .tar.gz archives into a subfolder"
+                checked={settings.auto_extract_archives ?? false}
+                saved={savedField === "auto_extract_archives"}
+                accentColor={accentColor}
+                onChange={async (v) => {
+                  await applyChange({ auto_extract_archives: v });
+                  markSaved("auto_extract_archives");
+                }}
+              />
+
+              {/* Delete-after-extract toggle */}
+              <div className={settings.auto_extract_archives ? undefined : "opacity-40 pointer-events-none"}>
+                <ToggleRow
+                  label="Delete archive files after successful extract"
+                  description="Remove the original .rar / .zip / .7z parts once extraction completes"
+                  checked={settings.delete_archives_after_extract ?? false}
+                  saved={savedField === "delete_archives_after_extract"}
+                  accentColor={accentColor}
+                  onChange={async (v) => {
+                    await applyChange({ delete_archives_after_extract: v });
+                    markSaved("delete_archives_after_extract");
+                  }}
+                />
+              </div>
+
+              {/* RAR tool detection status */}
+              <p className="text-[13px] -mt-6 mb-12" style={{ color: rarTool ? "#10b981" : "#f59e0b" }}>
+                {rarTool
+                  ? `\u2713 RAR support: ${rarTool} detected`
+                  : "\u26a0 RAR support: install 7-Zip (macOS/Windows), p7zip-full (Linux), or unar to extract .rar archives"}
+              </p>
             </section>
 
             {/* ── Media Library ── */}

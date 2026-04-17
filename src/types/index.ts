@@ -99,6 +99,7 @@ export type DownloadStatus =
   | "Pending"
   | "Downloading"
   | "Paused"
+  | "Extracting"
   | "Completed"
   | "Cancelled"
   | { Failed: string };
@@ -147,6 +148,8 @@ export interface AppSettings {
   emby_url?: string | null;
   emby_api_key?: string | null;
   speed_limit_bytes?: number | null;
+  auto_extract_archives?: boolean;
+  delete_archives_after_extract?: boolean;
 }
 
 // ── Search ──

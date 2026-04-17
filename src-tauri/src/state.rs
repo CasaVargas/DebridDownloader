@@ -44,6 +44,10 @@ pub struct AppSettings {
     pub emby_api_key: Option<String>,
     #[serde(default)]
     pub speed_limit_bytes: Option<u64>,
+    #[serde(default)]
+    pub auto_extract_archives: bool,
+    #[serde(default)]
+    pub delete_archives_after_extract: bool,
 }
 
 fn default_provider() -> String {
@@ -72,6 +76,8 @@ impl Default for AppSettings {
             emby_url: None,
             emby_api_key: None,
             speed_limit_bytes: None,
+            auto_extract_archives: false,
+            delete_archives_after_extract: false,
         }
     }
 }
@@ -91,10 +97,12 @@ pub struct DownloadTask {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
 pub enum DownloadStatus {
     Pending,
     Downloading,
     Paused,
+    Extracting,
     Completed,
     Failed(String),
     Cancelled,
@@ -117,6 +125,7 @@ pub struct AppState {
     pub watch_matches: Arc<RwLock<Vec<WatchMatch>>>,
     pub watch_seen: Arc<RwLock<HashMap<String, HashSet<String>>>>,
     pub watch_cancel: CancellationToken,
+    pub rar_tool: crate::extractor::RarTool,
 }
 
 impl AppState {
@@ -135,6 +144,7 @@ impl AppState {
             watch_matches: Arc::new(RwLock::new(Vec::new())),
             watch_seen: Arc::new(RwLock::new(HashMap::new())),
             watch_cancel: CancellationToken::new(),
+            rar_tool: crate::extractor::detect_rar_tool(),
         }
     }
 

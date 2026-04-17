@@ -1,6 +1,6 @@
 [package]
 name = "debriddownloader"
-version = "1.6.2"
+version = "1.6.3"
 description = "Real-Debrid Torrent Downloader"
 authors = ["Jonathan"]
 license = "GPL-3.0-or-later"
@@ -38,6 +38,13 @@ log = "0.4"
 env_logger = "0.11"
 thiserror = "2"
 urlencoding = "2"
+zip = "2"
+sevenz-rust2 = "0.13"
+tar = "0.4"
+flate2 = "1"
+xz2 = "0.1"
+bzip2 = "0.4"
+which = "7"
 async-trait = "0.1"
 quick-xml = "0.37"
 sha1 = "0.10"
@@ -51,3 +58,6 @@ dirs = "6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"
+
+[dev-dependencies]
+tempfile = "3"

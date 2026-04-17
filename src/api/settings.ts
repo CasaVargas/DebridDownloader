@@ -8,3 +8,7 @@ export async function getSettings(): Promise<AppSettings> {
 export async function updateSettings(settings: AppSettings): Promise<void> {
   return invoke("update_settings", { settings });
 }
+
+export async function detectRarTool(): Promise<string | null> {
+  return invoke("detect_rar_tool");
+}

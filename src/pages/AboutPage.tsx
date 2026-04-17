@@ -190,6 +190,18 @@ export default function AboutPage() {
           <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[1px] mb-4">What's New</div>
           {[
             {
+              version: "1.6.3",
+              title: "Auto-Extract Archives",
+              items: [
+                "Downloads that arrive as archives now extract automatically — .zip, .7z, .rar, and .tar.gz/.xz/.bz2",
+                "Multi-part RAR5, legacy RAR, and split 7z are handled — waits for every part to finish before extracting",
+                "Single-video extracts flow straight into the auto-organizer (Movies/TV folders)",
+                "Optional: delete archive parts after a successful extract",
+                "New \"Extracting…\" status in the Downloads view",
+                "Settings → Downloads: toggles for auto-extract and delete-after, plus a status line for the detected RAR tool (7-Zip / p7zip / unar)",
+              ],
+            },
+            {
               version: "1.6.2",
               title: "Bug Fixes",
               items: [
@@ -382,6 +394,35 @@ export default function AboutPage() {
             <div className="text-[12px] text-[var(--theme-text-muted)] mt-0.5">Check out my other projects</div>
           </div>
           <div className="text-[12px] text-[var(--theme-text-ghost)] shrink-0">casavargas.app →</div>
+        </a>
+
+        {/* Beltr */}
+        <a
+          href="https://beltr.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex items-center gap-4 rounded-xl transition-colors"
+          style={{
+            marginTop: 12,
+            padding: "16px 20px",
+            background: "var(--theme-bg)",
+            border: "1px solid var(--theme-border)",
+            textDecoration: "none",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--theme-border-hover)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--theme-border)"; }}
+        >
+          <img
+            src="/beltr-icon.png"
+            alt="Beltr"
+            className="shrink-0 rounded-lg"
+            style={{ width: 36, height: 36 }}
+          />
+          <div className="flex-1 min-w-0 text-left">
+            <div className="text-[14px] font-semibold text-[var(--theme-text-primary)]">Beltr</div>
+            <div className="text-[12px] text-[var(--theme-text-muted)] mt-0.5">AI karaoke — turn any song into a karaoke track</div>
+          </div>
+          <div className="text-[12px] text-[var(--theme-text-ghost)] shrink-0">beltr.app →</div>
         </a>
 
         <div

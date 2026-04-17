@@ -1,6 +1,7 @@
 mod commands;
 mod providers;
 mod downloader;
+mod extractor;
 mod media_parser;
 mod media_servers;
 mod rclone;
@@ -286,6 +287,8 @@ pub fn run() {
             commands::watchlist::get_watch_matches,
             commands::watchlist::clear_watch_matches,
             commands::watchlist::run_watch_rule_now,
+            // Extract
+            commands::extractor::detect_rar_tool,
             // Backup
             commands::backup::export_settings,
             commands::backup::import_settings,

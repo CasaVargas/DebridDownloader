@@ -8,11 +8,12 @@ import type { DownloadTask } from "../types";
 import { formatBytes, formatSpeed, formatEta, getDownloadStatusText } from "../utils";
 
 function isActive(status: DownloadTask["status"]): boolean {
-  return status === "Downloading" || status === "Pending";
+  return status === "Downloading" || status === "Pending" || status === "Extracting";
 }
 
 function statusBadgeClass(status: DownloadTask["status"]): string {
   if (status === "Downloading" || status === "Pending") return "bg-[rgba(59,130,246,0.12)] text-[#3b82f6]";
+  if (status === "Extracting") return "bg-[var(--accent-bg-medium)] text-[var(--accent)]";
   if (status === "Cancelled") return "bg-[rgba(239,68,68,0.12)] text-[#ef4444]";
   if (typeof status === "object" && "Failed" in status) return "bg-[rgba(239,68,68,0.12)] text-[#ef4444]";
   return "bg-[rgba(148,163,184,0.12)] text-[#94a3b8]";
@@ -258,6 +259,7 @@ export default function DownloadsPage() {
           const task = selectedTask;
           const active = isActive(task.status);
           const pct = task.total_bytes > 0 ? (task.downloaded_bytes / task.total_bytes) * 100 : 0;
+          const isExtracting = task.status === "Extracting";
           const isFailed = typeof task.status === "object" && "Failed" in task.status;
           const isCancelled = task.status === "Cancelled";
 
@@ -320,6 +322,13 @@ export default function DownloadsPage() {
                       </div>
                     </div>
                   </>
+                )}
+
+                {isExtracting && (
+                  <div className="flex flex-col gap-3">
+                    <p className="text-[15px] font-medium" style={{ color: "var(--accent)" }}>Extracting…</p>
+                    <p className="text-[14px] text-[var(--theme-text-muted)]">Archive is being unpacked</p>
+                  </div>
                 )}
 
                 {(isFailed || isCancelled) && (
