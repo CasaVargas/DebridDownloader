@@ -473,13 +473,29 @@ async fn extract_rar(primary: &Path, dest: &Path, tool: RarTool) -> Result<(), E
     })
 }
 
-// Stub - implemented in Task 11
 pub async fn extract(
-    _group: &ArchiveGroup,
-    _dest: &Path,
-    _rar_tool: RarTool,
+    group: &ArchiveGroup,
+    dest: &Path,
+    rar_tool: RarTool,
 ) -> Result<(), ExtractError> {
-    Err(ExtractError::UnsupportedFormat)
+    let primary = group.primary.clone();
+    let dest_buf = dest.to_path_buf();
+    match group.kind {
+        ArchiveKind::Rar => extract_rar(&primary, &dest_buf, rar_tool).await,
+        kind @ (ArchiveKind::Zip | ArchiveKind::SevenZip
+               | ArchiveKind::TarGz | ArchiveKind::TarXz | ArchiveKind::TarBz2) => {
+            tokio::task::spawn_blocking(move || match kind {
+                ArchiveKind::Zip => extract_zip(&primary, &dest_buf),
+                ArchiveKind::SevenZip => extract_7z(&primary, &dest_buf),
+                ArchiveKind::TarGz | ArchiveKind::TarXz | ArchiveKind::TarBz2 => {
+                    extract_tar(&primary, &dest_buf, kind)
+                }
+                _ => unreachable!(),
+            })
+            .await
+            .map_err(|e| ExtractError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+        }
+    }
 }
 
 fn extract_zip(primary: &Path, dest: &Path) -> Result<(), ExtractError> {
@@ -538,6 +554,30 @@ mod extract_zip_tests {
         assert!(matches!(err, ExtractError::BadArchive(_)), "got {:?}", err);
     }
 
+    #[tokio::test]
+    async fn dispatcher_zip() {
+        use std::fs::{self, File};
+        use std::io::Write;
+        use tempfile::tempdir;
+        use zip::write::{SimpleFileOptions, ZipWriter};
+
+        let d = tempdir().unwrap();
+        let archive = d.path().join("a.zip");
+        let f = File::create(&archive).unwrap();
+        let mut zw = ZipWriter::new(f);
+        zw.start_file("x.txt", SimpleFileOptions::default()).unwrap();
+        zw.write_all(b"hi").unwrap();
+        zw.finish().unwrap();
+
+        let group = ArchiveGroup {
+            kind: ArchiveKind::Zip,
+            primary: archive.clone(),
+            all_parts: vec![archive.clone()],
+        };
+        let dest = d.path().join("out");
+        extract(&group, &dest, RarTool::None).await.unwrap();
+        assert_eq!(fs::read(dest.join("x.txt")).unwrap(), b"hi");
+    }
 }
 
 #[cfg(test)]
