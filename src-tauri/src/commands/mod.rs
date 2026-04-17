@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod backup;
+pub mod extractor;
 pub mod downloads;
 pub mod magnet;
 pub mod media_servers;
