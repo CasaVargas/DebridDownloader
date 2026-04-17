@@ -443,6 +443,36 @@ fn extract_7z(primary: &Path, dest: &Path) -> Result<(), ExtractError> {
     Ok(())
 }
 
+async fn extract_rar(primary: &Path, dest: &Path, tool: RarTool) -> Result<(), ExtractError> {
+    if matches!(tool, RarTool::None) {
+        return Err(ExtractError::RarToolMissing);
+    }
+    std::fs::create_dir_all(dest).map_err(ExtractError::Io)?;
+    let (bin, args) = rar_command(tool, primary, dest);
+    let output = tokio::process::Command::new(&bin)
+        .args(&args)
+        .output()
+        .await
+        .map_err(ExtractError::Io)?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let tail = stderr.chars().rev().take(200).collect::<String>();
+    let tail: String = tail.chars().rev().collect();
+
+    // Heuristic: password prompts show in stderr
+    if stderr.to_lowercase().contains("password") {
+        return Err(ExtractError::PasswordRequired);
+    }
+    Err(ExtractError::ToolFailed {
+        tool: bin,
+        stderr: tail,
+    })
+}
+
 // Stub - implemented in Task 11
 pub async fn extract(
     _group: &ArchiveGroup,
