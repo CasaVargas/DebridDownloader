@@ -298,13 +298,12 @@ pub async fn start_downloads(
                         // Build sibling list from the download's directory.
                         let archive_path = std::path::PathBuf::from(&task.destination);
                         if let Some(parent) = archive_path.parent() {
-                            let siblings: Vec<std::path::PathBuf> = std::fs::read_dir(parent)
-                                .ok()
-                                .into_iter()
-                                .flatten()
-                                .flatten()
-                                .map(|e| e.path())
-                                .collect();
+                            let mut siblings: Vec<std::path::PathBuf> = Vec::new();
+                            if let Ok(mut entries) = tokio::fs::read_dir(parent).await {
+                                while let Ok(Some(entry)) = entries.next_entry().await {
+                                    siblings.push(entry.path());
+                                }
+                            }
                             let sibling_refs: Vec<&std::path::Path> =
                                 siblings.iter().map(|p| p.as_path()).collect();
                             if let Some(group) =
@@ -334,7 +333,7 @@ pub async fn start_downloads(
                                         // Delete archive parts if requested
                                         if task_delete_after {
                                             for part in &group.all_parts {
-                                                if let Err(e) = std::fs::remove_file(part) {
+                                                if let Err(e) = tokio::fs::remove_file(part).await {
                                                     log::warn!(
                                                         "Failed to delete archive part {:?}: {}",
                                                         part, e
