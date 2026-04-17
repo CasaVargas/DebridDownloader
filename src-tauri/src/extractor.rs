@@ -204,7 +204,20 @@ pub fn classify(completed: &Path, siblings: &[&Path]) -> Option<ArchiveGroup> {
 }
 
 pub fn detect_rar_tool() -> RarTool {
-    RarTool::None  // filled in by Task 4
+    // Priority: 7z > 7zz > unar > unrar.
+    // 7z is the traditional p7zip binary; 7zz is the new unified 7-Zip CLI
+    // shipped by Igor Pavlov. Either works.
+    for (bin, tool) in [
+        ("7z", RarTool::SevenZip),
+        ("7zz", RarTool::SevenZz),
+        ("unar", RarTool::Unar),
+        ("unrar", RarTool::Unrar),
+    ] {
+        if which::which(bin).is_ok() {
+            return tool;
+        }
+    }
+    RarTool::None
 }
 
 pub fn count_videos(_dir: &Path) -> usize {
@@ -313,5 +326,21 @@ mod classify_tests {
     fn bare_numeric_split_unsupported() {
         let files = vec![p("/dl/foo.001"), p("/dl/foo.002")];
         assert!(classify(&files[0], &sibs(&files)).is_none());
+    }
+}
+
+#[cfg(test)]
+mod detect_tests {
+    use super::*;
+
+    #[test]
+    fn detect_does_not_panic() {
+        // Result depends on the runner's environment; just ensure no panic
+        // and that .name() is consistent with the variant.
+        let t = detect_rar_tool();
+        match t {
+            RarTool::None => assert!(t.name().is_none()),
+            _ => assert!(t.name().is_some()),
+        }
     }
 }
