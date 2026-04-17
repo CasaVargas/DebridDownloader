@@ -220,8 +220,24 @@ pub fn detect_rar_tool() -> RarTool {
     RarTool::None
 }
 
-pub fn count_videos(_dir: &Path) -> usize {
-    0  // filled in by Task 5
+pub fn count_videos(dir: &Path) -> usize {
+    const VIDEO_EXTS: &[&str] = &["mkv", "mp4", "avi", "mov", "m4v", "webm"];
+    let mut count = 0;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                if VIDEO_EXTS.contains(&ext.to_lowercase().as_str()) {
+                    count += 1;
+                }
+            }
+        }
+    }
+    count
 }
 
 #[cfg(test)]
@@ -342,5 +358,52 @@ mod detect_tests {
             RarTool::None => assert!(t.name().is_none()),
             _ => assert!(t.name().is_some()),
         }
+    }
+}
+
+#[cfg(test)]
+mod count_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn empty_dir_zero() {
+        let d = tempdir().unwrap();
+        assert_eq!(count_videos(d.path()), 0);
+    }
+
+    #[test]
+    fn one_video_one() {
+        let d = tempdir().unwrap();
+        fs::write(d.path().join("movie.mkv"), b"").unwrap();
+        fs::write(d.path().join("readme.nfo"), b"").unwrap();
+        assert_eq!(count_videos(d.path()), 1);
+    }
+
+    #[test]
+    fn two_videos_two() {
+        let d = tempdir().unwrap();
+        fs::write(d.path().join("a.mkv"), b"").unwrap();
+        fs::write(d.path().join("b.mp4"), b"").unwrap();
+        assert_eq!(count_videos(d.path()), 2);
+    }
+
+    #[test]
+    fn nested_videos_counted() {
+        let d = tempdir().unwrap();
+        fs::create_dir(d.path().join("sub")).unwrap();
+        fs::write(d.path().join("sub/a.mkv"), b"").unwrap();
+        fs::write(d.path().join("b.mp4"), b"").unwrap();
+        assert_eq!(count_videos(d.path()), 2);
+    }
+
+    #[test]
+    fn sample_and_extras_ignored() {
+        let d = tempdir().unwrap();
+        fs::write(d.path().join("movie.mkv"), b"").unwrap();
+        fs::write(d.path().join("sample.srt"), b"").unwrap();
+        fs::write(d.path().join("poster.jpg"), b"").unwrap();
+        assert_eq!(count_videos(d.path()), 1);
     }
 }
