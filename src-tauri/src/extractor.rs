@@ -408,6 +408,13 @@ mod count_tests {
     }
 }
 
+fn extract_7z(primary: &Path, dest: &Path) -> Result<(), ExtractError> {
+    std::fs::create_dir_all(dest).map_err(ExtractError::Io)?;
+    sevenz_rust2::decompress_file(primary, dest)
+        .map_err(|e| ExtractError::BadArchive(e.to_string()))?;
+    Ok(())
+}
+
 // Stub - implemented in Task 11
 pub async fn extract(
     _group: &ArchiveGroup,
@@ -473,4 +480,28 @@ mod extract_zip_tests {
         assert!(matches!(err, ExtractError::BadArchive(_)), "got {:?}", err);
     }
 
+}
+
+#[cfg(test)]
+mod extract_7z_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn extract_7z_files() {
+        let d = tempdir().unwrap();
+        let archive = d.path().join("a.7z");
+        // Build via sevenz-rust2 compress API
+        let src = d.path().join("src");
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("a.txt"), b"A").unwrap();
+        fs::write(src.join("b.txt"), b"BB").unwrap();
+        sevenz_rust2::compress_to_path(&src, &archive).unwrap();
+
+        let dest = d.path().join("out");
+        extract_7z(&archive, &dest).unwrap();
+        assert_eq!(fs::read(dest.join("a.txt")).unwrap(), b"A");
+        assert_eq!(fs::read(dest.join("b.txt")).unwrap(), b"BB");
+    }
 }
