@@ -44,6 +44,8 @@ pub async fn start_downloads(
     let emby_url = settings.emby_url.clone();
     let emby_api_key = settings.emby_api_key.clone();
     let speed_limit_bytes = settings.speed_limit_bytes;
+    let auto_extract = settings.auto_extract_archives;
+    let delete_after_extract = settings.delete_archives_after_extract;
     drop(settings);
 
     // Symlink mode: create symlinks instead of downloading
@@ -246,6 +248,9 @@ pub async fn start_downloads(
     let dl_jellyfin_key = jellyfin_api_key;
     let dl_emby_url = emby_url;
     let dl_emby_key = emby_api_key;
+    let dl_auto_extract = auto_extract;
+    let dl_delete_after = delete_after_extract;
+    let dl_rar_tool = state.rar_tool; // RarTool is Copy
 
     tokio::spawn(async move {
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrent));
@@ -260,6 +265,9 @@ pub async fn start_downloads(
             let task_movies = dl_movies_folder.clone();
             let task_tv = dl_tv_folder.clone();
             let task_tmdb = dl_tmdb_key.clone();
+            let task_auto_extract = dl_auto_extract;
+            let task_delete_after = dl_delete_after;
+            let task_rar_tool = dl_rar_tool; // Copy
 
             let handle = tokio::spawn(async move {
                 let _permit = sem.acquire().await.unwrap();
@@ -273,29 +281,124 @@ pub async fn start_downloads(
                 };
 
                 let result = if task.remote.is_some() {
-                    crate::rclone::download_to_rclone(app, &mut task, &mut cancel_rx, speed_limit_bytes).await
+                    crate::rclone::download_to_rclone(app.clone(), &mut task, &mut cancel_rx, speed_limit_bytes).await
                 } else {
-                    downloader::download_file(app, &mut task, &mut cancel_rx, speed_limit_bytes).await
+                    downloader::download_file(app.clone(), &mut task, &mut cancel_rx, speed_limit_bytes).await
                 };
 
                 if let Err(e) = result {
                     task.status = DownloadStatus::Failed(e);
                 }
 
-                // Post-download organize (local downloads only, not rclone)
-                if task.status == DownloadStatus::Completed && task.remote.is_none() && task_organize {
-                    if let (Some(ref mf), Some(ref tf)) = (&task_movies, &task_tv) {
-                        let result = crate::organizer::organize_path(
-                            &task.filename, mf, tf, task_tmdb.as_deref(),
-                        ).await;
-                        let source = PathBuf::from(&task.destination);
-                        match crate::organizer::move_file(&source, &result.dest_path).await {
-                            Ok(()) => {
-                                task.destination = result.dest_path.to_string_lossy().to_string();
-                                log::info!("Organized: {} → {}", task.filename, task.destination);
+                // Post-download: extract if archive, then organize the result.
+                if task.status == DownloadStatus::Completed && task.remote.is_none() {
+                    // --- Extract phase ---
+                    let mut extracted_dir: Option<std::path::PathBuf> = None;
+                    if task_auto_extract {
+                        // Build sibling list from the download's directory.
+                        let archive_path = std::path::PathBuf::from(&task.destination);
+                        if let Some(parent) = archive_path.parent() {
+                            let siblings: Vec<std::path::PathBuf> = std::fs::read_dir(parent)
+                                .ok()
+                                .into_iter()
+                                .flatten()
+                                .flatten()
+                                .map(|e| e.path())
+                                .collect();
+                            let sibling_refs: Vec<&std::path::Path> =
+                                siblings.iter().map(|p| p.as_path()).collect();
+                            if let Some(group) =
+                                crate::extractor::classify(&archive_path, &sibling_refs)
+                            {
+                                // Mark Extracting and emit
+                                task.status = DownloadStatus::Extracting;
+                                downloads.write().await.insert(id.clone(), task.clone());
+                                let _ = app.emit("download-progress",
+                                    &crate::downloader::DownloadProgress {
+                                        id: id.clone(),
+                                        filename: task.filename.clone(),
+                                        downloaded_bytes: task.total_bytes,
+                                        total_bytes: task.total_bytes,
+                                        speed: 0.0,
+                                        status: DownloadStatus::Extracting,
+                                        remote: task.remote.clone(),
+                                    });
+
+                                // Extract into <parent>/<basename-without-ext>/
+                                let base = archive_basename(&group.primary);
+                                let dest = parent.join(&base);
+                                match crate::extractor::extract(&group, &dest, task_rar_tool).await {
+                                    Ok(()) => {
+                                        extracted_dir = Some(dest.clone());
+                                        task.status = DownloadStatus::Completed;
+                                        // Delete archive parts if requested
+                                        if task_delete_after {
+                                            for part in &group.all_parts {
+                                                if let Err(e) = std::fs::remove_file(part) {
+                                                    log::warn!(
+                                                        "Failed to delete archive part {:?}: {}",
+                                                        part, e
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        log::info!("Extracted: {:?} → {:?}", group.primary, dest);
+                                    }
+                                    Err(e) => {
+                                        task.status = DownloadStatus::Failed(e.to_string());
+                                        log::warn!("Extract failed: {}", e);
+                                    }
+                                }
                             }
-                            Err(e) => {
-                                log::warn!("Failed to organize {}: {}", task.filename, e);
+                        }
+                    }
+
+                    // --- Organize phase ---
+                    // If extraction produced exactly one video, organize that.
+                    // If it produced 0 or >1, skip organize.
+                    // If extraction didn't happen, fall back to original organize.
+                    if task.status == DownloadStatus::Completed && task_organize {
+                        if let (Some(ref mf), Some(ref tf)) = (&task_movies, &task_tv) {
+                            let organize_source = if let Some(ref ed) = extracted_dir {
+                                let count = crate::extractor::count_videos(ed);
+                                if count == 1 {
+                                    find_single_video(ed)
+                                } else {
+                                    log::info!(
+                                        "Extracted dir has {} videos — skipping organize",
+                                        count
+                                    );
+                                    None
+                                }
+                            } else {
+                                Some(std::path::PathBuf::from(&task.destination))
+                            };
+
+                            if let Some(src) = organize_source {
+                                let fname = src
+                                    .file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or(&task.filename)
+                                    .to_string();
+                                let result = crate::organizer::organize_path(
+                                    &fname, mf, tf, task_tmdb.as_deref(),
+                                )
+                                .await;
+                                match crate::organizer::move_file(&src, &result.dest_path).await {
+                                    Ok(()) => {
+                                        task.destination =
+                                            result.dest_path.to_string_lossy().to_string();
+                                        log::info!(
+                                            "Organized: {} → {}",
+                                            task.filename, task.destination
+                                        );
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "Failed to organize {}: {}", task.filename, e
+                                        );
+                                    }
+                                }
                             }
                         }
                     }
@@ -404,4 +507,46 @@ fn sanitize_filename(name: &str) -> String {
             _ => c,
         })
         .collect()
+}
+
+fn archive_basename(primary: &std::path::Path) -> String {
+    let name = primary.file_name().and_then(|n| n.to_str()).unwrap_or("archive");
+    // Strip known compound + single extensions
+    for ext in [".tar.gz", ".tar.xz", ".tar.bz2"] {
+        if let Some(stripped) = name.strip_suffix(ext) { return stripped.to_string(); }
+    }
+    // Strip .partN.rar → leave the base name
+    if let Some(caps) = regex::Regex::new(r"^(.+)\.part\d+\.rar$").unwrap().captures(name) {
+        return caps.get(1).unwrap().as_str().to_string();
+    }
+    // Strip .7z.NNN
+    if let Some(caps) = regex::Regex::new(r"^(.+)\.7z\.\d{3}$").unwrap().captures(name) {
+        return caps.get(1).unwrap().as_str().to_string();
+    }
+    // Default: strip final extension
+    std::path::Path::new(name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(name)
+        .to_string()
+}
+
+fn find_single_video(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    const VIDEO_EXTS: &[&str] = &["mkv", "mp4", "avi", "mov", "m4v", "webm"];
+    let mut found: Option<std::path::PathBuf> = None;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() { stack.push(path); continue; }
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                if VIDEO_EXTS.contains(&ext.to_lowercase().as_str()) {
+                    if found.is_some() { return None; } // multiple videos
+                    found = Some(path);
+                }
+            }
+        }
+    }
+    found
 }
