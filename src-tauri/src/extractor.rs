@@ -408,6 +408,20 @@ mod count_tests {
     }
 }
 
+/// Pure helper: given the selected tool + input/output paths, build the
+/// (binary, args) pair the extractor will exec.
+pub(crate) fn rar_command(tool: RarTool, primary: &Path, dest: &Path) -> (String, Vec<String>) {
+    let p = primary.to_string_lossy().into_owned();
+    let d = dest.to_string_lossy().into_owned();
+    match tool {
+        RarTool::SevenZip => ("7z".into(), vec!["x".into(), "-y".into(), format!("-o{}", d), p]),
+        RarTool::SevenZz  => ("7zz".into(), vec!["x".into(), "-y".into(), format!("-o{}", d), p]),
+        RarTool::Unar     => ("unar".into(), vec!["-o".into(), d, "-f".into(), p]),
+        RarTool::Unrar    => ("unrar".into(), vec!["x".into(), "-y".into(), "-o+".into(), p, format!("{}/", d)]),
+        RarTool::None     => (String::new(), Vec::new()),
+    }
+}
+
 fn extract_tar(primary: &Path, dest: &Path, kind: ArchiveKind) -> Result<(), ExtractError> {
     std::fs::create_dir_all(dest).map_err(ExtractError::Io)?;
     let file = std::fs::File::open(primary).map_err(ExtractError::Io)?;
@@ -551,5 +565,47 @@ mod extract_tar_tests {
         extract_tar(&archive, &dest, ArchiveKind::TarGz).unwrap();
         assert_eq!(fs::read(dest.join("a.txt")).unwrap(), b"A");
         assert_eq!(fs::read(dest.join("b.txt")).unwrap(), b"BB");
+    }
+}
+
+#[cfg(test)]
+mod rar_cmd_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn sevenzip_args() {
+        let (bin, args) = rar_command(RarTool::SevenZip, Path::new("/d/x.rar"), Path::new("/d/out"));
+        assert_eq!(bin, "7z");
+        assert_eq!(args, vec!["x", "-y", "-o/d/out", "/d/x.rar"]);
+    }
+
+    #[test]
+    fn sevenzz_args() {
+        let (bin, args) = rar_command(RarTool::SevenZz, Path::new("/d/x.rar"), Path::new("/d/out"));
+        assert_eq!(bin, "7zz");
+        assert_eq!(args, vec!["x", "-y", "-o/d/out", "/d/x.rar"]);
+    }
+
+    #[test]
+    fn unar_args() {
+        let (bin, args) = rar_command(RarTool::Unar, Path::new("/d/x.rar"), Path::new("/d/out"));
+        assert_eq!(bin, "unar");
+        assert_eq!(args, vec!["-o", "/d/out", "-f", "/d/x.rar"]);
+    }
+
+    #[test]
+    fn unrar_args() {
+        let (bin, args) = rar_command(RarTool::Unrar, Path::new("/d/x.rar"), Path::new("/d/out"));
+        assert_eq!(bin, "unrar");
+        assert_eq!(args, vec!["x", "-y", "-o+", "/d/x.rar", "/d/out/"]);
+    }
+
+    #[test]
+    fn none_returns_empty() {
+        let (bin, args) = rar_command(RarTool::None, Path::new("/d/x.rar"), Path::new("/d/out"));
+        assert_eq!(bin, "");
+        assert!(args.is_empty());
+        let _ = PathBuf::new();
     }
 }
