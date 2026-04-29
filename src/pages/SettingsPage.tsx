@@ -137,6 +137,16 @@ export default function SettingsPage() {
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url;
     }
+    if (newTrackerType === "torznab") {
+      url = url.replace(/\/api\/?$/, "");
+    }
+    if (newTrackerType === "prowlarr") {
+      url = url.replace(/\/api\/v1(?:\/search|\/health|\/indexer)?\/?$/, "");
+    }
+    if (newTrackerType === "piratebay_api") {
+      url = url.replace(/\/q\.php.*$/, "");
+    }
+    url = url.replace(/\/+$/, "");
     const config: TrackerConfig = {
       id: crypto.randomUUID(),
       name: newTrackerName.trim(),
