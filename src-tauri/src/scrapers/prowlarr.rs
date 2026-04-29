@@ -11,15 +11,26 @@ pub struct ProwlarrScraper {
     client: reqwest::Client,
 }
 
+pub fn normalize_prowlarr_url(url: &str) -> String {
+    let url = url.trim_end_matches('/');
+    for suffix in ["/api/v1/search", "/api/v1/health", "/api/v1/indexer", "/api/v1"] {
+        if let Some(base) = url.strip_suffix(suffix) {
+            return base.trim_end_matches('/').to_string();
+        }
+    }
+    url.to_string()
+}
+
 impl ProwlarrScraper {
     pub fn new(name: String, base_url: String, api_key: String) -> Self {
+        let url = normalize_prowlarr_url(&base_url);
         Self {
             name,
             client: reqwest::Client::builder()
                 .user_agent("DebridDownloader/1.1.8")
                 .build()
                 .expect("Failed to create HTTP client"),
-            base_url,
+            base_url: url,
             api_key,
         }
     }
