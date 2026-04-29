@@ -355,4 +355,21 @@ impl DebridProvider for TorBoxClient {
     ) -> Result<Vec<shared::DownloadItem>, shared::ProviderError> {
         Ok(vec![])
     }
+
+    async fn check_availability(&self, hashes: &[String]) -> Result<Vec<String>, shared::ProviderError> {
+        if hashes.is_empty() {
+            return Ok(vec![]);
+        }
+        let hash_list = hashes.join(",");
+        let resp: TbApiResponse<Vec<String>> = self
+            .get(&format!(
+                "/torrents/checkcached?hash={}&format=list&list_files=false",
+                hash_list
+            ))
+            .await?;
+        match self.unwrap_response(resp) {
+            Ok(cached) => Ok(cached.into_iter().map(|h| h.to_lowercase()).collect()),
+            Err(_) => Ok(vec![]),
+        }
+    }
 }

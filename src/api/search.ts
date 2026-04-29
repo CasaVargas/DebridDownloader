@@ -23,6 +23,12 @@ export async function saveTrackerConfigs(configs: TrackerConfig[]): Promise<void
   return invoke("save_tracker_configs", { configs });
 }
 
+export async function checkCacheAvailability(
+  hashes: string[]
+): Promise<string[]> {
+  return invoke("check_cache_availability", { hashes });
+}
+
 export async function testTracker(
   trackerType: string,
   url: string,
