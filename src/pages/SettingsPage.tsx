@@ -137,6 +137,12 @@ export default function SettingsPage() {
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url;
     }
+    if (newTrackerType === "jackett" && !url.includes("/api/")) {
+      url = url.replace(/\/UI.*$/, "");
+      url = url.replace(/\/+$/, "");
+      url += "/api/v2.0/indexers/all/results/torznab";
+    }
+    url = url.replace(/\/+$/, "");
     const config: TrackerConfig = {
       id: crypto.randomUUID(),
       name: newTrackerName.trim(),
@@ -889,7 +895,7 @@ export default function SettingsPage() {
                         <div className="text-[13px] text-[var(--theme-text-muted)] truncate">{tracker.url}</div>
                       </div>
                       <span className="text-[12px] text-[var(--theme-text-ghost)] shrink-0 px-2 py-1 rounded-md" style={{ background: "var(--theme-selected)" }}>
-                        {tracker.tracker_type === "piratebay_api" ? "API" : tracker.tracker_type === "torznab" ? "Torznab" : tracker.tracker_type === "prowlarr" ? "Prowlarr" : tracker.tracker_type}
+                        {tracker.tracker_type === "piratebay_api" ? "API" : tracker.tracker_type === "torznab" ? "Torznab" : tracker.tracker_type === "prowlarr" ? "Prowlarr" : tracker.tracker_type === "jackett" ? "Jackett" : tracker.tracker_type}
                       </span>
                       <button
                         onClick={() => handleRemoveTracker(tracker.id)}
@@ -917,9 +923,11 @@ export default function SettingsPage() {
                 <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Add Tracker</span>
                 <p className="text-[14px] text-[var(--theme-text-muted)] mb-5">
                   {newTrackerType === "torznab"
-                    ? "Connect to a Torznab-compatible indexer (Prowlarr, Jackett)"
+                    ? "Connect to a Torznab-compatible indexer"
                     : newTrackerType === "prowlarr"
                     ? "Connect to Prowlarr to search all configured indexers"
+                    : newTrackerType === "jackett"
+                    ? "Connect to Jackett — paste the base URL and it will be auto-corrected"
                     : "Connect to a site with a TPB-compatible JSON API"}
                 </p>
 
@@ -941,6 +949,7 @@ export default function SettingsPage() {
                       <option value="piratebay_api">API (TPB-style)</option>
                       <option value="torznab">Torznab</option>
                       <option value="prowlarr">Prowlarr</option>
+                      <option value="jackett">Jackett</option>
                     </select>
                   </div>
 
@@ -949,25 +958,25 @@ export default function SettingsPage() {
                     type="text"
                     value={newTrackerUrl}
                     onChange={(e) => setNewTrackerUrl(e.target.value)}
-                    placeholder={newTrackerType === "prowlarr" ? "http://localhost:9696" : newTrackerType === "torznab" ? "http://localhost:9696/1/api" : "https://example.org"}
+                    placeholder={newTrackerType === "prowlarr" ? "http://localhost:9696" : newTrackerType === "torznab" ? "http://localhost:9696/1/api" : newTrackerType === "jackett" ? "http://localhost:9117" : "https://example.org"}
                     onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
                     className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
                   />
 
                   {/* Row 3: API Key (if needed) */}
-                  {(newTrackerType === "torznab" || newTrackerType === "prowlarr" || newTrackerApiKey) && (
+                  {(newTrackerType === "torznab" || newTrackerType === "prowlarr" || newTrackerType === "jackett" || newTrackerApiKey) && (
                     <input
                       type="text"
                       value={newTrackerApiKey}
                       onChange={(e) => setNewTrackerApiKey(e.target.value)}
-                      placeholder={newTrackerType === "torznab" ? "API Key (required)" : "API Key (optional)"}
+                      placeholder={newTrackerType === "torznab" || newTrackerType === "jackett" ? "API Key (required)" : "API Key (optional)"}
                       onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
                       className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
                     />
                   )}
 
-                  {newTrackerType === "torznab" && !newTrackerApiKey.trim() && (
-                    <p className="text-[13px] text-[#f59e0b]">Torznab trackers require an API key</p>
+                  {(newTrackerType === "torznab" || newTrackerType === "jackett") && !newTrackerApiKey.trim() && (
+                    <p className="text-[13px] text-[#f59e0b]">{newTrackerType === "jackett" ? "Jackett" : "Torznab"} trackers require an API key</p>
                   )}
 
                   {/* Add button */}
