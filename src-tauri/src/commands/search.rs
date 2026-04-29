@@ -1,10 +1,13 @@
-use crate::scrapers::{self, SearchResponse, TrackerConfig};
-use tauri::Manager;
+use crate::providers::torbox::client::TorBoxClient;
+use crate::scrapers::{self, SearchResponse, TorrentScraper, TrackerConfig};
+use crate::state::AppState;
+use tauri::State;
 use tauri_plugin_store::StoreExt;
 
 #[tauri::command]
 pub async fn search_torrents(
     app: tauri::AppHandle,
+    state: State<'_, AppState>,
     query: String,
     category: Option<String>,
     sort_by: Option<String>,
@@ -18,7 +21,25 @@ pub async fn search_torrents(
     };
 
     let configs = load_tracker_configs(&app);
-    Ok(scrapers::search_all(&params, &configs).await)
+
+    let mut extra: Vec<Box<dyn TorrentScraper>> = Vec::new();
+
+    let provider_id = state.provider_id.read().await.clone();
+    if provider_id == "torbox" {
+        let settings = state.settings.read().await;
+        if settings.torbox_search_enabled {
+            let provider = state.get_provider().await;
+            if let Some(tb) = provider.as_any().downcast_ref::<TorBoxClient>() {
+                if let Ok(key) = tb.get_api_key().await {
+                    extra.push(Box::new(
+                        scrapers::torbox_search::TorBoxSearchScraper::new(key),
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(scrapers::search_all(&params, &configs, extra).await)
 }
 
 #[tauri::command]

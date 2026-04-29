@@ -857,6 +857,23 @@ export default function SettingsPage() {
                 {savedField === "trackers" && <span style={{ color: accentColor }} className="ml-2 normal-case tracking-normal">Saved</span>}
               </h3>
 
+              {/* TorBox built-in search */}
+              {activeProvider === "torbox" && (
+                <div className="mb-12">
+                  <ToggleRow
+                    label="TorBox Search"
+                    description="Search torrents using the TorBox Search API with your existing API key"
+                    checked={settings.torbox_search_enabled ?? false}
+                    saved={savedField === "torbox_search_enabled"}
+                    accentColor={accentColor}
+                    onChange={async (v) => {
+                      await applyChange({ torbox_search_enabled: v });
+                      markSaved("torbox_search_enabled");
+                    }}
+                  />
+                </div>
+              )}
+
               {/* Existing trackers */}
               {trackers.length > 0 && (
                 <div className="mb-12 space-y-3">

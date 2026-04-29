@@ -167,19 +167,19 @@ impl TorrentScraper for TorznabScraper {
 // ── XML Parsing ──────────────────────────────────────────────────────
 
 #[derive(Default)]
-struct TorznabItem {
-    title: String,
-    link: String,
-    size: u64,
-    seeders: u32,
-    peers: u32,
-    info_hash: String,
-    magnet_url: String,
-    category: String,
-    pub_date: String,
+pub struct TorznabItem {
+    pub title: String,
+    pub link: String,
+    pub size: u64,
+    pub seeders: u32,
+    pub peers: u32,
+    pub info_hash: String,
+    pub magnet_url: String,
+    pub category: String,
+    pub pub_date: String,
 }
 
-fn parse_torznab_error(xml: &str) -> Option<ScraperError> {
+pub fn parse_torznab_error(xml: &str) -> Option<ScraperError> {
     let mut reader = Reader::from_str(xml);
     let mut buf = Vec::new();
 
@@ -216,7 +216,7 @@ fn parse_torznab_error(xml: &str) -> Option<ScraperError> {
     None
 }
 
-fn parse_torznab_items(xml: &str) -> Result<Vec<TorznabItem>, ScraperError> {
+pub fn parse_torznab_items(xml: &str) -> Result<Vec<TorznabItem>, ScraperError> {
     let mut reader = Reader::from_str(xml);
     let mut buf = Vec::new();
     let mut items = Vec::new();
