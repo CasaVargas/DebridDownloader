@@ -13,15 +13,22 @@ pub struct TorznabScraper {
     client: reqwest::Client,
 }
 
+pub fn normalize_torznab_url(url: &str) -> String {
+    let url = url.trim_end_matches('/');
+    let base = url.strip_suffix("/api").unwrap_or(url);
+    base.trim_end_matches('/').to_string()
+}
+
 impl TorznabScraper {
     pub fn new(name: String, base_url: String, api_key: String) -> Self {
+        let url = normalize_torznab_url(&base_url);
         Self {
             name,
             client: reqwest::Client::builder()
                 .user_agent("DebridDownloader/1.1.8")
                 .build()
                 .expect("Failed to create HTTP client"),
-            base_url,
+            base_url: url,
             api_key,
         }
     }
@@ -167,19 +174,19 @@ impl TorrentScraper for TorznabScraper {
 // ── XML Parsing ──────────────────────────────────────────────────────
 
 #[derive(Default)]
-struct TorznabItem {
-    title: String,
-    link: String,
-    size: u64,
-    seeders: u32,
-    peers: u32,
-    info_hash: String,
-    magnet_url: String,
-    category: String,
-    pub_date: String,
+pub struct TorznabItem {
+    pub title: String,
+    pub link: String,
+    pub size: u64,
+    pub seeders: u32,
+    pub peers: u32,
+    pub info_hash: String,
+    pub magnet_url: String,
+    pub category: String,
+    pub pub_date: String,
 }
 
-fn parse_torznab_error(xml: &str) -> Option<ScraperError> {
+pub fn parse_torznab_error(xml: &str) -> Option<ScraperError> {
     let mut reader = Reader::from_str(xml);
     let mut buf = Vec::new();
 
@@ -216,7 +223,7 @@ fn parse_torznab_error(xml: &str) -> Option<ScraperError> {
     None
 }
 
-fn parse_torznab_items(xml: &str) -> Result<Vec<TorznabItem>, ScraperError> {
+pub fn parse_torznab_items(xml: &str) -> Result<Vec<TorznabItem>, ScraperError> {
     let mut reader = Reader::from_str(xml);
     let mut buf = Vec::new();
     let mut items = Vec::new();
@@ -242,6 +249,37 @@ fn parse_torznab_items(xml: &str) -> Result<Vec<TorznabItem>, ScraperError> {
                                 let val = String::from_utf8_lossy(&attr.value).to_string();
                                 current_item.size = val.parse().unwrap_or(0);
                             }
+                        }
+                    }
+
+                    if name == "attr" {
+                        let mut attr_name = String::new();
+                        let mut attr_value = String::new();
+                        for attr in e.attributes().flatten() {
+                            let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                            let val = String::from_utf8_lossy(&attr.value).to_string();
+                            match key.as_str() {
+                                "name" => attr_name = val,
+                                "value" => attr_value = val,
+                                _ => {}
+                            }
+                        }
+                        match attr_name.as_str() {
+                            "seeders" => current_item.seeders = attr_value.parse().unwrap_or(0),
+                            "peers" => current_item.peers = attr_value.parse().unwrap_or(0),
+                            "infohash" => current_item.info_hash = attr_value,
+                            "magneturl" => current_item.magnet_url = attr_value,
+                            "category" => {
+                                if current_item.category.is_empty() {
+                                    current_item.category = attr_value;
+                                }
+                            }
+                            "size" => {
+                                if current_item.size == 0 {
+                                    current_item.size = attr_value.parse().unwrap_or(0);
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }

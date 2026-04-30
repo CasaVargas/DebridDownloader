@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getSettings, updateSettings, detectRarTool } from "../api/settings";
-import { getTrackerConfigs, saveTrackerConfigs } from "../api/search";
+import { getTrackerConfigs, saveTrackerConfigs, testTracker } from "../api/search";
 import { getAvailableProviders, switchProvider, getActiveProvider } from "../api/providers";
 import type { AppSettings, TrackerConfig, ProviderInfo } from "../types";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -72,11 +72,14 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [rarTool, setRarTool] = useState<string | null>(null);
 
-  // Add tracker form
+  // Add/edit tracker form
   const [newTrackerName, setNewTrackerName] = useState("");
   const [newTrackerUrl, setNewTrackerUrl] = useState("");
   const [newTrackerType, setNewTrackerType] = useState("piratebay_api");
   const [newTrackerApiKey, setNewTrackerApiKey] = useState("");
+  const [editingTrackerId, setEditingTrackerId] = useState<string | null>(null);
+  const [trackerTestResult, setTrackerTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [trackerTesting, setTrackerTesting] = useState(false);
 
   // Load backend settings + autostart status + trackers
   useEffect(() => {
@@ -137,15 +140,32 @@ export default function SettingsPage() {
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url;
     }
+    if (newTrackerType === "jackett" && !url.includes("/api/")) {
+      url = url.replace(/\/UI.*$/, "");
+      url = url.replace(/\/+$/, "");
+      url += "/api/v2.0/indexers/all/results/torznab";
+    }
+    if (newTrackerType === "torznab") {
+      url = url.replace(/\/api\/?$/, "");
+    }
+    if (newTrackerType === "prowlarr") {
+      url = url.replace(/\/api\/v1(?:\/search|\/health|\/indexer)?\/?$/, "");
+    }
+    if (newTrackerType === "piratebay_api") {
+      url = url.replace(/\/q\.php.*$/, "");
+    }
+    url = url.replace(/\/+$/, "");
     const config: TrackerConfig = {
-      id: crypto.randomUUID(),
+      id: editingTrackerId ?? crypto.randomUUID(),
       name: newTrackerName.trim(),
       url,
       tracker_type: newTrackerType,
       enabled: true,
       api_key: newTrackerApiKey.trim() || undefined,
     };
-    const next = [...trackers, config];
+    const next = editingTrackerId
+      ? trackers.map((t) => t.id === editingTrackerId ? config : t)
+      : [...trackers, config];
     setTrackers(next);
     try {
       await saveTrackerConfigs(next);
@@ -153,12 +173,47 @@ export default function SettingsPage() {
     } catch (e) {
       console.error("Failed to save tracker configs:", e);
     }
+    handleCancelEdit();
+  }
+
+  function handleEditTracker(tracker: TrackerConfig) {
+    setEditingTrackerId(tracker.id);
+    setNewTrackerName(tracker.name);
+    setNewTrackerUrl(tracker.url);
+    setNewTrackerType(tracker.tracker_type);
+    setNewTrackerApiKey(tracker.api_key ?? "");
+    setTrackerTestResult(null);
+  }
+
+  function handleCancelEdit() {
+    setEditingTrackerId(null);
     setNewTrackerName("");
     setNewTrackerUrl("");
+    setNewTrackerType("piratebay_api");
     setNewTrackerApiKey("");
+    setTrackerTestResult(null);
+  }
+
+  async function handleTestTracker() {
+    if (!newTrackerUrl.trim()) return;
+    setTrackerTesting(true);
+    setTrackerTestResult(null);
+    let url = newTrackerUrl.trim().replace(/\/+$/, "");
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+    try {
+      const msg = await testTracker(newTrackerType, url, newTrackerApiKey.trim() || undefined);
+      setTrackerTestResult({ ok: true, msg });
+    } catch (e) {
+      setTrackerTestResult({ ok: false, msg: String(e) });
+    } finally {
+      setTrackerTesting(false);
+    }
   }
 
   async function handleRemoveTracker(id: string) {
+    if (editingTrackerId === id) handleCancelEdit();
     const next = trackers.filter((t) => t.id !== id);
     setTrackers(next);
     try {
@@ -857,6 +912,23 @@ export default function SettingsPage() {
                 {savedField === "trackers" && <span style={{ color: accentColor }} className="ml-2 normal-case tracking-normal">Saved</span>}
               </h3>
 
+              {/* TorBox built-in search */}
+              {activeProvider === "torbox" && (
+                <div className="mb-12">
+                  <ToggleRow
+                    label="TorBox Search"
+                    description="Search torrents using the TorBox Search API with your existing API key"
+                    checked={settings.torbox_search_enabled ?? false}
+                    saved={savedField === "torbox_search_enabled"}
+                    accentColor={accentColor}
+                    onChange={async (v) => {
+                      await applyChange({ torbox_search_enabled: v });
+                      markSaved("torbox_search_enabled");
+                    }}
+                  />
+                </div>
+              )}
+
               {/* Existing trackers */}
               {trackers.length > 0 && (
                 <div className="mb-12 space-y-3">
@@ -889,8 +961,17 @@ export default function SettingsPage() {
                         <div className="text-[13px] text-[var(--theme-text-muted)] truncate">{tracker.url}</div>
                       </div>
                       <span className="text-[12px] text-[var(--theme-text-ghost)] shrink-0 px-2 py-1 rounded-md" style={{ background: "var(--theme-selected)" }}>
-                        {tracker.tracker_type === "piratebay_api" ? "API" : tracker.tracker_type === "torznab" ? "Torznab" : tracker.tracker_type === "prowlarr" ? "Prowlarr" : tracker.tracker_type}
+                        {tracker.tracker_type === "piratebay_api" ? "API" : tracker.tracker_type === "torznab" ? "Torznab" : tracker.tracker_type === "prowlarr" ? "Prowlarr" : tracker.tracker_type === "jackett" ? "Jackett" : tracker.tracker_type}
                       </span>
+                      <button
+                        onClick={() => handleEditTracker(tracker)}
+                        className="shrink-0 text-[13px] px-5 py-2.5 rounded-lg transition-colors"
+                        style={{ color: "var(--accent)", background: "var(--accent-bg-medium)" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.8"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+                      >
+                        Edit
+                      </button>
                       <button
                         onClick={() => handleRemoveTracker(tracker.id)}
                         className="shrink-0 text-[#ef4444] text-[13px] px-5 py-2.5 rounded-lg transition-colors"
@@ -912,14 +993,18 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Add new tracker */}
+              {/* Add/edit tracker */}
               <div className="mb-12">
-                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">Add Tracker</span>
+                <span className="text-[15px] text-[var(--theme-text-primary)] block mb-1.5">
+                  {editingTrackerId ? "Edit Tracker" : "Add Tracker"}
+                </span>
                 <p className="text-[14px] text-[var(--theme-text-muted)] mb-5">
                   {newTrackerType === "torznab"
-                    ? "Connect to a Torznab-compatible indexer (Prowlarr, Jackett)"
+                    ? "Connect to a Torznab-compatible indexer"
                     : newTrackerType === "prowlarr"
                     ? "Connect to Prowlarr to search all configured indexers"
+                    : newTrackerType === "jackett"
+                    ? "Connect to Jackett — paste the base URL and it will be auto-corrected"
                     : "Connect to a site with a TPB-compatible JSON API"}
                 </p>
 
@@ -935,12 +1020,13 @@ export default function SettingsPage() {
                     />
                     <select
                       value={newTrackerType}
-                      onChange={(e) => setNewTrackerType(e.target.value)}
+                      onChange={(e) => { setNewTrackerType(e.target.value); setTrackerTestResult(null); }}
                       className="w-[200px] bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] outline-none focus:border-[var(--theme-border-hover)] transition-colors"
                     >
                       <option value="piratebay_api">API (TPB-style)</option>
                       <option value="torznab">Torznab</option>
                       <option value="prowlarr">Prowlarr</option>
+                      <option value="jackett">Jackett</option>
                     </select>
                   </div>
 
@@ -948,37 +1034,67 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={newTrackerUrl}
-                    onChange={(e) => setNewTrackerUrl(e.target.value)}
-                    placeholder={newTrackerType === "prowlarr" ? "http://localhost:9696" : newTrackerType === "torznab" ? "http://localhost:9696/1/api" : "https://example.org"}
+                    onChange={(e) => { setNewTrackerUrl(e.target.value); setTrackerTestResult(null); }}
+                    placeholder={newTrackerType === "prowlarr" ? "http://localhost:9696" : newTrackerType === "torznab" ? "http://localhost:9696/1/api" : newTrackerType === "jackett" ? "http://localhost:9117" : "https://example.org"}
                     onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
                     className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
                   />
 
                   {/* Row 3: API Key (if needed) */}
-                  {(newTrackerType === "torznab" || newTrackerType === "prowlarr" || newTrackerApiKey) && (
+                  {(newTrackerType === "torznab" || newTrackerType === "prowlarr" || newTrackerType === "jackett" || newTrackerApiKey) && (
                     <input
                       type="text"
                       value={newTrackerApiKey}
-                      onChange={(e) => setNewTrackerApiKey(e.target.value)}
-                      placeholder={newTrackerType === "torznab" ? "API Key (required)" : "API Key (optional)"}
+                      onChange={(e) => { setNewTrackerApiKey(e.target.value); setTrackerTestResult(null); }}
+                      placeholder={newTrackerType === "torznab" || newTrackerType === "jackett" ? "API Key (required)" : "API Key (optional)"}
                       onKeyDown={(e) => e.key === "Enter" && handleAddTracker()}
                       className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] placeholder:text-[var(--theme-text-ghost)] outline-none focus:border-[var(--theme-border-hover)] transition-colors font-mono"
                     />
                   )}
 
-                  {newTrackerType === "torznab" && !newTrackerApiKey.trim() && (
-                    <p className="text-[13px] text-[#f59e0b]">Torznab trackers require an API key</p>
+                  {(newTrackerType === "torznab" || newTrackerType === "jackett") && !newTrackerApiKey.trim() && (
+                    <p className="text-[13px] text-[#f59e0b]">{newTrackerType === "jackett" ? "Jackett" : "Torznab"} trackers require an API key</p>
                   )}
 
-                  {/* Add button */}
-                  <button
-                    onClick={handleAddTracker}
-                    disabled={!newTrackerName.trim() || !newTrackerUrl.trim()}
-                    className="w-full rounded-lg text-white text-[15px] font-medium disabled:opacity-30 transition-colors py-4"
-                    style={{ background: "var(--accent)" }}
-                  >
-                    Add Tracker
-                  </button>
+                  {/* Test result */}
+                  {trackerTestResult && (
+                    <p className={`text-[13px] ${trackerTestResult.ok ? "text-[var(--accent)]" : "text-[#ef4444]"}`}>
+                      {trackerTestResult.msg}
+                    </p>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleTestTracker}
+                      disabled={!newTrackerUrl.trim() || trackerTesting}
+                      className="border border-[var(--theme-text-muted)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-text-primary)] rounded-full text-[14px] font-medium disabled:opacity-30 transition-colors py-3 px-10"
+                      style={{ background: "var(--theme-bg)" }}
+                    >
+                      {trackerTesting ? (
+                        <span className="flex items-center gap-2">
+                          <span className="w-4 h-4 border-2 border-[rgba(255,255,255,0.3)] border-t-white rounded-full animate-spin" />
+                          Testing
+                        </span>
+                      ) : "  Test  "}
+                    </button>
+                    <button
+                      onClick={handleAddTracker}
+                      disabled={!newTrackerName.trim() || !newTrackerUrl.trim()}
+                      className="flex-1 rounded-lg text-white text-[15px] font-medium disabled:opacity-30 transition-colors py-4"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      {editingTrackerId ? "Save Changes" : "Add Tracker"}
+                    </button>
+                    {editingTrackerId && (
+                      <button
+                        onClick={handleCancelEdit}
+                        className="bg-[var(--theme-selected)] border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] hover:border-[var(--theme-border-hover)] rounded-lg text-[15px] font-medium transition-colors py-4 px-8"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </section>

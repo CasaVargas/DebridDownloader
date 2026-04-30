@@ -1,5 +1,7 @@
+pub mod jackett;
 pub mod piratebay;
 pub mod prowlarr;
+pub mod torbox_search;
 pub mod torznab;
 pub mod utils;
 pub use utils::format_size;
@@ -51,7 +53,7 @@ pub struct TrackerConfig {
     pub id: String,
     pub name: String,
     pub url: String,
-    pub tracker_type: String, // "piratebay_api" | "torznab" | "prowlarr"
+    pub tracker_type: String, // "piratebay_api" | "torznab" | "prowlarr" | "jackett"
     pub enabled: bool,
     #[serde(default)]
     pub api_key: Option<String>,
@@ -90,7 +92,7 @@ pub fn extract_info_hash(magnet: &str) -> Option<String> {
     Some(hash.to_lowercase())
 }
 
-const SCRAPER_TIMEOUT_SECS: u64 = 10;
+const SCRAPER_TIMEOUT_SECS: u64 = 60;
 
 /// Build scrapers from user-configured tracker list
 fn build_scrapers(configs: &[TrackerConfig]) -> (Vec<Box<dyn TorrentScraper>>, Vec<TrackerStatus>) {
@@ -138,6 +140,24 @@ fn build_scrapers(configs: &[TrackerConfig]) -> (Vec<Box<dyn TorrentScraper>>, V
                     }
                 }
             }
+            "jackett" => {
+                match &config.api_key {
+                    Some(key) if !key.is_empty() => {
+                        scrapers.push(Box::new(jackett::JackettScraper::new(
+                            config.name.clone(),
+                            config.url.clone(),
+                            key.clone(),
+                        )));
+                    }
+                    _ => {
+                        config_errors.push(TrackerStatus {
+                            name: config.name.clone(),
+                            ok: false,
+                            error: Some("Missing API key — configure in Settings".into()),
+                        });
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -145,8 +165,14 @@ fn build_scrapers(configs: &[TrackerConfig]) -> (Vec<Box<dyn TorrentScraper>>, V
     (scrapers, config_errors)
 }
 
-pub async fn search_all(params: &SearchParams, tracker_configs: &[TrackerConfig]) -> SearchResponse {
+pub async fn search_all(
+    params: &SearchParams,
+    tracker_configs: &[TrackerConfig],
+    extra_scrapers: Vec<Box<dyn TorrentScraper>>,
+) -> SearchResponse {
     let (scrapers, config_errors) = build_scrapers(tracker_configs);
+    let mut scrapers = scrapers;
+    scrapers.extend(extra_scrapers);
 
     if scrapers.is_empty() && config_errors.is_empty() {
         return SearchResponse {

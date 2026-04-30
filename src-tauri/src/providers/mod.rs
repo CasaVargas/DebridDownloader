@@ -40,6 +40,9 @@ pub trait DebridProvider: Send + Sync {
         page: u32,
         limit: u32,
     ) -> Result<Vec<DownloadItem>, ProviderError>;
+
+    // Cache availability — returns lowercase hashes that are instantly available
+    async fn check_availability(&self, hashes: &[String]) -> Result<Vec<String>, ProviderError>;
 }
 
 /// List of all available provider IDs

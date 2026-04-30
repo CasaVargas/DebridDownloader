@@ -36,6 +36,10 @@ impl TorBoxClient {
             .ok_or(shared::ProviderError::NotAuthenticated)
     }
 
+    pub async fn get_api_key(&self) -> Result<String, shared::ProviderError> {
+        self.get_key().await
+    }
+
     async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<TbApiResponse<T>, shared::ProviderError> {
         let key = self.get_key().await?;
         let url = format!("{}{}", BASE_URL, path);
@@ -350,5 +354,43 @@ impl DebridProvider for TorBoxClient {
         _limit: u32,
     ) -> Result<Vec<shared::DownloadItem>, shared::ProviderError> {
         Ok(vec![])
+    }
+
+    async fn check_availability(&self, hashes: &[String]) -> Result<Vec<String>, shared::ProviderError> {
+        if hashes.is_empty() {
+            return Ok(vec![]);
+        }
+        let key = self.get_key().await?;
+        let hash_list = hashes.join(",");
+        let url = format!(
+            "{}/torrents/checkcached?hash={}&format=list&list_files=false",
+            BASE_URL, hash_list
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", key))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(shared::ProviderError::Other(format!("HTTP: {}", text)));
+        }
+
+        let api_resp: TbApiResponse<serde_json::Value> = resp.json().await?;
+
+        if !api_resp.success {
+            return Ok(vec![]);
+        }
+
+        match api_resp.data {
+            Some(serde_json::Value::Array(arr)) => {
+                Ok(arr.iter()
+                    .filter_map(|v| v.get("hash").and_then(|h| h.as_str()).map(|s| s.to_lowercase()))
+                    .collect())
+            }
+            _ => Ok(vec![]),
+        }
     }
 }

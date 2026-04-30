@@ -395,4 +395,18 @@ impl DebridProvider for PremiumizeClient {
             })
             .collect())
     }
+
+    async fn check_availability(&self, hashes: &[String]) -> Result<Vec<String>, shared::ProviderError> {
+        if hashes.is_empty() {
+            return Ok(vec![]);
+        }
+        let params: Vec<(&str, &str)> = hashes.iter().map(|h| ("items[]", h.as_str())).collect();
+        let resp: PmCacheCheckResponse = self.post_form("/cache/check", &params).await?;
+        Ok(hashes
+            .iter()
+            .zip(resp.response.iter())
+            .filter(|(_, &cached)| cached)
+            .map(|(hash, _)| hash.to_lowercase())
+            .collect())
+    }
 }

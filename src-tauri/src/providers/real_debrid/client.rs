@@ -1,5 +1,6 @@
 use reqwest::{Client, Response, StatusCode};
 use serde::de::DeserializeOwned;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -294,6 +295,17 @@ impl RdClient {
     pub async fn rd_get_user(&self) -> Result<RdUser, ProviderError> {
         self.get("/user").await
     }
+
+    pub async fn rd_instant_availability(
+        &self,
+        hashes: &[String],
+    ) -> Result<HashMap<String, serde_json::Value>, ProviderError> {
+        if hashes.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let path = format!("/torrents/instantAvailability/{}", hashes.join("/"));
+        self.get(&path).await
+    }
 }
 
 // ── Mapping functions ──
@@ -475,5 +487,14 @@ impl DebridProvider for RdClient {
     ) -> Result<Vec<shared::DownloadItem>, shared::ProviderError> {
         let items = self.rd_list_downloads(Some(page), Some(limit)).await?;
         Ok(items.into_iter().map(map_download_item).collect())
+    }
+
+    async fn check_availability(&self, hashes: &[String]) -> Result<Vec<String>, shared::ProviderError> {
+        let resp = self.rd_instant_availability(hashes).await?;
+        Ok(resp
+            .into_iter()
+            .filter(|(_, v)| v.as_object().map_or(false, |obj| !obj.is_empty()))
+            .map(|(hash, _)| hash.to_lowercase())
+            .collect())
     }
 }
