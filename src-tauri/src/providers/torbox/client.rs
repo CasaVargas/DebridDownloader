@@ -360,16 +360,37 @@ impl DebridProvider for TorBoxClient {
         if hashes.is_empty() {
             return Ok(vec![]);
         }
+        let key = self.get_key().await?;
         let hash_list = hashes.join(",");
-        let resp: TbApiResponse<Vec<String>> = self
-            .get(&format!(
-                "/torrents/checkcached?hash={}&format=list&list_files=false",
-                hash_list
-            ))
+        let url = format!(
+            "{}/torrents/checkcached?hash={}&format=list&list_files=false",
+            BASE_URL, hash_list
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", key))
+            .send()
             .await?;
-        match self.unwrap_response(resp) {
-            Ok(cached) => Ok(cached.into_iter().map(|h| h.to_lowercase()).collect()),
-            Err(_) => Ok(vec![]),
+
+        if !resp.status().is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(shared::ProviderError::Other(format!("HTTP: {}", text)));
+        }
+
+        let api_resp: TbApiResponse<serde_json::Value> = resp.json().await?;
+
+        if !api_resp.success {
+            return Ok(vec![]);
+        }
+
+        match api_resp.data {
+            Some(serde_json::Value::Array(arr)) => {
+                Ok(arr.iter()
+                    .filter_map(|v| v.get("hash").and_then(|h| h.as_str()).map(|s| s.to_lowercase()))
+                    .collect())
+            }
+            _ => Ok(vec![]),
         }
     }
 }

@@ -78,7 +78,9 @@ export default function SearchPage() {
               setCachedHashes(new Set(cached.map((h) => h.toLowerCase())));
               setCacheChecked(true);
             })
-            .catch(() => setCacheChecked(true));
+            .catch(() => {
+              setCacheChecked(true);
+            });
         } else {
           setCacheChecked(true);
         }
