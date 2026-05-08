@@ -73,7 +73,7 @@ pub async fn test_tracker(
 
     match tracker_type.as_str() {
         "piratebay_api" => {
-            let base = url.trim_end_matches('/');
+            let base = crate::scrapers::piratebay::normalize_piratebay_url(&url);
             let test_url = format!("{}/q.php?q=test&cat=0", base);
             let resp = client.get(&test_url).send().await.map_err(|e| format!("{}", e))?;
             let status = resp.status();
@@ -88,9 +88,15 @@ pub async fn test_tracker(
                 .map_err(|_| "Invalid JSON response — check URL".to_string())?;
             Ok("Connected".into())
         }
-        "torznab" => {
+        "torznab" | "jackett" => {
             let key = api_key.as_deref().unwrap_or("");
-            let test_url = format!("{}?t=caps&apikey={}", url.trim_end_matches('/'), key);
+            let test_url = if tracker_type == "jackett" {
+                let base = crate::scrapers::jackett::normalize_jackett_url(&url);
+                format!("{}?t=caps&apikey={}", base.trim_end_matches('/'), key)
+            } else {
+                let base = crate::scrapers::torznab::normalize_torznab_url(&url);
+                format!("{}/api?t=caps&apikey={}", base.trim_end_matches('/'), key)
+            };
             let resp = client.get(&test_url).send().await.map_err(|e| format!("{}", e))?;
             let status = resp.status();
             if !status.is_success() {
@@ -117,7 +123,8 @@ pub async fn test_tracker(
         }
         "prowlarr" => {
             let key = api_key.as_deref().unwrap_or("");
-            let test_url = format!("{}/api/v1/health", url.trim_end_matches('/'));
+            let base = crate::scrapers::prowlarr::normalize_prowlarr_url(&url);
+            let test_url = format!("{}/api/v1/health", base);
             let resp = client.get(&test_url)
                 .header("X-Api-Key", key)
                 .send()
@@ -134,6 +141,18 @@ pub async fn test_tracker(
         }
         _ => Err(format!("Unknown tracker type: {}", tracker_type)),
     }
+}
+
+#[tauri::command]
+pub async fn check_cache_availability(
+    state: State<'_, AppState>,
+    hashes: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let provider = state.get_provider().await;
+    provider
+        .check_availability(&hashes)
+        .await
+        .map_err(|e| format!("{}", e))
 }
 
 fn load_tracker_configs(app: &tauri::AppHandle) -> Vec<TrackerConfig> {

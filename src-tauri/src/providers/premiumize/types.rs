@@ -62,3 +62,10 @@ pub struct PmStatusResponse {
     pub status: String,
     pub message: Option<String>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PmCacheCheckResponse {
+    pub status: String,
+    #[serde(default)]
+    pub response: Vec<bool>,
+}

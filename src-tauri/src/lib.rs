@@ -268,6 +268,7 @@ pub fn run() {
             commands::search::get_tracker_configs,
             commands::search::save_tracker_configs,
             commands::search::test_tracker,
+            commands::search::check_cache_availability,
             // Streaming
             commands::streaming::get_stream_url,
             commands::streaming::cleanup_stream_session,

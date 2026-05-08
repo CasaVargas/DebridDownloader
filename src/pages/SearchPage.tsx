@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { searchTorrents } from "../api/search";
+import { searchTorrents, checkCacheAvailability } from "../api/search";
 import { listTorrents, addMagnet, selectTorrentFiles } from "../api/torrents";
 import type { SearchResult, Torrent, TrackerStatus } from "../types";
 
@@ -23,6 +23,8 @@ export default function SearchPage() {
   const [addingHash, setAddingHash] = useState<string | null>(null);
   const [addedHashes, setAddedHashes] = useState<Set<string>>(new Set());
   const [trackerStatus, setTrackerStatus] = useState<TrackerStatus[]>([]);
+  const [cachedHashes, setCachedHashes] = useState<Set<string>>(new Set());
+  const [cacheChecked, setCacheChecked] = useState(false);
   const [error, setError] = useState("");
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,10 +62,28 @@ export default function SearchPage() {
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       setError("");
+      setCacheChecked(false);
+      setCachedHashes(new Set());
       try {
         const response = await searchTorrents(query, undefined, "seeders", 1);
         setSearchResults(response.results);
         setTrackerStatus(response.tracker_status);
+
+        const hashes = response.results
+          .map((r) => r.info_hash)
+          .filter((h) => h.length > 0);
+        if (hashes.length > 0) {
+          checkCacheAvailability(hashes)
+            .then((cached) => {
+              setCachedHashes(new Set(cached.map((h) => h.toLowerCase())));
+              setCacheChecked(true);
+            })
+            .catch(() => {
+              setCacheChecked(true);
+            });
+        } else {
+          setCacheChecked(true);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         setSearchResults([]);
@@ -309,6 +329,8 @@ export default function SearchPage() {
                   ? "text-[#eab308]"
                   : "text-[#ef4444]";
 
+              const isCached = cachedHashes.has(result.info_hash.toLowerCase());
+
               return (
                 <div
                   key={result.info_hash}
@@ -323,6 +345,16 @@ export default function SearchPage() {
                   <span className="text-[16px] text-[var(--theme-text-primary)] truncate flex-1">
                     {result.title}
                   </span>
+                  {cacheChecked && isCached && (
+                    <span title="Cached — instant download" className="shrink-0">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-[#10b981]">
+                        <path d="M8.5 1L3 9h4.5l-1 6L13 7H8.5l1-6z" fill="currentColor" />
+                      </svg>
+                    </span>
+                  )}
+                  {!cacheChecked && result.info_hash.length > 0 && (
+                    <span className="shrink-0 w-4 h-4 rounded-full border-2 border-[var(--theme-border)] border-t-[var(--accent)] animate-spin" />
+                  )}
                   <span className="text-[13px] bg-[rgba(16,185,129,0.08)] text-[#10b981] rounded-md px-3 py-1 shrink-0 font-medium">
                     {result.source}
                   </span>
