@@ -13,15 +13,22 @@ pub struct TorznabScraper {
     client: reqwest::Client,
 }
 
+pub fn normalize_torznab_url(url: &str) -> String {
+    let url = url.trim_end_matches('/');
+    let base = url.strip_suffix("/api").unwrap_or(url);
+    base.trim_end_matches('/').to_string()
+}
+
 impl TorznabScraper {
     pub fn new(name: String, base_url: String, api_key: String) -> Self {
+        let url = normalize_torznab_url(&base_url);
         Self {
             name,
             client: reqwest::Client::builder()
                 .user_agent("DebridDownloader/1.1.8")
                 .build()
                 .expect("Failed to create HTTP client"),
-            base_url,
+            base_url: url,
             api_key,
         }
     }

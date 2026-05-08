@@ -27,14 +27,25 @@ pub struct PirateBayScraper {
     base_url: String,
 }
 
+pub fn normalize_piratebay_url(url: &str) -> String {
+    let url = url.trim_end_matches('/');
+    let base = if let Some(pos) = url.find("/q.php") {
+        &url[..pos]
+    } else {
+        url
+    };
+    base.trim_end_matches('/').to_string()
+}
+
 impl PirateBayScraper {
     pub fn new(base_url: String) -> Self {
+        let url = normalize_piratebay_url(&base_url);
         Self {
             client: reqwest::Client::builder()
                 .user_agent("DebridDownloader/0.1.0")
                 .build()
                 .expect("Failed to create HTTP client"),
-            base_url,
+            base_url: url,
         }
     }
 

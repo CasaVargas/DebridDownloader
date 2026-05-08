@@ -142,6 +142,15 @@ export default function SettingsPage() {
       url = url.replace(/\/+$/, "");
       url += "/api/v2.0/indexers/all/results/torznab";
     }
+    if (newTrackerType === "torznab") {
+      url = url.replace(/\/api\/?$/, "");
+    }
+    if (newTrackerType === "prowlarr") {
+      url = url.replace(/\/api\/v1(?:\/search|\/health|\/indexer)?\/?$/, "");
+    }
+    if (newTrackerType === "piratebay_api") {
+      url = url.replace(/\/q\.php.*$/, "");
+    }
     url = url.replace(/\/+$/, "");
     const config: TrackerConfig = {
       id: crypto.randomUUID(),
