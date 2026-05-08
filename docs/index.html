@@ -570,6 +570,25 @@ footer a:hover { color: var(--green); }
         <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
         <div class="changelog-content">
           <div class="changelog-header">
+            <span class="changelog-version">v1.6.4</span>
+            <span class="changelog-date">May 2026</span>
+          </div>
+          <div class="changelog-title">Jackett, TorBox Search & Cache Checking</div>
+          <ul class="changelog-items">
+            <li>Jackett as a dedicated tracker type with full search integration</li>
+            <li>TorBox Search API — search torrents directly through TorBox's built-in search</li>
+            <li>Cache availability checking — see if a torrent is already cached before adding</li>
+            <li>Edit and test saved trackers directly from the tracker list</li>
+            <li>Automatic tracker URL normalization on save</li>
+            <li>Fix: Windows Credential Manager full error now shows an actionable message</li>
+            <li>Fix: TorBox cache availability response parsing</li>
+          </ul>
+        </div>
+      </div>
+      <div class="changelog-entry">
+        <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
+        <div class="changelog-content">
+          <div class="changelog-header">
             <span class="changelog-version">v1.6.3</span>
             <span class="changelog-date">April 2026</span>
           </div>
@@ -892,13 +911,13 @@ footer a:hover { color: var(--green); }
 
   <script>
 (function() {
-  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.6.3/';
+  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.6.4/';
   var LATEST = 'https://github.com/CasaVargas/DebridDownloader/releases/latest';
 
   var directLinks = {
-    mac: BASE + 'DebridDownloader_1.6.3_aarch64.dmg',
-    win: BASE + 'DebridDownloader_1.6.3_x64-setup.exe',
-    linux: BASE + 'DebridDownloader_1.6.3_amd64.deb'
+    mac: BASE + 'DebridDownloader_1.6.4_aarch64.dmg',
+    win: BASE + 'DebridDownloader_1.6.4_x64-setup.exe',
+    linux: BASE + 'DebridDownloader_1.6.4_amd64.deb'
   };
 
   function detectOS() {
@@ -928,7 +947,7 @@ footer a:hover { color: var(--green); }
   }
 
   // Download cards — direct download links
-  var cardLinks = { mac: BASE + 'DebridDownloader_1.6.3_aarch64.dmg', win: BASE + 'DebridDownloader_1.6.3_x64-setup.exe', linux: BASE + 'DebridDownloader_1.6.3_amd64.deb' };
+  var cardLinks = { mac: BASE + 'DebridDownloader_1.6.4_aarch64.dmg', win: BASE + 'DebridDownloader_1.6.4_x64-setup.exe', linux: BASE + 'DebridDownloader_1.6.4_amd64.deb' };
   var cards = document.querySelectorAll('.dl-card[data-os]');
   var found = false;
   cards.forEach(function(card) {
