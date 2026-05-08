@@ -36,6 +36,10 @@ impl TorBoxClient {
             .ok_or(shared::ProviderError::NotAuthenticated)
     }
 
+    pub async fn get_api_key(&self) -> Result<String, shared::ProviderError> {
+        self.get_key().await
+    }
+
     async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<TbApiResponse<T>, shared::ProviderError> {
         let key = self.get_key().await?;
         let url = format!("{}{}", BASE_URL, path);

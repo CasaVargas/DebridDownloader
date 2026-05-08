@@ -48,6 +48,8 @@ pub struct AppSettings {
     pub auto_extract_archives: bool,
     #[serde(default)]
     pub delete_archives_after_extract: bool,
+    #[serde(default)]
+    pub torbox_search_enabled: bool,
 }
 
 fn default_provider() -> String {
@@ -78,6 +80,7 @@ impl Default for AppSettings {
             speed_limit_bytes: None,
             auto_extract_archives: false,
             delete_archives_after_extract: false,
+            torbox_search_enabled: false,
         }
     }
 }

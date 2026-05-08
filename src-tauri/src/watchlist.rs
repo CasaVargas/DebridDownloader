@@ -282,7 +282,7 @@ async fn run_rule(
         page: None,
     };
 
-    let response = scrapers::search_all(&params, tracker_configs).await;
+    let response = scrapers::search_all(&params, tracker_configs, vec![]).await;
 
     let seen = {
         let seen_map = state.watch_seen.read().await;

@@ -150,6 +150,7 @@ export interface AppSettings {
   speed_limit_bytes?: number | null;
   auto_extract_archives?: boolean;
   delete_archives_after_extract?: boolean;
+  torbox_search_enabled?: boolean;
 }
 
 // ── Search ──
