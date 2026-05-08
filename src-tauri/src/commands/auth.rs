@@ -13,6 +13,20 @@ fn get_entry(key: &str) -> Result<Entry, String> {
     Entry::new(KEYRING_SERVICE, key).map_err(|e| format!("Keyring error: {}", e))
 }
 
+fn map_keyring_save_error(context: &str, err: keyring::Error) -> String {
+    let msg = format!("{}", err);
+    if msg.contains("Windows error code 8") {
+        format!(
+            "Failed to save {}: Windows Credential Manager is full. \
+             Open Credential Manager (Win+R \u{2192} control /name Microsoft.CredentialManager) \
+             and remove unused credentials under \"Windows Credentials\", then try again.",
+            context
+        )
+    } else {
+        format!("Failed to save {}: {}", context, msg)
+    }
+}
+
 fn prefixed_key(provider_id: &str, key: &str) -> String {
     format!("{}.{}", provider_id, key)
 }
@@ -32,7 +46,7 @@ pub async fn set_api_token(state: State<'_, AppState>, token: String) -> Result<
     let entry = get_entry(&prefixed_key(&provider_id, "api_token"))?;
     entry
         .set_password(&token)
-        .map_err(|e| format!("Failed to save token: {}", e))?;
+        .map_err(|e| map_keyring_save_error("token", e))?;
     Ok(())
 }
 
@@ -124,10 +138,10 @@ pub async fn oauth_poll_credentials(
         Ok(creds) => {
             get_entry(&prefixed_key(&provider_id, "oauth_client_id"))?
                 .set_password(&creds.client_id)
-                .map_err(|e| format!("Failed to save client_id: {}", e))?;
+                .map_err(|e| map_keyring_save_error("client_id", e))?;
             get_entry(&prefixed_key(&provider_id, "oauth_client_secret"))?
                 .set_password(&creds.client_secret)
-                .map_err(|e| format!("Failed to save client_secret: {}", e))?;
+                .map_err(|e| map_keyring_save_error("client_secret", e))?;
             Ok(Some(creds))
         }
         Err(_) => Ok(None),
@@ -152,10 +166,10 @@ pub async fn oauth_get_token(
 
     get_entry(&prefixed_key(&provider_id, "api_token"))?
         .set_password(&token.access_token)
-        .map_err(|e| format!("Failed to save access token: {}", e))?;
+        .map_err(|e| map_keyring_save_error("access token", e))?;
     get_entry(&prefixed_key(&provider_id, "refresh_token"))?
         .set_password(&token.refresh_token)
-        .map_err(|e| format!("Failed to save refresh token: {}", e))?;
+        .map_err(|e| map_keyring_save_error("refresh token", e))?;
 
     rd.set_token(token.access_token.clone()).await;
 
