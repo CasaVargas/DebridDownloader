@@ -179,7 +179,7 @@ export default function Sidebar({
                 <button
                   key={item.id}
                   onClick={item.onClick}
-                  className="w-full flex items-center gap-2.5 rounded-lg text-left transition-colors duration-150 mb-0.5"
+                  className="w-full flex items-center gap-2.5 rounded-lg text-left transition-colors duration-150 mb-1"
                   style={{
                     padding: "10px 12px",
                     fontSize: "14px",
