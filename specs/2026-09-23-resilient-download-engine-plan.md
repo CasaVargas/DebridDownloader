@@ -2871,7 +2871,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `Job`, `PostStage`, `PostConfig` (Task 1); `crate::extractor::{classify, archive_basename, extract, count_videos}`; `crate::organizer::{organize_path, move_file}`.
 - Produces: `enum PipelineEvent { Extracting, Stage(PostStage) }`, `struct PostResult { destination: String, error: Option<String> }`, `async fn run_post(job: &Job, cfg: &PostConfig, events: &mpsc::UnboundedSender<PipelineEvent>) -> PostResult`, `async fn list_siblings(dir: &Path) -> Vec<PathBuf>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `engine/tests/pipeline_tests.rs`:
 ```rust
@@ -2937,12 +2937,12 @@ async fn disabled_steps_just_finish() {
 ```
 Add `pub mod pipeline_tests;` to `engine/tests/mod.rs` and `pub mod pipeline;` to `engine/mod.rs`.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::pipeline_tests`
 Expected: FAIL — module `pipeline` not found.
 
-- [ ] **Step 3: Implement `engine/pipeline.rs`** (behavior ported from `commands/downloads.rs:292-402`)
+- [x] **Step 3: Implement `engine/pipeline.rs`** (behavior ported from `commands/downloads.rs:292-402`)
 
 ```rust
 //! Post-download steps: extract → organize. Media-server scans are the host's job (BatchFinished).
@@ -3078,12 +3078,12 @@ fn find_single_video(dir: &Path) -> Option<PathBuf> {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::pipeline_tests`
 Expected: 3 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/engine

@@ -3,6 +3,7 @@
 
 pub mod events;
 pub mod limiter;
+pub mod pipeline;
 pub mod refresh;
 pub mod remote;
 pub mod segment;
