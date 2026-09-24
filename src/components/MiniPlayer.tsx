@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMiniPlayer } from "../contexts/MiniPlayerContext";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { Button, cn, IconButton, Spinner } from "./ui";
 
 const DEFAULT_WIDTH = 400;
 const DEFAULT_HEIGHT = 250;
@@ -170,92 +171,72 @@ export default function MiniPlayer() {
   return (
     <div
       ref={containerRef}
-      className={`fixed overflow-hidden shadow-2xl flex flex-col ${isFullscreen ? "" : "rounded-xl"}`}
-      style={isFullscreen ? {
-        inset: 0,
-        width: "100%",
-        height: "100%",
-        zIndex: 100,
-        background: "#000",
-      } : {
-        left: pos.x,
-        top: pos.y,
-        width: size.w,
-        height: size.h,
-        zIndex: 100,
-        border: "1px solid var(--theme-border)",
-        background: "#000",
-      }}
+      role="region"
+      aria-label={`Preview: ${filename}`}
+      className={cn(
+        "fixed z-50 flex flex-col overflow-hidden",
+        isFullscreen ? "inset-0 bg-black" : "rounded-lg border border-border bg-surface shadow-panel",
+      )}
+      style={isFullscreen ? undefined : { left: pos.x, top: pos.y, width: size.w, height: size.h }}
     >
       {/* Header — drag handle */}
       <div
-        className={`flex items-center justify-between px-3 py-2 select-none shrink-0 ${isFullscreen ? "" : "cursor-grab active:cursor-grabbing"}`}
-        style={{ background: "rgba(0,0,0,0.85)" }}
+        className={cn(
+          "flex h-9 shrink-0 select-none items-center justify-between gap-2 border-b border-border bg-surface pl-3 pr-1",
+          !isFullscreen && "cursor-grab active:cursor-grabbing",
+        )}
         onPointerDown={isFullscreen ? undefined : handleDragStart}
         onPointerMove={isFullscreen ? undefined : handleDragMove}
         onPointerUp={isFullscreen ? undefined : handleDragEnd}
       >
-        <span className="text-[12px] text-white/70 truncate mr-2">{filename}</span>
-        <div className="flex items-center gap-1">
+        <span className="truncate text-sm text-fg-secondary">{filename}</span>
+        <div className="flex items-center gap-0.5" onPointerDown={(e) => e.stopPropagation()}>
           {isInlinePlayable && !videoError && streamUrl && (
-            <button
-              onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
-              className="w-6 h-6 rounded-md flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer"
-              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-            >
+            <IconButton size="sm" label={isFullscreen ? "Exit Fullscreen" : "Fullscreen"} onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}>
               {isFullscreen ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <polyline points="4 14 10 14 10 20" />
                   <polyline points="20 10 14 10 14 4" />
                   <line x1="14" y1="10" x2="21" y2="3" />
                   <line x1="3" y1="21" x2="10" y2="14" />
                 </svg>
               ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <polyline points="15 3 21 3 21 9" />
                   <polyline points="9 21 3 21 3 15" />
                   <line x1="21" y1="3" x2="14" y2="10" />
                   <line x1="3" y1="21" x2="10" y2="14" />
                 </svg>
               )}
-            </button>
+            </IconButton>
           )}
-          <button
-            onClick={(e) => { e.stopPropagation(); closePreview(); }}
-            className="w-6 h-6 rounded-md flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer"
-          >
-            ×
-          </button>
+          <IconButton size="sm" label="Close preview" onClick={(e) => { e.stopPropagation(); closePreview(); }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </IconButton>
         </div>
       </div>
 
       {/* Body */}
-      <div className="flex-1 relative min-h-0">
+      <div className="relative min-h-0 flex-1">
         {loadingTorrentId ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
-            <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            <Spinner />
           </div>
         ) : showFallback ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-3 px-4">
-            <p className="text-[13px] text-white/60 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface px-4">
+            <p className="text-center text-sm text-fg-secondary">
               {videoError ? "Playback failed" : "Format not supported in browser"}
             </p>
             <div className="flex gap-2">
-              <button
-                onClick={handleExternalPlayer}
-                className="px-4 py-2 rounded-lg text-[12px] font-medium text-white transition-colors cursor-pointer"
-                style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
-              >
+              <Button variant="primary" size="sm" onClick={handleExternalPlayer}>
                 Open in External Player
-              </button>
+              </Button>
               {videoError && (
-                <button
-                  onClick={() => retryPreview()}
-                  className="px-4 py-2 rounded-lg text-[12px] text-white/60 hover:text-white transition-colors cursor-pointer"
-                  style={{ background: "rgba(255,255,255,0.1)" }}
-                >
+                <Button size="sm" onClick={() => retryPreview()}>
                   Retry
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -265,24 +246,26 @@ export default function MiniPlayer() {
             controls
             autoPlay
             onError={() => setVideoError(true)}
-            className="w-full h-full object-contain bg-black"
+            className="size-full bg-black object-contain"
           />
         ) : null}
       </div>
 
       {/* Resize handle — bottom-left corner (hidden in fullscreen) */}
-      {!isFullscreen && <div
-        className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize"
-        style={{ zIndex: 10 }}
-        onPointerDown={handleResizeStart}
-        onPointerMove={handleResizeMove}
-        onPointerUp={handleResizeEnd}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" className="absolute bottom-1 left-1 text-white/30">
-          <line x1="0" y1="10" x2="10" y2="0" stroke="currentColor" strokeWidth="1" />
-          <line x1="0" y1="6" x2="6" y2="0" stroke="currentColor" strokeWidth="1" />
-        </svg>
-      </div>}
+      {!isFullscreen && (
+        <div
+          aria-hidden
+          className="absolute bottom-0 left-0 z-10 size-4 cursor-nesw-resize"
+          onPointerDown={handleResizeStart}
+          onPointerMove={handleResizeMove}
+          onPointerUp={handleResizeEnd}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" className="absolute bottom-1 left-1 text-fg-muted">
+            <line x1="0" y1="10" x2="10" y2="0" stroke="currentColor" strokeWidth="1" />
+            <line x1="0" y1="6" x2="6" y2="0" stroke="currentColor" strokeWidth="1" />
+          </svg>
+        </div>
+      )}
     </div>
   );
 }

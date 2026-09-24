@@ -46,6 +46,9 @@ export const CLEAN_FILES: string[] = [
   "src/pages/CompletedPage.tsx",
   // Task 8: Auth
   "src/pages/AuthPage.tsx",
+  // Task 9: media players
+  "src/components/MiniPlayer.tsx",
+  "src/components/VideoPlayer.tsx",
 ];
 
 const RULES: { name: string; re: RegExp }[] = [

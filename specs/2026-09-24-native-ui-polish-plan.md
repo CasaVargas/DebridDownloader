@@ -1710,15 +1710,15 @@ Behavior, data fetching, IPC calls and state logic must not change. Only markup 
 
 **Files:** Modify `src/components/MiniPlayer.tsx`, `src/components/VideoPlayer.tsx`, `src/test/no-style-literals.test.ts`
 
-- [ ] **Step 1:** Append both files to `CLEAN_FILES`. Run `npm test`; it fails.
-- [ ] **Step 2:** Apply the recipe.
+- [x] **Step 1:** Append both files to `CLEAN_FILES`. Run `npm test`; it fails.
+- [x] **Step 2:** Apply the recipe.
   - The mini player is a floating panel `rounded-lg border border-border bg-surface shadow-panel` with `IconButton` controls (Expand, Close).
   - Fullscreen keeps a black backdrop (`bg-black`; a Tailwind named color is allowed).
   - Video element sizing that needs an intrinsic aspect ratio may use `aspect-video`. If a pixel value is truly unavoidable, mark it `// style-literal-ok` with a reason.
   - Keep the Escape logic.
-- [ ] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
-- [ ] **Step 4: Screenshots.** Mini player over Torrents, fullscreen. Both themes.
-- [ ] **Step 5: Commit** `feat(ui): restyle media players`.
+- [x] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
+- [x] **Step 4: Screenshots.** Mini player over Torrents, fullscreen. Both themes.
+- [x] **Step 5: Commit** `feat(ui): restyle media players`.
 
 ---
 

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { Button } from "./ui";
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -22,51 +23,41 @@ export default function VideoPlayer({
 
   if (error) {
     return (
-      <div className="mx-6 mt-5 rounded-[10px] overflow-hidden bg-black/40 border border-[var(--theme-border-subtle)]">
-        <div className="flex flex-col items-center justify-center py-8 px-4 gap-3">
-          <p className="text-[14px] text-[var(--theme-text-secondary)] text-center">
-            Can't play this format in the browser.
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={onExternalPlayer}
-              className="px-4 py-2 rounded-lg text-[13px] font-medium text-white transition-colors"
-              style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
-            >
-              Open in External Player
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-[13px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-              style={{ background: "var(--theme-hover)" }}
-            >
-              Close
-            </button>
-          </div>
+      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-border bg-bg px-4 py-6">
+        <p className="text-center text-sm text-fg-secondary">Can't play this format in the browser.</p>
+        <div className="flex gap-2">
+          <Button variant="primary" size="sm" onClick={onExternalPlayer}>
+            Open in External Player
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-6 mt-5 rounded-[10px] overflow-hidden bg-black relative group">
+    <div className="group relative overflow-hidden rounded-lg border border-border bg-black">
       <video
         ref={videoRef}
         src={streamUrl}
         controls
         autoPlay
         onError={handleError}
-        className="w-full aspect-video bg-black"
+        className="aspect-video w-full bg-black"
       />
       <button
+        type="button"
+        aria-label="Close player"
         onClick={onClose}
-        className="absolute top-2 right-2 w-7 h-7 rounded-md bg-black/60 text-white/70 hover:text-white flex items-center justify-center text-[14px] opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-md bg-black/60 text-white/80 opacity-0 transition-opacity duration-120 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
       >
-        ×
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
       </button>
-      <div className="px-3 py-2 bg-[var(--theme-hover)] text-[12px] text-[var(--theme-text-muted)] truncate">
-        {filename}
-      </div>
+      <div className="truncate border-t border-border bg-surface px-3 py-1.5 text-sm text-fg-muted">{filename}</div>
     </div>
   );
 }
