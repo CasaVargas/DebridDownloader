@@ -1014,7 +1014,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `mock_server::{MockServer, MockOpts, pattern}`; `MockServer::start(opts).await`, `MockServer::start_on(port, opts).await`, `.url()`, `.rotate() -> String`, `.data() -> Vec<u8>`, `.update(|&mut MockOpts|)`, `.set_data(Vec<u8>)`, `.requests()`, `.max_active()`, `.ranges() -> Vec<(u64, u64)>`; `free_port() -> u16`.
   - `support::{RecordingSink, FakeRefresher, NoRefresh, fast_transfer_cfg, read}`.
 
-- [ ] **Step 1: Write `tests/mock_server.rs`**
+- [x] **Step 1: Write `tests/mock_server.rs`**
 
 ```rust
 //! Minimal range-capable HTTP file server with fault injection.
@@ -1274,7 +1274,7 @@ async fn handler(State(inner): State<Shared>, Path(token): Path<String>, headers
 }
 ```
 
-- [ ] **Step 2: Write `tests/support.rs`**
+- [x] **Step 2: Write `tests/support.rs`**
 
 ```rust
 use crate::engine::events::{EngineEvent, EventSink};
@@ -1391,7 +1391,7 @@ impl Default for TransferConfig {
 }
 ```
 
-- [ ] **Step 3: Write a sanity test for the mock itself**
+- [x] **Step 3: Write a sanity test for the mock itself**
 
 Append to `engine/tests/mod.rs`:
 ```rust
@@ -1419,12 +1419,12 @@ async fn serves_ranges_and_expires_tokens() {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::mock_tests`
 Expected: 1 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/engine
