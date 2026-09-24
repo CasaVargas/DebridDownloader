@@ -38,6 +38,8 @@ export const CLEAN_FILES: string[] = [
   // Task 4: Torrents
   "src/pages/TorrentsPage.tsx",
   "src/components/AddTorrentModal.tsx",
+  // Task 5: Search
+  "src/pages/SearchPage.tsx",
 ];
 
 const RULES: { name: string; re: RegExp }[] = [

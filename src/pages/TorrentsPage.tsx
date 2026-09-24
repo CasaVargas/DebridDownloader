@@ -14,28 +14,9 @@ import { Button, ContextMenu, IconButton, Inspector, Menu, Spinner, StatusDot, T
 import {
   formatBytes,
   formatRelativeTime,
+  torrentStatusDot,
   torrentStatusLabel,
 } from "../utils";
-
-function torrentDot(status: string): "success" | "info" | "warning" | "danger" | "idle" {
-  switch (status) {
-    case "downloaded":
-      return "success";
-    case "downloading":
-      return "info";
-    case "waiting_files_selection":
-    case "queued":
-    case "magnet_conversion":
-      return "warning";
-    case "error":
-    case "dead":
-    case "magnet_error":
-    case "virus":
-      return "danger";
-    default:
-      return "idle";
-  }
-}
 
 const DownloadIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -385,7 +366,7 @@ export default function TorrentsPage() {
       key: "status",
       header: "Status",
       width: 28,
-      render: (t) => <StatusDot status={torrentDot(t.status)}>{torrentStatusLabel(t.status)}</StatusDot>,
+      render: (t) => <StatusDot status={torrentStatusDot(t.status)}>{torrentStatusLabel(t.status)}</StatusDot>,
     },
     {
       key: "actions",
@@ -500,7 +481,7 @@ export default function TorrentsPage() {
 
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
                 <dt className="text-fg-muted">Status</dt>
-                <dd><StatusDot status={torrentDot(detailInfo.status)}><span className="text-sm">{torrentStatusLabel(detailInfo.status)}</span></StatusDot></dd>
+                <dd><StatusDot status={torrentStatusDot(detailInfo.status)}><span className="text-sm">{torrentStatusLabel(detailInfo.status)}</span></StatusDot></dd>
                 <dt className="text-fg-muted">Size</dt>
                 <dd className="text-fg tabular">{formatBytes(detailInfo.bytes)}</dd>
                 <dt className="text-fg-muted">Added</dt>

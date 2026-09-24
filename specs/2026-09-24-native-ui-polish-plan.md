@@ -1642,17 +1642,17 @@ Behavior, data fetching, IPC calls and state logic must not change. Only markup 
 
 **Files:** Modify `src/pages/SearchPage.tsx`, `src/test/no-style-literals.test.ts`
 
-- [ ] **Step 1:** Append `src/pages/SearchPage.tsx` to `CLEAN_FILES`. Run `npm test`; it fails.
-- [ ] **Step 2:** Apply the recipe.
+- [x] **Step 1:** Append `src/pages/SearchPage.tsx` to `CLEAN_FILES`. Run `npm test`; it fails.
+- [x] **Step 2:** Apply the recipe.
   - The search box is a large `Input` (`className="h-9 text-md"`) at the top with `kbd="Mod+K"`.
   - Results use the same row styling as `DataTable`: seeders, size and source columns, `tabular`.
   - Cached-on-provider results show `<StatusDot status="success">Cached</StatusDot>`.
   - "Add" per row is a secondary `Button size="sm"`.
   - The loading state uses `Spinner`; no results and "no trackers configured" use `EmptyState`. The "no trackers" state gets an action `<Button onClick={() => navigate("/settings/search")}>Add a tracker</Button>`.
   - Keep the existing Tab/↑/↓/Enter handling in this page (lines ~151–175), and restyle the highlighted result to `bg-selected`.
-- [ ] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
-- [ ] **Step 4: Screenshots.** Empty, loading, results with a highlighted row, no trackers. Both themes, two accents.
-- [ ] **Step 5: Commit** `feat(ui): restyle Search`.
+- [x] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
+- [x] **Step 4: Screenshots.** Empty, loading, results with a highlighted row, no trackers. Both themes, two accents.
+- [x] **Step 5: Commit** `feat(ui): restyle Search`.
 
 ---
 

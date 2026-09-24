@@ -46,6 +46,27 @@ export function torrentStatusColor(status: string): string {
   }
 }
 
+/** StatusDot tone for a provider torrent status. */
+export function torrentStatusDot(status: string): "success" | "info" | "warning" | "danger" | "idle" {
+  switch (status) {
+    case "downloaded":
+      return "success";
+    case "downloading":
+      return "info";
+    case "waiting_files_selection":
+    case "queued":
+    case "magnet_conversion":
+      return "warning";
+    case "error":
+    case "dead":
+    case "magnet_error":
+    case "virus":
+      return "danger";
+    default:
+      return "idle";
+  }
+}
+
 export function torrentStatusLabel(status: string): string {
   switch (status) {
     case "downloaded":
