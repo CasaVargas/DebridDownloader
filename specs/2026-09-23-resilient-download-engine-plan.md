@@ -4846,7 +4846,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: IPC commands and events from Task 11.
 - Produces: `pauseDownload`, `resumeDownload`, `retryDownload`, `pauseAllDownloads`, `resumeAllDownloads`, `retryFailedDownloads` in `src/api/downloads.ts`.
 
-- [ ] **Step 1: Types**
+- [x] **Step 1: Types**
 
 In `src/types/index.ts`, add above `DownloadLink`:
 ```ts
@@ -4867,7 +4867,7 @@ Add `source?: LinkSource;` to `DownloadLink`. Add these optional fields to **bot
 ```
 Add `segments_per_file?: number;` to `AppSettings`.
 
-- [ ] **Step 2: API wrappers**
+- [x] **Step 2: API wrappers**
 
 Append to `src/api/downloads.ts`:
 ```ts
@@ -4896,7 +4896,7 @@ export async function retryFailedDownloads(): Promise<void> {
 }
 ```
 
-- [ ] **Step 3: Event-driven hook**
+- [x] **Step 3: Event-driven hook**
 
 In `src/hooks/useDownloadTasks.tsx`, replace the "Poll for task list every 3 seconds" effect with:
 ```tsx
@@ -4923,7 +4923,7 @@ and replace the merge block with:
   });
 ```
 
-- [ ] **Step 4: Downloads page**
+- [x] **Step 4: Downloads page**
 
 In `src/pages/DownloadsPage.tsx`:
 
@@ -5063,7 +5063,7 @@ and handlers next to the existing ones:
 ```
 and change the footer's Cancel condition from `{active && (` to `{(active || task.status === "Paused") && (`.
 
-- [ ] **Step 5: Settings field**
+- [x] **Step 5: Settings field**
 
 In `src/pages/SettingsPage.tsx`, after the Speed Limit block (`</div>` closing the `mb-12` div around line 494), add:
 ```tsx
@@ -5096,7 +5096,7 @@ In `src/pages/SettingsPage.tsx`, after the Speed Limit block (`</div>` closing t
 ```
 If `markSaved`'s parameter is typed as a union of field names, add `"segments_per_file"` to that union.
 
-- [ ] **Step 6: Type-check**
+- [x] **Step 6: Type-check**
 
 Run: `npx tsc --noEmit`
 Expected: no errors.
@@ -5110,7 +5110,7 @@ Run: `npm run tauri dev`. With a logged-in provider account, start a download of
 - Settings → Downloads shows "Connections per File"; changing it saves.
 If you can't log in to a provider, say so explicitly in the report — don't claim the UI is verified.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src

@@ -52,3 +52,27 @@ export async function getDownloadHistory(
     limit: limit ?? null,
   });
 }
+
+export async function pauseDownload(id: string): Promise<void> {
+  return invoke("pause_download", { id });
+}
+
+export async function resumeDownload(id: string): Promise<void> {
+  return invoke("resume_download", { id });
+}
+
+export async function retryDownload(id: string): Promise<void> {
+  return invoke("retry_download", { id });
+}
+
+export async function pauseAllDownloads(): Promise<void> {
+  return invoke("pause_all_downloads");
+}
+
+export async function resumeAllDownloads(): Promise<void> {
+  return invoke("resume_all_downloads");
+}
+
+export async function retryFailedDownloads(): Promise<void> {
+  return invoke("retry_failed_downloads");
+}

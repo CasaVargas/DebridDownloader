@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ReactNode } from "react";
 import DataTable, { type Column } from "../components/DataTable";
 import TableToolbar from "../components/TableToolbar";
 import SlideOverPanel from "../components/SlideOverPanel";
@@ -19,12 +19,57 @@ function statusBadgeClass(status: DownloadTask["status"]): string {
   return "bg-[rgba(148,163,184,0.12)] text-[#94a3b8]";
 }
 
+const MAX_ATTEMPTS = 8; // engine Timing::default().max_attempts
+
+function isFailedStatus(status: DownloadTask["status"]): boolean {
+  return typeof status === "object" && "Failed" in status;
+}
+
+function statusDetail(t: DownloadTask, now: number): string | null {
+  if (t.waiting_for_network) return "Waiting for network";
+  if (t.status === "Pending" && t.retry_at) {
+    const s = Math.max(0, Math.ceil((t.retry_at - now) / 1000));
+    return `Retrying in ${s}s · attempt ${t.attempt ?? 0}/${MAX_ATTEMPTS}`;
+  }
+  if (t.status === "Downloading" && t.resumable === false) return "Server doesn't support resume";
+  if (t.status === "Downloading" && (t.segments_active ?? 0) > 1) return `${t.segments_active} connections`;
+  return null;
+}
+
+function IconButton({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] cursor-pointer transition-colors"
+      style={{ background: "var(--theme-selected)" }}
+    >
+      {children}
+    </button>
+  );
+}
+
+const PauseIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+);
+const PlayIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4" /></svg>
+);
+const RetryIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+);
+
 export default function DownloadsPage() {
   const { tasks } = useDownloadTasks();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, []);
 
   // Only show non-completed tasks
   const activeTasks = useMemo(() => tasks.filter((t) => t.status !== "Completed"), [tasks]);
@@ -79,6 +124,10 @@ export default function DownloadsPage() {
     try { await downloadsApi.removeDownload(id); } catch { /* ignore */ }
   };
 
+  const handlePause = (id: string) => downloadsApi.pauseDownload(id).catch(() => {});
+  const handleResume = (id: string) => downloadsApi.resumeDownload(id).catch(() => {});
+  const handleRetry = (id: string) => downloadsApi.retryDownload(id).catch(() => {});
+
   const handleCancelAll = async () => {
     try { await downloadsApi.cancelAllDownloads(); setSelectedId(null); } catch { /* ignore */ }
   };
@@ -130,6 +179,9 @@ export default function DownloadsPage() {
                 </svg>
               )}
             </div>
+            {statusDetail(t, now) && (
+              <div className="mt-1 text-[12px] text-[var(--theme-text-muted)]">{statusDetail(t, now)}</div>
+            )}
             {active && pct > 0 && (
               <div className="mt-1.5 h-[3px] rounded-full bg-[rgba(59,130,246,0.08)]">
                 <div className="h-full bg-[#3b82f6] rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -175,10 +227,19 @@ export default function DownloadsPage() {
     {
       key: "actions",
       header: "",
-      width: "70px",
+      width: "110px",
       render: (t) => (
-        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-          {isActive(t.status) ? (
+        <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {(t.status === "Downloading" || t.status === "Pending") && (
+            <IconButton title="Pause" onClick={() => handlePause(t.id)}><PauseIcon /></IconButton>
+          )}
+          {t.status === "Paused" && (
+            <IconButton title="Resume" onClick={() => handleResume(t.id)}><PlayIcon /></IconButton>
+          )}
+          {(isFailedStatus(t.status) || t.status === "Cancelled") && (
+            <IconButton title="Retry" onClick={() => handleRetry(t.id)}><RetryIcon /></IconButton>
+          )}
+          {isActive(t.status) || t.status === "Paused" ? (
             <button
               onClick={() => handleCancel(t.id)}
               className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[#ef4444] cursor-pointer"
@@ -219,6 +280,21 @@ export default function DownloadsPage() {
         actions={
           activeTasks.length > 0 ? (
             <div className="flex items-center gap-2">
+              {activeTasks.some((t) => t.status === "Downloading" || t.status === "Pending") && (
+                <button onClick={() => downloadsApi.pauseAllDownloads().catch(() => {})}
+                  className="px-4 py-2 rounded-lg text-[13px] font-medium text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors cursor-pointer"
+                  style={{ background: "var(--theme-selected)" }}>Pause All</button>
+              )}
+              {activeTasks.some((t) => t.status === "Paused") && (
+                <button onClick={() => downloadsApi.resumeAllDownloads().catch(() => {})}
+                  className="px-4 py-2 rounded-lg text-[13px] font-medium text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors cursor-pointer"
+                  style={{ background: "var(--theme-selected)" }}>Resume All</button>
+              )}
+              {activeTasks.some((t) => isFailedStatus(t.status)) && (
+                <button onClick={() => downloadsApi.retryFailedDownloads().catch(() => {})}
+                  className="px-4 py-2 rounded-lg text-[13px] font-medium text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors cursor-pointer"
+                  style={{ background: "var(--theme-selected)" }}>Retry Failed</button>
+              )}
               {activeTasks.some((t) => !isActive(t.status)) && (
                 <button
                   onClick={handleClearInactive}
@@ -358,7 +434,16 @@ export default function DownloadsPage() {
 
               {/* Footer */}
               <div className="px-6 py-4 border-t border-[var(--theme-border)] flex gap-2.5">
-                {active && (
+                {(task.status === "Downloading" || task.status === "Pending") && (
+                  <button onClick={() => handlePause(task.id)} className="py-3 px-5 rounded-[10px] text-[var(--theme-text-primary)] text-[14px] transition-colors" style={{ background: "var(--theme-selected)" }}>Pause</button>
+                )}
+                {task.status === "Paused" && (
+                  <button onClick={() => handleResume(task.id)} className="py-3 px-5 rounded-[10px] text-[var(--theme-text-primary)] text-[14px] transition-colors" style={{ background: "var(--theme-selected)" }}>Resume</button>
+                )}
+                {(isFailed || isCancelled) && (
+                  <button onClick={() => handleRetry(task.id)} className="py-3 px-5 rounded-[10px] text-[var(--theme-text-primary)] text-[14px] transition-colors" style={{ background: "var(--theme-selected)" }}>Retry</button>
+                )}
+                {(active || task.status === "Paused") && (
                   <button
                     onClick={() => handleCancel(task.id)}
                     className="py-3 px-5 rounded-[10px] text-[#ef4444] text-[14px] transition-colors"

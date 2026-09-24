@@ -493,6 +493,33 @@ export default function SettingsPage() {
                 </select>
               </div>
 
+              {/* Connections per file */}
+              <div className="mb-12">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[15px] text-[var(--theme-text-primary)]">Connections per File</span>
+                  {savedField === "segments_per_file" && (
+                    <span style={{ color: accentColor }} className="text-[13px]">Saved</span>
+                  )}
+                </div>
+                <select
+                  value={settings.segments_per_file ?? 4}
+                  onChange={async (e) => {
+                    await applyChange({ segments_per_file: Number(e.target.value) });
+                    markSaved("segments_per_file");
+                  }}
+                  className="w-full bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg p-4 text-[15px] text-[var(--theme-text-primary)] focus:outline-none transition-colors"
+                >
+                  {[1, 2, 4, 8, 16].map((n) => (
+                    <option key={n} value={n}>
+                      {n} connection{n !== 1 ? "s" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[13px] text-[var(--theme-text-muted)] mt-2">
+                  Parallel connections per file. Lower this if your provider limits connections.
+                </p>
+              </div>
+
               {/* Subfolders toggle */}
               <ToggleRow
                 label="Create subfolders per torrent"

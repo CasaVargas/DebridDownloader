@@ -29,19 +29,18 @@ export function DownloadTasksProvider({ children }: { children: ReactNode }) {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  // Poll for task list every 3 seconds
+  // Fetch once, then refetch whenever the engine adds/removes jobs
   useEffect(() => {
-    const poll = async () => {
+    const fetchTasks = async () => {
       try {
-        const data = await downloadsApi.getDownloadTasks();
-        setTasks(data);
+        setTasks(await downloadsApi.getDownloadTasks());
       } catch {
         // ignore
       }
     };
-    poll();
-    const interval = setInterval(poll, 3000);
-    return () => clearInterval(interval);
+    fetchTasks();
+    const unlisten = listen("downloads-changed", fetchTasks);
+    return () => { unlisten.then((fn) => fn()); };
   }, []);
 
   // Listen for refresh-list events
@@ -67,19 +66,10 @@ export function DownloadTasksProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Merge real-time progress into tasks
+  // Merge real-time progress into tasks (progress events carry the newest state)
   const mergedTasks = tasks.map((task) => {
     const p = progress.get(task.id);
-    if (p) {
-      return {
-        ...task,
-        downloaded_bytes: p.downloaded_bytes,
-        total_bytes: p.total_bytes,
-        speed: p.speed,
-        status: p.status,
-      };
-    }
-    return task;
+    return p ? { ...task, ...p } : task;
   });
 
   return (
