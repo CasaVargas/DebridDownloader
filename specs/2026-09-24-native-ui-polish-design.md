@@ -19,7 +19,7 @@ Make DebridDownloader look and behave like a sturdy native desktop utility inste
 
 1. Zero hardcoded color hex values or arbitrary pixel sizes in `src/pages/**` and `src/components/**` (enforced by lint).
 2. One token source (`src/styles/tokens.css`); the Tailwind `@theme` `noir-*`/`emerald`/`status-*` tokens and the JS `THEMES` palette copy are gone.
-3. Every text/background token pair passes WCAG AA in both themes (4.5:1 body text; 3:1 large text and non-text UI), checked by a test.
+3. Every text/background token pair passes WCAG AA in both themes (4.5:1 body text; 3:1 for status dots and the focus ring), checked by a test. Decorative borders/dividers are exempt, as in native OS themes.
 4. Theme follows the OS by default and switches live when the OS changes.
 5. Every shortcut works with ⌘ on macOS and Ctrl on Windows/Linux; hints render accordingly.
 6. Every interactive control is reachable by keyboard with a visible focus ring; dialogs trap focus; menus and selects support arrow keys and type-ahead.
@@ -63,7 +63,7 @@ All values live in `src/styles/tokens.css`. Components never reference raw value
 | `--border-subtle` | `#2a2a2a` | `#ededed` | row separators |
 | `--text` | `#e8e8e8` | `#1f1f1f` | primary text |
 | `--text-secondary` | `#a8a8a8` | `#555555` | secondary text, numbers |
-| `--text-muted` | `#8a8a8a` | `#6b6b6b` | meta, labels, placeholders |
+| `--text-muted` | `#919191` | `#6b6b6b` | meta, labels, placeholders (not used on `--raised`; kbd/badge text uses `--text-secondary`) |
 | `--selected` | accent @ 16% | accent @ 12% | selected row / nav |
 | `--success` | `#3fb950` | `#1a7f37` | Ready / Completed |
 | `--info` | `#58a6ff` | `#0969da` | Downloading |
