@@ -345,6 +345,7 @@ impl DebridProvider for TorBoxClient {
             filesize: file.bytes,
             download: download_url,
             streamable: Some(true),
+            source: shared::LinkSource::Direct,
         })
     }
 

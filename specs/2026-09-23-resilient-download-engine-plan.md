@@ -132,7 +132,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Produces: `engine::types::{Job, NewJob, JobKind, JobState, SegmentState, PostStage, EngineConfig, PostConfig, now_ms}`, `providers::types::LinkSource` (re-exported as `engine::types::LinkSource`), `engine::events::{JobView, EngineEvent, EventSink}`, `engine::refresh::{LinkRefresher, RefreshedLink, RefreshError}`, `engine::remote::{RemoteRunner, RemoteOutcome, NoRemote}`. `state::DownloadStatus` becomes `pub use crate::engine::types::JobState as DownloadStatus`.
 
-- [ ] **Step 1: Add `LinkSource` to provider types**
+- [x] **Step 1: Add `LinkSource` to provider types**
 
 In `src-tauri/src/providers/types.rs`, directly above `pub struct DownloadLink`, add:
 ```rust
@@ -173,7 +173,7 @@ pub struct DownloadLink {
 ```
 Then fix the four construction sites so the crate compiles (real values come in Task 9): add `source: shared::LinkSource::Direct,` to the struct literals in `src-tauri/src/providers/real_debrid/client.rs:360`, `src-tauri/src/providers/torbox/client.rs:343`, and both literals in `src-tauri/src/providers/premiumize/client.rs:333` and `:346`.
 
-- [ ] **Step 2: Write `engine/types.rs`**
+- [x] **Step 2: Write `engine/types.rs`**
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -380,7 +380,7 @@ pub fn now_ms() -> i64 {
 }
 ```
 
-- [ ] **Step 3: Write `engine/events.rs`, `engine/refresh.rs`, `engine/remote.rs`**
+- [x] **Step 3: Write `engine/events.rs`, `engine/refresh.rs`, `engine/remote.rs`**
 
 `events.rs`:
 ```rust
@@ -475,7 +475,7 @@ impl RemoteRunner for NoRemote {
 }
 ```
 
-- [ ] **Step 4: Write `engine/mod.rs` and the test module root**
+- [x] **Step 4: Write `engine/mod.rs` and the test module root**
 
 `engine/mod.rs`:
 ```rust
@@ -503,14 +503,14 @@ mod types_tests;
 
 In `src-tauri/src/lib.rs` add `mod engine;` to the module list (keep alphabetical-ish: after `mod downloader;`).
 
-- [ ] **Step 5: Move `DownloadStatus` onto `JobState`**
+- [x] **Step 5: Move `DownloadStatus` onto `JobState`**
 
 In `src-tauri/src/state.rs`, delete the `DownloadStatus` enum (lines ~103-112, the `#[derive(...)] #[serde(rename_all = "PascalCase")] pub enum DownloadStatus { ... }` block) and put at the top of the file, after the `use` lines:
 ```rust
 pub use crate::engine::types::JobState as DownloadStatus;
 ```
 
-- [ ] **Step 6: Write the failing tests**
+- [x] **Step 6: Write the failing tests**
 
 `engine/tests/types_tests.rs`:
 ```rust
@@ -566,12 +566,12 @@ fn segment_math() {
 }
 ```
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::types_tests`
 Expected: 4 passed. (They compile only once Steps 1–5 are done; if you wrote them first, the expected failure is "unresolved import `crate::engine`".)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src-tauri/src/engine src-tauri/src/providers src-tauri/src/state.rs src-tauri/src/lib.rs

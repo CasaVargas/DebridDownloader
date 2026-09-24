@@ -118,12 +118,37 @@ pub struct AddTorrentResponse {
     pub id: String,
 }
 
+/// How to obtain a fresh URL for a file when its debrid link expires.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(tag = "type")]
+pub enum LinkSource {
+    RealDebrid { hoster_link: String },
+    TorBox { torrent_id: String, file_id: u64 },
+    Premiumize { transfer_id: String, filename: String },
+    #[default]
+    Direct,
+}
+
+impl LinkSource {
+    /// Provider id (matches `ProviderInfo.id`) that can refresh this source.
+    pub fn provider_id(&self) -> Option<&'static str> {
+        match self {
+            LinkSource::RealDebrid { .. } => Some("real-debrid"),
+            LinkSource::TorBox { .. } => Some("torbox"),
+            LinkSource::Premiumize { .. } => Some("premiumize"),
+            LinkSource::Direct => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadLink {
     pub filename: String,
     pub filesize: i64,
     pub download: String,
     pub streamable: Option<bool>,
+    #[serde(default)]
+    pub source: LinkSource,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -362,6 +362,7 @@ fn map_download_link(link: RdUnrestrictedLink) -> shared::DownloadLink {
         filesize: link.filesize,
         download: link.download,
         streamable: link.streamable.map(|s| s == 1),
+        source: shared::LinkSource::Direct,
     }
 }
 

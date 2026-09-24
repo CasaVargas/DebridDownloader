@@ -8,6 +8,8 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
+pub use crate::engine::types::JobState as DownloadStatus;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub download_folder: Option<String>,
@@ -97,18 +99,6 @@ pub struct DownloadTask {
     pub status: DownloadStatus,
     #[serde(default)]
     pub remote: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "PascalCase")]
-pub enum DownloadStatus {
-    Pending,
-    Downloading,
-    Paused,
-    Extracting,
-    Completed,
-    Failed(String),
-    Cancelled,
 }
 
 pub struct StreamSession {

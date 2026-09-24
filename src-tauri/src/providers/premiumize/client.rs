@@ -335,6 +335,7 @@ impl DebridProvider for PremiumizeClient {
                         filesize: item.size.unwrap_or(0) as i64,
                         download: link.clone(),
                         streamable: item.stream_link.is_some().then_some(true),
+                        source: shared::LinkSource::Direct,
                     })
                 })
                 .collect())
@@ -348,6 +349,7 @@ impl DebridProvider for PremiumizeClient {
                     filesize: item.size.unwrap_or(0) as i64,
                     download: link.clone(),
                     streamable: item.stream_link.is_some().then_some(true),
+                    source: shared::LinkSource::Direct,
                 }])
             } else {
                 Err(shared::ProviderError::Other(
