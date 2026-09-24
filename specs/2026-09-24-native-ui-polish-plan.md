@@ -2076,7 +2076,7 @@ Move each block's local state and handlers along with it: e.g. tracker form stat
 - Delete: `src/hooks/useAccentColor.ts`, `src/components/SlideOverPanel.tsx`, `src/components/TableToolbar.tsx`, `src/pages/SettingsPage.tsx`, `src/pages/AboutPage.tsx`
 - Modify: `src/styles/tokens.css` (remove aliases), `src/test/no-style-literals.test.ts`, `.github/workflows/test.yml`, `AGENTS.md`
 
-- [ ] **Step 1: Make the guard global.** Replace `CLEAN_FILES` with a directory walk:
+- [x] **Step 1: Make the guard global.** Replace `CLEAN_FILES` with a directory walk:
 ```ts
 import { readdirSync, statSync } from "node:fs";
 function walk(dir: string): string[] {
@@ -2089,18 +2089,18 @@ const ROOT = resolve(__dirname, "../..");
 export const CLEAN_FILES = [...walk(`${ROOT}/src/pages`), ...walk(`${ROOT}/src/components`)].map((p) => p.slice(ROOT.length + 1));
 ```
 Run `npm test`. It should fail only on the files about to be deleted.
-- [ ] **Step 2: Delete the dead files.**
+- [x] **Step 2: Delete the dead files.**
 ```bash
 git rm src/hooks/useAccentColor.ts src/components/SlideOverPanel.tsx src/components/TableToolbar.tsx src/pages/SettingsPage.tsx src/pages/AboutPage.tsx
 ```
 Remove their imports from `App.tsx`. Run `grep -rn "theme-\|accent-bg-\|SlideOverPanel\|TableToolbar\|useAccentColor" src`; the only hits should be in `tokens.css` aliases.
-- [ ] **Step 3: Remove the aliases.** Delete the "Temporary aliases" block from `tokens.css`. Run `npm test && npx tsc --noEmit && npm run build`; everything passes.
-- [ ] **Step 4: CI.** In `.github/workflows/test.yml` (created by the engine branch; create it with the same shape if it's missing), add a `- run: npm test` step after `npm ci`.
-- [ ] **Step 5: Docs.** In `AGENTS.md`:
+- [x] **Step 3: Remove the aliases.** Delete the "Temporary aliases" block from `tokens.css`. Run `npm test && npx tsc --noEmit && npm run build`; everything passes.
+- [x] **Step 4: CI.** In `.github/workflows/test.yml` (created by the engine branch; create it with the same shape if it's missing), add a `- run: npm test` step after `npm ci`.
+- [x] **Step 5: Docs.** In `AGENTS.md`:
   - Replace "**Do not hardcode colors** — use the theme variables already defined in `src/styles/`" with: "All visual values live in `src/styles/tokens.css`; build UI from `src/components/ui/` primitives. `npm test` fails on raw hex/rgb/px literals in `src/pages` and `src/components`."
   - Add `npm test` to the Commands table.
   - Change "Settings is ~68 KB by design" to "Settings is split into `src/pages/settings/` sections."
-- [ ] **Step 6: Final pass.** In `npm run tauri dev` at the minimum window size:
+- [x] **Step 6: Final pass.** In `npm run tauri dev` at the minimum window size:
   - every screen in both themes
   - the full keyboard table from spec §4.6
   - Tab through every screen, checking the focus ring shows
@@ -2108,4 +2108,4 @@ Remove their imports from `App.tsx`. Run `grep -rn "theme-\|accent-bg-\|SlideOve
   - on the Windows machine (WSL build): Ctrl shortcuts, Segoe UI rendering, `Kbd` hints reading "Ctrl K"
   
   Record each result. Any check you couldn't run is listed as NOT DONE.
-- [ ] **Step 7: Commit** `chore(ui): remove legacy styling, enforce token guard everywhere`.
+- [x] **Step 7: Commit** `chore(ui): remove legacy styling, enforce token guard everywhere`.

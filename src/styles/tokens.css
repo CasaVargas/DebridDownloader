@@ -97,29 +97,3 @@
 
   --shadow-panel: 0 8px 24px var(--shadow-color);
 }
-
-/* Temporary aliases so un-migrated screens keep working. Deleted in Task 13. */
-:root, [data-theme] {
-  --theme-bg: var(--bg);
-  --theme-bg-content: var(--bg);
-  --theme-bg-sidebar: var(--surface);
-  --theme-bg-surface: var(--surface);
-  --theme-bg-input: var(--surface);
-  --theme-border: var(--border);
-  --theme-border-subtle: var(--border-subtle);
-  --theme-border-hover: var(--border);
-  --theme-hover: var(--raised);
-  --theme-selected: var(--raised);
-  --theme-text-primary: var(--text);
-  --theme-text-secondary: var(--text-secondary);
-  --theme-text-muted: var(--text-muted);
-  --theme-text-ghost: var(--text-muted);
-  --theme-text-faint: var(--border);
-  --theme-shadow: var(--shadow-color);
-  --theme-scrim: rgb(0 0 0 / 0.4);
-  --theme-scrollbar: var(--border);
-  --theme-scrollbar-hover: var(--text-muted);
-  --accent-bg-subtle: var(--accent-subtle);
-  --accent-bg-light: var(--accent-subtle);
-  --accent-bg-medium: var(--selected);
-}

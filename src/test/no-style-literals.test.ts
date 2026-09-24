@@ -1,67 +1,19 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-/**
- * Files that have been migrated to tokens + primitives. Each screen task appends its files.
- * Task 13 replaces this list with "every file under src/pages and src/components".
- */
-export const CLEAN_FILES: string[] = [
-  // Task 2: primitives
-  "src/components/ui/cn.ts",
-  "src/components/ui/Button.tsx",
-  "src/components/ui/IconButton.tsx",
-  "src/components/ui/Input.tsx",
-  "src/components/ui/Toggle.tsx",
-  "src/components/ui/StatusDot.tsx",
-  "src/components/ui/CountBadge.tsx",
-  "src/components/ui/Kbd.tsx",
-  "src/components/ui/Spinner.tsx",
-  "src/components/ui/EmptyState.tsx",
-  "src/components/ui/Toolbar.tsx",
-  "src/components/ui/Inspector.tsx",
-  "src/components/ui/SettingsGroup.tsx",
-  "src/components/ui/Dialog.tsx",
-  "src/components/ui/Menu.tsx",
-  "src/components/ui/ContextMenu.tsx",
-  "src/components/ui/Select.tsx",
-  "src/components/ui/Tooltip.tsx",
-  "src/components/ui/index.ts",
-  "src/lib/platform.ts",
-  // Task 3: shell
-  "src/components/Layout.tsx",
-  "src/components/Sidebar.tsx",
-  "src/components/DataTable.tsx",
-  "src/components/Toast.tsx",
-  "src/hooks/useShortcut.ts",
-  "src/lib/providers.ts",
-  // Task 4: Torrents
-  "src/pages/TorrentsPage.tsx",
-  "src/components/AddTorrentModal.tsx",
-  // Task 5: Search
-  "src/pages/SearchPage.tsx",
-  // Task 6: Watch List
-  "src/pages/WatchListPage.tsx",
-  // Task 7: Completed
-  "src/pages/CompletedPage.tsx",
-  // Task 8: Auth
-  "src/pages/AuthPage.tsx",
-  // Task 9: media players
-  "src/components/MiniPlayer.tsx",
-  // Task 10: settings shell
-  "src/pages/settings/SettingsLayout.tsx",
-  "src/pages/settings/useSettings.tsx",
-  // Task 11: settings sections
-  "src/pages/settings/GeneralSettings.tsx",
-  "src/pages/settings/AccountSettings.tsx",
-  "src/pages/settings/LibrarySettings.tsx",
-  "src/pages/settings/SearchSettings.tsx",
-  "src/pages/settings/BackupSettings.tsx",
-  // Task 12: Downloads
-  "src/pages/DownloadsPage.tsx",
-  "src/pages/settings/DownloadsSettings.tsx",
-  "src/lib/downloadStatus.ts",
-];
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((f) => {
+    const p = `${dir}/${f}`;
+    return statSync(p).isDirectory() ? walk(p) : /\.(tsx?|css)$/.test(f) ? [p] : [];
+  });
+}
+const ROOT = resolve(__dirname, "../..");
+
+/** Every file under src/pages and src/components must use tokens + primitives only. */
+export const CLEAN_FILES = [...walk(`${ROOT}/src/pages`), ...walk(`${ROOT}/src/components`), `${ROOT}/src/lib/platform.ts`, `${ROOT}/src/lib/providers.ts`, `${ROOT}/src/lib/downloadStatus.ts`, `${ROOT}/src/hooks/useShortcut.ts`].map((p) =>
+  p.slice(ROOT.length + 1),
+);
 
 const RULES: { name: string; re: RegExp }[] = [
   { name: "hex color", re: /#[0-9a-fA-F]{3,8}\b/ },

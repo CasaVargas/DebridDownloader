@@ -10,9 +10,10 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 | Production bundle for current platform | `npm run tauri build` |
 | Type-check only (no emit) | `npx tsc --noEmit` |
 | Frontend-only build (tsc + Vite, no native bundle) | `npm run build` |
+| Frontend tests (Vitest: tokens/contrast, shortcuts, primitives, settings routes, style-literal guard) | `npm test` |
 | Rust tests (download engine) | `cargo test --manifest-path src-tauri/Cargo.toml` |
 
-Rust tests live in `src-tauri/src/engine/tests/` (mock CDN in `mock_server.rs`) and run in CI via `.github/workflows/test.yml`. There is no frontend test runner — verify UI changes manually in `npm run tauri dev`.
+Rust tests live in `src-tauri/src/engine/tests/` (mock CDN in `mock_server.rs`); frontend tests live in `src/test/` (Vitest + jsdom). Both run in CI via `.github/workflows/test.yml`. Tests don't cover rendering in the Tauri WebView — still verify UI changes visually in `npm run tauri dev`.
 
 Native bundles land in `src-tauri/target/release/bundle/`. Vite dev URL is `http://localhost:1420` (hardcoded in `tauri.conf.json` — don't change without updating both sides).
 
@@ -64,9 +65,9 @@ Secrets (API tokens, OAuth client id/secret, refresh tokens) live in the OS keyr
 
 ### Frontend conventions
 
-- Pages in `src/pages/` are big — each route is a single file (Settings is ~68 KB by design; don't split it without a reason).
+- Each route is a single file in `src/pages/`; Settings is split into `src/pages/settings/` sections (`SettingsLayout` + one file per section, shared state in `useSettings`).
 - `Layout.tsx` wraps authenticated routes; `App.tsx` flips between `<AuthPage/>` and the layout based on `isAuthenticated`.
-- Theming: Tailwind v4 + CSS custom properties (`var(--theme-bg)`, accent vars set by `useAccentColor.ts`). **Do not hardcode colors** — use the theme variables already defined in `src/styles/`.
+- All visual values live in `src/styles/tokens.css`; build UI from `src/components/ui/` primitives. `npm test` fails on raw hex/rgb/px literals in `src/pages` and `src/components`. Theme (System/Light/Dark) and accent are applied by `src/hooks/useAppearance.ts`; accent-colored text uses `text-accent-text`, never `text-accent`.
 - Mini player + toast live at the App root via two contexts (`MiniPlayerProvider`, `AuthContext`) so they survive route changes.
 
 ## Releases
