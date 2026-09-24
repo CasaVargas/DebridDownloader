@@ -787,6 +787,12 @@ impl Actor {
         if self.stop_running(id, StopReason::Remove) {
             return;
         }
+        if self.pipelines.contains(id) {
+            // Post-processing can't be interrupted; dropping the job now would orphan the running
+            // extract/organize (which may still delete archive parts). Remove it once it finishes.
+            log::info!("Ignoring remove for {} while post-processing", id);
+            return;
+        }
         if let Some(idx) = self.jobs.iter().position(|j| j.id == id) {
             let job = self.jobs.remove(idx);
             if job.state != JobState::Completed {

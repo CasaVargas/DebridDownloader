@@ -7,7 +7,7 @@ import * as downloadsApi from "../api/downloads";
 import { getSettings } from "../api/settings";
 import type { AppSettings, DownloadTask } from "../types";
 import { formatBytes, formatSpeed, formatEta } from "../utils";
-import { downloadStatusView, isActiveStatus as isActive, isFailedStatus, postProcessingSteps } from "../lib/downloadStatus";
+import { downloadActions, downloadStatusView, isActiveStatus as isActive, isFailedStatus, postProcessingSteps } from "../lib/downloadStatus";
 
 const PauseIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
@@ -120,9 +120,11 @@ export default function DownloadsPage() {
     const handler = () => {
       if (!selectedId) return;
       const task = activeTasks.find((t) => t.id === selectedId);
-      if (task && isActive(task.status)) {
+      if (!task) return;
+      const can = downloadActions(task);
+      if (can.cancel) {
         downloadsApi.cancelDownload(selectedId).catch(() => {});
-      } else {
+      } else if (can.remove) {
         downloadsApi.removeDownload(selectedId).catch(() => {});
         setSelectedId(null);
       }
@@ -145,24 +147,18 @@ export default function DownloadsPage() {
 
   const selectRow = (t: DownloadTask) => { setSelectedId(t.id); setInspectorOpen(true); };
 
-  const rowActions = (t: DownloadTask) => (
-    <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-      {(t.status === "Downloading" || t.status === "Pending") && (
-        <IconButton label="Pause" onClick={() => handlePause(t.id)}><PauseIcon /></IconButton>
-      )}
-      {t.status === "Paused" && (
-        <IconButton label="Resume" onClick={() => handleResume(t.id)}><PlayIcon /></IconButton>
-      )}
-      {(isFailedStatus(t.status) || t.status === "Cancelled") && (
-        <IconButton label="Retry" onClick={() => handleRetry(t.id)}><RetryIcon /></IconButton>
-      )}
-      {isActive(t.status) || t.status === "Paused" ? (
-        <IconButton label="Cancel" variant="danger" onClick={() => handleCancel(t.id)}><CancelIcon /></IconButton>
-      ) : (
-        <IconButton label="Remove" variant="danger" onClick={() => handleRemove(t.id)}><TrashIcon /></IconButton>
-      )}
-    </div>
-  );
+  const rowActions = (t: DownloadTask) => {
+    const can = downloadActions(t);
+    return (
+      <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        {can.pause && <IconButton label="Pause" onClick={() => handlePause(t.id)}><PauseIcon /></IconButton>}
+        {can.resume && <IconButton label="Resume" onClick={() => handleResume(t.id)}><PlayIcon /></IconButton>}
+        {can.retry && <IconButton label="Retry" onClick={() => handleRetry(t.id)}><RetryIcon /></IconButton>}
+        {can.cancel && <IconButton label="Cancel" variant="danger" onClick={() => handleCancel(t.id)}><CancelIcon /></IconButton>}
+        {can.remove && <IconButton label="Remove" variant="danger" onClick={() => handleRemove(t.id)}><TrashIcon /></IconButton>}
+      </div>
+    );
+  };
 
   const columns: Column<DownloadTask>[] = [
     {
@@ -231,6 +227,7 @@ export default function DownloadsPage() {
     const task = selectedTask;
     const view = downloadStatusView(task, now);
     const active = isActive(task.status);
+    const actions = downloadActions(task);
     const segments = task.status === "Downloading" ? task.segments_active ?? 0 : 0;
     const eta = task.speed > 0 ? formatEta(task.total_bytes, task.downloaded_bytes, task.speed) : null;
     const errorText = task.error || (isFailedStatus(task.status) ? task.status.Failed : null);
@@ -244,15 +241,12 @@ export default function DownloadsPage() {
         subtitle={`${formatBytes(task.downloaded_bytes)} of ${formatBytes(task.total_bytes)}${eta ? ` · ${eta} left` : ""}`}
         footer={
           <>
-            {(task.status === "Downloading" || task.status === "Pending") && <Button onClick={() => handlePause(task.id)}>Pause</Button>}
-            {task.status === "Paused" && <Button onClick={() => handleResume(task.id)}>Resume</Button>}
-            {(isFailedStatus(task.status) || task.status === "Cancelled") && <Button onClick={() => handleRetry(task.id)}>Retry</Button>}
+            {actions.pause && <Button onClick={() => handlePause(task.id)}>Pause</Button>}
+            {actions.resume && <Button onClick={() => handleResume(task.id)}>Resume</Button>}
+            {actions.retry && <Button onClick={() => handleRetry(task.id)}>Retry</Button>}
             {canReveal && <Button onClick={() => revealItemInDir(task.destination).catch(() => {})}>Show in Folder</Button>}
-            {active || task.status === "Paused" ? (
-              <Button variant="danger" onClick={() => handleCancel(task.id)}>Cancel</Button>
-            ) : (
-              <Button variant="danger" onClick={() => handleRemove(task.id)}>Remove</Button>
-            )}
+            {actions.cancel && <Button variant="danger" onClick={() => handleCancel(task.id)}>Cancel</Button>}
+            {actions.remove && <Button variant="danger" onClick={() => handleRemove(task.id)}>Remove</Button>}
           </>
         }
       >

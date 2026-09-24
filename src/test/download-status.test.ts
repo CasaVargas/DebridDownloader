@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { downloadStatusView, postProcessingSteps } from "../lib/downloadStatus";
+import { downloadActions, downloadStatusView, postProcessingSteps } from "../lib/downloadStatus";
 import type { DownloadTask } from "../types";
 
 const base: DownloadTask = { id: "1", filename: "f", url: "", destination: "/d/f", total_bytes: 100, downloaded_bytes: 40, speed: 0, status: "Downloading" };
@@ -33,5 +33,27 @@ describe("postProcessingSteps", () => {
     expect(postProcessingSteps({ auto_extract_archives: true, auto_organize: true, plex_url: "http://p" })).toEqual(["Extract", "Organize", "Media scan"]);
     expect(postProcessingSteps({ auto_organize: true })).toEqual(["Organize"]);
     expect(postProcessingSteps(null)).toEqual([]);
+  });
+});
+
+describe("downloadActions", () => {
+  const t = (status: DownloadTask["status"]) => ({ ...base, status });
+  it("offers nothing destructive while finishing (engine can't stop post-processing)", () => {
+    expect(downloadActions(t("Extracting"))).toEqual({ pause: false, resume: false, retry: false, cancel: false, remove: false });
+  });
+  it("running and queued jobs can pause or cancel", () => {
+    for (const s of ["Downloading", "Pending"] as const) {
+      expect(downloadActions(t(s))).toEqual({ pause: true, resume: false, retry: false, cancel: true, remove: false });
+    }
+  });
+  it("paused jobs can resume or cancel", () => {
+    expect(downloadActions(t("Paused"))).toEqual({ pause: false, resume: true, retry: false, cancel: true, remove: false });
+  });
+  it("failed and cancelled jobs can retry or be removed", () => {
+    expect(downloadActions(t({ Failed: "x" }))).toEqual({ pause: false, resume: false, retry: true, cancel: false, remove: true });
+    expect(downloadActions(t("Cancelled"))).toEqual({ pause: false, resume: false, retry: true, cancel: false, remove: true });
+  });
+  it("completed jobs can only be removed", () => {
+    expect(downloadActions(t("Completed"))).toEqual({ pause: false, resume: false, retry: false, cancel: false, remove: true });
   });
 });

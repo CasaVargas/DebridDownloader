@@ -21,7 +21,7 @@ export function Toolbar({ title, subtitle, filter, actions }: {
         {filter && (
           <Input
             ref={filter.inputRef}
-            className="w-40 xl:w-56"
+            className="w-48 xl:w-60"
             icon={<SearchIcon />}
             kbd="/"
             value={filter.value}

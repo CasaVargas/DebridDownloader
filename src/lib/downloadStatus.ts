@@ -12,6 +12,23 @@ export function isFailedStatus(status: DownloadTask["status"]): status is { Fail
   return typeof status === "object" && "Failed" in status;
 }
 
+/**
+ * Which controls a download offers. `Extracting` (shown as "Finishing…") offers none: the engine
+ * can't stop post-processing, and removing the job mid-way would orphan the running extraction.
+ */
+export function downloadActions(t: DownloadTask): { pause: boolean; resume: boolean; retry: boolean; cancel: boolean; remove: boolean } {
+  const s = t.status;
+  const running = s === "Downloading" || s === "Pending";
+  const failedOrCancelled = isFailedStatus(s) || s === "Cancelled";
+  return {
+    pause: running,
+    resume: s === "Paused",
+    retry: failedOrCancelled,
+    cancel: running || s === "Paused",
+    remove: failedOrCancelled || s === "Completed",
+  };
+}
+
 function percent(t: DownloadTask): number {
   return t.total_bytes > 0 ? (t.downloaded_bytes / t.total_bytes) * 100 : 0;
 }
