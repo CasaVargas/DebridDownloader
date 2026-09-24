@@ -84,7 +84,7 @@
 **Files:**
 - Modify: `src-tauri/Cargo.toml`
 
-- [ ] **Step 1: Make sure Rust is installed**
+- [x] **Step 1: Make sure Rust is installed**
 
 Run: `cargo --version`
 If it is missing (it was missing on the M4 Mac Mini on 2026-09-23), install rustup — **ask the human first**, it modifies the shell profile:
@@ -94,7 +94,7 @@ source "$HOME/.cargo/env"
 ```
 Expected: `cargo 1.8x.x` or newer.
 
-- [ ] **Step 2: Add dependencies**
+- [x] **Step 2: Add dependencies**
 
 In `src-tauri/Cargo.toml`, under `[dependencies]` add:
 ```toml
@@ -107,12 +107,12 @@ tempfile = "3"
 tokio = { version = "1", features = ["full", "test-util"] }
 ```
 
-- [ ] **Step 3: Verify the baseline builds and the (empty) test suite runs**
+- [x] **Step 3: Verify the baseline builds and the (empty) test suite runs**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml`
 Expected: compiles; `test result: ok. 0 passed` (or whatever tests already exist in `extractor.rs`, all passing). If it fails to compile *before* any change, stop and report — do not start Task 1 on a broken baseline.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src-tauri/Cargo.toml src-tauri/Cargo.lock
