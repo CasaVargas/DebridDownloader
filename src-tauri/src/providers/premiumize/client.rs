@@ -335,7 +335,7 @@ impl DebridProvider for PremiumizeClient {
                         filesize: item.size.unwrap_or(0) as i64,
                         download: link.clone(),
                         streamable: item.stream_link.is_some().then_some(true),
-                        source: shared::LinkSource::Direct,
+                        source: shared::LinkSource::Premiumize { transfer_id: id.to_string(), filename: item.name.clone() },
                     })
                 })
                 .collect())
@@ -349,7 +349,7 @@ impl DebridProvider for PremiumizeClient {
                     filesize: item.size.unwrap_or(0) as i64,
                     download: link.clone(),
                     streamable: item.stream_link.is_some().then_some(true),
-                    source: shared::LinkSource::Direct,
+                    source: shared::LinkSource::Premiumize { transfer_id: id.to_string(), filename: item.name.clone() },
                 }])
             } else {
                 Err(shared::ProviderError::Other(
@@ -373,6 +373,18 @@ impl DebridProvider for PremiumizeClient {
             .into_iter()
             .nth(file_id as usize)
             .ok_or_else(|| shared::ProviderError::Other("File not found".to_string()))
+    }
+
+    async fn refresh_link(&self, source: &shared::LinkSource) -> Result<shared::DownloadLink, shared::ProviderError> {
+        match source {
+            shared::LinkSource::Premiumize { transfer_id, filename } => self
+                .get_download_links(transfer_id)
+                .await?
+                .into_iter()
+                .find(|l| &l.filename == filename)
+                .ok_or_else(|| shared::ProviderError::Other("File is no longer in this transfer".into())),
+            _ => Err(shared::ProviderError::Other("Link belongs to a different provider".into())),
+        }
     }
 
     async fn download_history(

@@ -184,3 +184,24 @@ pub struct OAuthToken {
     pub token_type: String,
     pub refresh_token: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::premiumize::client::PremiumizeClient;
+    use crate::providers::real_debrid::client::RdClient;
+    use crate::providers::torbox::client::TorBoxClient;
+    use crate::providers::DebridProvider;
+
+    /// Spec §8: each provider rejects sources that belong to another provider, without network I/O.
+    #[tokio::test]
+    async fn refresh_link_rejects_foreign_sources() {
+        let rd = LinkSource::RealDebrid { hoster_link: "https://h/x".into() };
+        let tb = LinkSource::TorBox { torrent_id: "1".into(), file_id: 2 };
+        let pm = LinkSource::Premiumize { transfer_id: "t".into(), filename: "f".into() };
+        assert!(RdClient::new().refresh_link(&tb).await.is_err());
+        assert!(RdClient::new().refresh_link(&LinkSource::Direct).await.is_err());
+        assert!(TorBoxClient::new().refresh_link(&pm).await.is_err());
+        assert!(PremiumizeClient::new().refresh_link(&rd).await.is_err());
+    }
+}

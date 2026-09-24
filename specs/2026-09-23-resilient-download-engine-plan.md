@@ -4259,7 +4259,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Produces: `DebridProvider::refresh_link(&self, source: &LinkSource) -> Result<DownloadLink, ProviderError>`; every `DownloadLink` from `get_download_links` / `get_download_link_for_file` carries a non-`Direct` `source`.
 
-- [ ] **Step 1: Add the trait method**
+- [x] **Step 1: Add the trait method**
 
 In `src-tauri/src/providers/mod.rs`, after `get_download_link_for_file`:
 ```rust
@@ -4267,7 +4267,7 @@ In `src-tauri/src/providers/mod.rs`, after `get_download_link_for_file`:
     async fn refresh_link(&self, source: &LinkSource) -> Result<DownloadLink, ProviderError>;
 ```
 
-- [ ] **Step 2: Real-Debrid**
+- [x] **Step 2: Real-Debrid**
 
 Change `map_download_link` to carry the hoster link:
 ```rust
@@ -4294,7 +4294,7 @@ Update its two callers: `map_download_link(unrestricted, link)` in `get_download
     }
 ```
 
-- [ ] **Step 3: TorBox**
+- [x] **Step 3: TorBox**
 
 In `get_download_link_for_file`, set `source: shared::LinkSource::TorBox { torrent_id: torrent_id.to_string(), file_id },` in the returned `DownloadLink` (replacing the `Direct` placeholder). Add:
 ```rust
@@ -4306,7 +4306,7 @@ In `get_download_link_for_file`, set `source: shared::LinkSource::TorBox { torre
     }
 ```
 
-- [ ] **Step 4: Premiumize**
+- [x] **Step 4: Premiumize**
 
 In both `DownloadLink` literals inside `get_download_links`, set `source: shared::LinkSource::Premiumize { transfer_id: id.to_string(), filename: item.name.clone() },`. Add:
 ```rust
@@ -4323,12 +4323,12 @@ In both `DownloadLink` literals inside `get_download_links`, set `source: shared
     }
 ```
 
-- [ ] **Step 5: Build and run all tests**
+- [x] **Step 5: Build and run all tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml`
 Expected: compiles; all tests pass. (Provider HTTP calls can't be unit-tested without live accounts; they are covered by the manual check in Task 13.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/providers

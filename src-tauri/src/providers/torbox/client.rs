@@ -345,8 +345,15 @@ impl DebridProvider for TorBoxClient {
             filesize: file.bytes,
             download: download_url,
             streamable: Some(true),
-            source: shared::LinkSource::Direct,
+            source: shared::LinkSource::TorBox { torrent_id: torrent_id.to_string(), file_id },
         })
+    }
+
+    async fn refresh_link(&self, source: &shared::LinkSource) -> Result<shared::DownloadLink, shared::ProviderError> {
+        match source {
+            shared::LinkSource::TorBox { torrent_id, file_id } => self.get_download_link_for_file(torrent_id, *file_id).await,
+            _ => Err(shared::ProviderError::Other("Link belongs to a different provider".into())),
+        }
     }
 
     async fn download_history(
