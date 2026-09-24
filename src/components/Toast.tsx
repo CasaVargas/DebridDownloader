@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { cn } from "./ui";
 
 interface ToastProps {
   message: string;
@@ -24,15 +25,11 @@ export default function Toast({ message, onDismiss, duration = 3000 }: ToastProp
 
   return (
     <div
-      className="fixed bottom-6 z-[200] px-5 py-3 rounded-xl text-[14px] font-medium shadow-lg transition-all duration-200"
-      style={{
-        left: "50%",
-        background: "var(--theme-bg-surface)",
-        color: "var(--theme-text-primary)",
-        border: "1px solid var(--theme-border)",
-        opacity: visible ? 1 : 0,
-        transform: `translateX(-50%) translateY(${visible ? "0" : "12px"})`,
-      }}
+      role="status"
+      className={cn(
+        "fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-border bg-surface px-4 py-2.5 text-base text-fg shadow-panel transition-all duration-120",
+        visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0",
+      )}
     >
       {message}
     </div>

@@ -28,6 +28,13 @@ export const CLEAN_FILES: string[] = [
   "src/components/ui/Tooltip.tsx",
   "src/components/ui/index.ts",
   "src/lib/platform.ts",
+  // Task 3: shell
+  "src/components/Layout.tsx",
+  "src/components/Sidebar.tsx",
+  "src/components/DataTable.tsx",
+  "src/components/Toast.tsx",
+  "src/hooks/useShortcut.ts",
+  "src/lib/providers.ts",
 ];
 
 const RULES: { name: string; re: RegExp }[] = [

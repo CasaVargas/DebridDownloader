@@ -6,6 +6,7 @@ import Sidebar from "./Sidebar";
 import Toast from "./Toast";
 import { DownloadTasksProvider } from "../hooks/useDownloadTasks";
 import { useAppearance } from "../hooks/useAppearance";
+import { useShortcut } from "../hooks/useShortcut";
 import type { WatchMatch } from "../types";
 
 export default function Layout() {
@@ -70,49 +71,28 @@ export default function Layout() {
     return () => { unlisten.then((fn) => fn()); };
   }, [activeView]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === "k") {
-        e.preventDefault();
-        navigate("/search");
-        return;
-      }
-
-      if (e.metaKey && e.key === "r") {
-        e.preventDefault();
-        window.dispatchEvent(new Event("refresh-list"));
-        return;
-      }
-
-      if (e.key === "Escape") {
-        window.dispatchEvent(new Event("deselect-item"));
-        return;
-      }
-
-      if ((e.key === "Delete" || e.key === "Backspace") && !e.metaKey) {
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
-          window.dispatchEvent(new Event("delete-selected"));
-        }
-        return;
-      }
-
-      if (e.key === "Enter") {
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
-          window.dispatchEvent(new Event("action-selected"));
-        }
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate]);
+  const go = (path: string) => () => navigate(path);
+  const fire = (name: string) => () => window.dispatchEvent(new Event(name));
+  useShortcut("1", go("/torrents"));
+  useShortcut("2", go("/downloads"));
+  useShortcut("3", go("/completed"));
+  useShortcut("4", go("/watchlist"));
+  useShortcut("Mod+K", go("/search"));
+  useShortcut("Mod+,", go("/settings"));
+  useShortcut("Mod+N", fire("open-add-torrent"));
+  useShortcut("Mod+R", fire("refresh-list"));
+  useShortcut("Mod+I", fire("toggle-inspector"));
+  useShortcut("/", fire("focus-filter"));
+  useShortcut("Escape", fire("deselect-item"), { allowInInputs: true });
+  useShortcut(["Delete", "Backspace"], fire("delete-selected"));
+  useShortcut("Enter", fire("action-selected"));
+  useShortcut("Space", fire("toggle-selected"));
+  useShortcut("ArrowDown", fire("select-next"));
+  useShortcut("ArrowUp", fire("select-prev"));
 
   return (
     <DownloadTasksProvider>
-      <div className="flex h-screen overflow-hidden bg-[var(--theme-bg)]">
+      <div className="flex h-screen overflow-hidden bg-bg text-fg">
         <Sidebar
           activeView={activeView}
           onNavigate={handleNavigate}
@@ -121,7 +101,7 @@ export default function Layout() {
           onAboutOpen={() => navigate("/about")}
           unreadWatchCount={unreadWatchCount}
         />
-        <main className="flex-1 overflow-hidden flex flex-col" style={{ background: "var(--theme-bg-content)" }}>
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-bg">
           <Outlet />
         </main>
       </div>

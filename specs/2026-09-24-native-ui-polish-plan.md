@@ -1299,7 +1299,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - Window events (unchanged names plus one new one): `refresh-list`, `deselect-item`, `delete-selected`, `action-selected`, **`toggle-selected`** (Space), **`focus-filter`** (`/`), **`toggle-inspector`** (`Mod+I`), **`select-next`** / **`select-prev`** (↓/↑)
   - `DataTable` gains `onKeyboardSelect?: (item: T) => void` handling `select-next`/`select-prev`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `src/test/shortcut.test.ts`:
 ```ts
@@ -1387,12 +1387,12 @@ describe("useShortcut", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npm test -- shortcut`
 Expected: FAIL — cannot resolve `../hooks/useShortcut`.
 
-- [ ] **Step 3: Write `src/hooks/useShortcut.ts`**
+- [x] **Step 3: Write `src/hooks/useShortcut.ts`**
 
 ```ts
 import { useEffect, useRef } from "react";
@@ -1460,7 +1460,7 @@ export function useShortcut(
 }
 ```
 
-- [ ] **Step 4: Write `src/lib/providers.ts`**
+- [x] **Step 4: Write `src/lib/providers.ts`**
 
 ```ts
 export const PROVIDER_NAMES: Record<string, string> = {
@@ -1474,7 +1474,7 @@ export function providerName(id: string): string {
 }
 ```
 
-- [ ] **Step 5: Rebuild `Layout.tsx` shortcuts on `useShortcut`**
+- [x] **Step 5: Rebuild `Layout.tsx` shortcuts on `useShortcut`**
 
 Delete the `handleKeyDown` effect and add, inside `Layout`:
 ```tsx
@@ -1508,7 +1508,7 @@ Change the layout markup to:
 ```
 `TorrentsPage` currently opens `AddTorrentModal` from its own button. Task 4 makes it also listen for `open-add-torrent`.
 
-- [ ] **Step 6: Rebuild `Sidebar.tsx`**
+- [x] **Step 6: Rebuild `Sidebar.tsx`**
 
 Keep the component's props and data logic (provider fetch, update check, `premiumDays`, `logout`). Replace its markup with:
 - `<nav className="flex w-50 shrink-0 flex-col border-r border-border bg-surface px-2 py-2.5">` (200px)
@@ -1521,7 +1521,7 @@ Keep the component's props and data logic (provider fetch, update check, `premiu
 - Store the raw provider id in state (`providerId`) and render it through `providerName`. This fixes Premiumize showing as `premiumize`.
 - Delete the popover state, refs and the mousedown effect; the Radix Menu handles all of that.
 
-- [ ] **Step 7: Rebuild `DataTable.tsx`**
+- [x] **Step 7: Rebuild `DataTable.tsx`**
 
 Keep the props API and add `onKeyboardSelect?: (item: T) => void`. Changes:
 - **Container:** `className="flex-1 overflow-auto"`, no inline padding.
@@ -1535,17 +1535,17 @@ Keep the props API and add `onKeyboardSelect?: (item: T) => void`. Changes:
 - **Keyboard:** listen for the `select-next`/`select-prev` window events. Move from the current `selectedId` index (or 0) and call `onKeyboardSelect?.(item)`, falling back to `onRowClick?.(item)`. Scroll the new row into view with `scrollIntoView({ block: "nearest" })`, using a ref map keyed by row id.
 - `onRowContextMenu` stays for now; Task 4 moves Torrents to `ContextMenu`.
 
-- [ ] **Step 8: Rebuild `Toast.tsx`**
+- [x] **Step 8: Rebuild `Toast.tsx`**
 
 Keep its logic. Markup: `className={cn("fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-border bg-surface px-4 py-2.5 text-base text-fg shadow-panel transition-all duration-120", visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0")}` with `role="status"`. No inline style.
 
-- [ ] **Step 9: Guard + tests**
+- [x] **Step 9: Guard + tests**
 
 Append `src/components/Layout.tsx`, `src/components/Sidebar.tsx`, `src/components/DataTable.tsx`, `src/components/Toast.tsx`, `src/hooks/useShortcut.ts`, `src/lib/providers.ts` to `CLEAN_FILES`.
 Run: `npm test && npx tsc --noEmit`
 Expected: all pass.
 
-- [ ] **Step 10: Visual and keyboard check**
+- [x] **Step 10: Visual and keyboard check**
 
 In `npm run tauri dev`, screenshot the full window on Torrents in dark and light (emerald + blue):
 - The sidebar no longer touches the window edge.
@@ -1559,7 +1559,7 @@ Keyboard checks:
 
 Log in with Premiumize, or temporarily hard-code `providerId = "premiumize"` and then revert, to confirm the label reads "Premiumize".
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add -A src/hooks/useShortcut.ts src/lib/providers.ts src/components/Layout.tsx src/components/Sidebar.tsx src/components/DataTable.tsx src/components/Toast.tsx src/test
