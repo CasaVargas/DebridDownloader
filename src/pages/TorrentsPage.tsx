@@ -3,11 +3,10 @@ import { useMiniPlayer } from "../contexts/MiniPlayerContext";
 import { open } from "@tauri-apps/plugin-dialog";
 import DataTable, { type Column } from "../components/DataTable";
 import AddTorrentModal from "../components/AddTorrentModal";
-import VideoPlayer from "../components/VideoPlayer";
 import * as torrentsApi from "../api/torrents";
 import * as downloadsApi from "../api/downloads";
 import { getSettings } from "../api/settings";
-import { getStreamUrl, cleanupStreamSession } from "../api/streaming";
+import { getStreamUrl } from "../api/streaming";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Torrent, TorrentInfo, AppSettings } from "../types";
 import { Button, ContextMenu, IconButton, Inspector, Menu, Spinner, StatusDot, Toolbar, type MenuItem } from "../components/ui";
@@ -78,42 +77,8 @@ export default function TorrentsPage() {
 
   const { openPreview, loadingTorrentId: miniPlayerLoadingId } = useMiniPlayer();
 
-  // Streaming state
-  const [streamingFileId, setStreamingFileId] = useState<number | null>(null);
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
-  const [streamSessionId, setStreamSessionId] = useState<string | null>(null);
-  const [streamLoading, setStreamLoading] = useState(false);
+  // Inline playback goes to the floating mini player (resizable, fullscreen) rather than the narrow inspector.
   const [streamError, setStreamError] = useState<string | null>(null);
-
-  const handlePlayInline = async (fileId: number) => {
-    if (!detailInfo) return;
-
-    // Toggle off if clicking the same file
-    if (streamingFileId === fileId) {
-      await handleStopStream();
-      return;
-    }
-
-    // Cleanup previous session
-    if (streamSessionId) {
-      await cleanupStreamSession(streamSessionId).catch(() => {});
-    }
-
-    setStreamLoading(true);
-    setStreamError(null);
-    setStreamingFileId(fileId);
-
-    try {
-      const result = await getStreamUrl(detailInfo.id, fileId);
-      setStreamUrl(result.stream_url);
-      setStreamSessionId(result.session_id);
-    } catch (e) {
-      setStreamError(e instanceof Error ? e.message : String(e));
-      setStreamingFileId(null);
-    } finally {
-      setStreamLoading(false);
-    }
-  };
 
   const handlePlayExternal = async (fileId: number) => {
     if (!detailInfo) return;
@@ -124,16 +89,6 @@ export default function TorrentsPage() {
     } catch (e) {
       setStreamError(e instanceof Error ? e.message : String(e));
     }
-  };
-
-  const handleStopStream = async () => {
-    if (streamSessionId) {
-      await cleanupStreamSession(streamSessionId).catch(() => {});
-    }
-    setStreamingFileId(null);
-    setStreamUrl(null);
-    setStreamSessionId(null);
-    setStreamError(null);
   };
 
   const fetchTorrents = useCallback(async () => {
@@ -185,11 +140,10 @@ export default function TorrentsPage() {
   }, []);
 
   useEffect(() => {
-    // Esc used to close the slide-over, which also stopped any inline stream.
-    const handler = () => { handleStopStream(); setSelectedId(null); };
+    const handler = () => { setStreamError(null); setSelectedId(null); };
     window.addEventListener("deselect-item", handler);
     return () => window.removeEventListener("deselect-item", handler);
-  }, [streamSessionId]);
+  }, []);
 
   useEffect(() => {
     const onAdd = () => setShowAdd(true);
@@ -327,7 +281,7 @@ export default function TorrentsPage() {
   const totalBytes = torrents.reduce((s, t) => s + t.bytes, 0);
 
   const selectRow = (id: string) => { setSelectedId(id); setInspectorOpen(true); };
-  const closeInspector = () => { handleStopStream(); setSelectedId(null); };
+  const closeInspector = () => { setStreamError(null); setSelectedId(null); };
 
   // Right-click menu: same actions and handlers as the old positioned menu.
   const rowMenuItems = (t: Torrent): MenuItem[] => [
@@ -492,30 +446,7 @@ export default function TorrentsPage() {
                 <dd className="truncate font-mono text-fg-secondary" title={detailInfo.hash}>{detailInfo.hash}</dd>
               </dl>
 
-              {/* Video Player */}
-              {streamingFileId !== null && streamUrl && (
-                <VideoPlayer
-                  streamUrl={streamUrl}
-                  filename={
-                    detailInfo.files.find((f) => f.id === streamingFileId)?.path.split("/").pop() || "Video"
-                  }
-                  onClose={handleStopStream}
-                  onExternalPlayer={() => {
-                    const fid = streamingFileId;
-                    handleStopStream();
-                    if (fid !== null) handlePlayExternal(fid);
-                  }}
-                />
-              )}
-
-              {streamError && !streamUrl && (
-                <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
-                  <p className="text-sm text-danger">{streamError}</p>
-                  <Button size="sm" onClick={() => streamingFileId !== null && handlePlayInline(streamingFileId)}>
-                    Retry
-                  </Button>
-                </div>
-              )}
+              {streamError && <p className="text-sm text-danger" role="alert">{streamError}</p>}
 
               {/* Files */}
               {detailInfo.files.length > 0 && (
@@ -527,9 +458,7 @@ export default function TorrentsPage() {
                     {detailInfo.files.map((file) => (
                       <div
                         key={file.id}
-                        className={`flex min-h-7.5 items-center gap-2 border-b border-border-subtle px-2 py-1 last:border-b-0 ${
-                          streamingFileId === file.id ? "bg-selected" : "hover:bg-raised"
-                        }`}
+                        className="flex min-h-7.5 items-center gap-2 border-b border-border-subtle px-2 py-1 last:border-b-0 hover:bg-raised"
                       >
                         {detailInfo.status === "waiting_files_selection" && (
                           <input
@@ -551,17 +480,11 @@ export default function TorrentsPage() {
                         {detailInfo.status === "downloaded" && isInlineVideo(file.path) && (
                           <IconButton
                             size="sm"
-                            label={streamingFileId === file.id ? "Stop playback" : "Play"}
-                            onClick={() => handlePlayInline(file.id)}
-                            disabled={streamLoading && streamingFileId === file.id}
+                            label="Play in preview"
+                            onClick={() => openPreview(detailInfo.id, file.id, file.path.split("/").pop() || file.path)}
+                            disabled={miniPlayerLoadingId === detailInfo.id}
                           >
-                            {streamLoading && streamingFileId === file.id ? (
-                              <Spinner size="sm" />
-                            ) : streamingFileId === file.id ? (
-                              <span className="text-xs">■</span>
-                            ) : (
-                              <span className="text-xs">▶</span>
-                            )}
+                            {miniPlayerLoadingId === detailInfo.id ? <Spinner size="sm" /> : <span className="text-xs">▶</span>}
                           </IconButton>
                         )}
 

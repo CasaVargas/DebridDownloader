@@ -48,7 +48,6 @@ export const CLEAN_FILES: string[] = [
   "src/pages/AuthPage.tsx",
   // Task 9: media players
   "src/components/MiniPlayer.tsx",
-  "src/components/VideoPlayer.tsx",
   // Task 10: settings shell
   "src/pages/settings/SettingsLayout.tsx",
   "src/pages/settings/useSettings.tsx",
