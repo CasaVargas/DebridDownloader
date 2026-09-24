@@ -16,7 +16,7 @@ export function SettingsField({ label, description, saved, children }: { label: 
       <div>
         <div className="flex items-center gap-2 text-base text-fg">
           {label}
-          {saved && <span className="text-sm text-accent" role="status">Saved</span>}
+          {saved && <span className="text-sm text-accent-text" role="status">Saved</span>}
         </div>
         {description && <p className="mt-0.5 text-sm text-fg-muted">{description}</p>}
       </div>
@@ -31,7 +31,7 @@ export function SettingsRow({ label, description, saved, children }: { label: st
       <div className="min-w-0">
         <div className="flex items-center gap-2 text-base text-fg">
           {label}
-          {saved && <span className="text-sm text-accent" role="status">Saved</span>}
+          {saved && <span className="text-sm text-accent-text" role="status">Saved</span>}
         </div>
         {description && <p className="mt-0.5 text-sm text-fg-muted">{description}</p>}
       </div>

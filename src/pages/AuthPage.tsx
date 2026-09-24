@@ -224,7 +224,7 @@ export default function AuthPage() {
               ) : (
                 <>
                   Get your token at{" "}
-                  <button type="button" className="text-accent hover:underline" onClick={() => openUrl("https://real-debrid.com/apitoken").catch(() => {})}>
+                  <button type="button" className="text-accent-text hover:underline" onClick={() => openUrl("https://real-debrid.com/apitoken").catch(() => {})}>
                     real-debrid.com/apitoken
                   </button>
                 </>

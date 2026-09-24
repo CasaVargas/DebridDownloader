@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ACCENTS, ACCENT_NAMES, contrastRatio, pickAccentFg } from "../theme/accents";
+import { ACCENTS, ACCENT_NAMES, THEME_BASE, accentText, contrastRatio, pickAccentFg } from "../theme/accents";
 
 const css = readFileSync(resolve(__dirname, "../styles/tokens.css"), "utf8");
 
@@ -32,6 +32,19 @@ describe.each(["dark", "light"] as const)("%s theme contrast", (theme) => {
 
   it.each(["bg", "surface"])("status colors ≥ 3:1 on %s", (bg) => {
     for (const s of ["success", "info", "warning", "danger"]) expect(contrastRatio(p[s], p[bg]), s).toBeGreaterThanOrEqual(3);
+  });
+
+  it("THEME_BASE mirrors tokens.css (accent-text is derived from it)", () => {
+    expect(THEME_BASE[theme]).toEqual({ bg: p.bg, surface: p.surface, text: p.text });
+  });
+
+  it("every accent: accent-text ≥ 4.5:1 on bg and surface", () => {
+    for (const name of ACCENT_NAMES) {
+      const t = accentText(ACCENTS[name][theme], theme);
+      expect(t, name).toMatch(/^#[0-9a-f]{6}$/);
+      expect(contrastRatio(t, p.bg), `${name} on bg`).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(t, p.surface), `${name} on surface`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("every accent: fg ≥ 4.5:1 on the accent and focus ring ≥ 3:1 on bg", () => {

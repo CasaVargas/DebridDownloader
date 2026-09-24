@@ -123,7 +123,7 @@ const CHANGELOG: { version: string; title: string; items: string[] }[] = [
   },
 ];
 
-const linkClass = "text-accent hover:underline";
+const linkClass = "text-accent-text hover:underline";
 
 function ExtLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (

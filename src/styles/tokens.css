@@ -49,6 +49,7 @@
   --accent: #10b981;
   --accent-hover: #34d399;
   --accent-fg: #111111;
+  --accent-text: #10b981;
   --selected: color-mix(in srgb, var(--accent) var(--selected-mix, 16%), transparent);
   --accent-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
 }
@@ -74,6 +75,7 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-fg);
+  --color-accent-text: var(--accent-text);
   --color-accent-subtle: var(--accent-subtle);
 
   --text-xs: 11px;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ACCENTS, ACCENT_NAMES, type AccentName, pickAccentFg } from "../theme/accents";
+import { ACCENTS, ACCENT_NAMES, type AccentName, accentText, pickAccentFg } from "../theme/accents";
 
 export type ThemePref = "system" | "light" | "dark";
 const KEY = "frontend-settings";
@@ -30,6 +30,7 @@ export function applyAppearance(theme: "light" | "dark", accent: AccentName, roo
   root.style.setProperty("--accent", base);
   root.style.setProperty("--accent-hover", theme === "dark" ? a.darkHover : a.lightHover);
   root.style.setProperty("--accent-fg", pickAccentFg(base));
+  root.style.setProperty("--accent-text", accentText(base, theme));
 }
 
 /** Apply the stored appearance synchronously, before React mounts (no unthemed flash on the loading/auth screens). */

@@ -66,6 +66,7 @@ const RULES: { name: string; re: RegExp }[] = [
   { name: "pixel value", re: /\b\d+(\.\d+)?px\b/ },
   { name: "old --theme-* variable", re: /--theme-/ },
   { name: "old --accent-bg-* variable", re: /--accent-bg-/ },
+  { name: "accent as text color (use text-accent-text)", re: /\btext-accent(?![-\w])/ },
 ];
 
 export function findLiterals(source: string): string[] {
@@ -86,6 +87,9 @@ describe("no raw style literals in migrated files", () => {
     expect(findLiterals(`bg-[rgba(239,68,68,0.08)]`)).toHaveLength(1);
     expect(findLiterals(`text-[var(--theme-text-muted)]`)).toHaveLength(1);
     expect(findLiterals(`className="h-7 px-3 text-base text-fg"`)).toHaveLength(0);
+    expect(findLiterals(`className="text-sm text-accent"`)).toHaveLength(1);
+    expect(findLiterals(`className="hover:text-accent underline"`)).toHaveLength(1);
+    expect(findLiterals(`className="bg-accent text-accent-fg text-accent-text"`)).toHaveLength(0);
     expect(findLiterals(`<path d="M21 15v4a2" /> // style-literal-ok`)).toHaveLength(0);
   });
 

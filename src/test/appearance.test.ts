@@ -41,6 +41,10 @@ describe("applyAppearance", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(s.getPropertyValue("--accent")).toBe("#2563eb");
     expect(s.getPropertyValue("--accent-fg")).toBe("#ffffff");
+    // blue #2563eb already clears 4.5:1 on light bg and surface, so it is used unchanged
+    expect(s.getPropertyValue("--accent-text")).toBe("#2563eb");
+    applyAppearance("light", "amber", document.documentElement);
+    expect(s.getPropertyValue("--accent-text")).not.toBe("#d97706");
   });
 });
 
