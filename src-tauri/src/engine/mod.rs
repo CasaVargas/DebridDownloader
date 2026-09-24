@@ -2,6 +2,7 @@
 #![allow(dead_code)] // removed in Task 10 once the host uses everything
 
 pub mod events;
+pub mod limiter;
 pub mod refresh;
 pub mod remote;
 pub mod types;

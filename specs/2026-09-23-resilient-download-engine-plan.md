@@ -591,7 +591,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Produces: `engine::limiter::Limiter { fn new(rate: Option<u64>) -> Self; async fn set_rate(&self, rate: Option<u64>); async fn acquire(&self, n: usize) }`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `engine/tests/limiter_tests.rs`:
 ```rust
@@ -651,12 +651,12 @@ async fn set_rate_applies_live() {
 ```
 Add `mod limiter_tests;` to `engine/tests/mod.rs` and `pub mod limiter;` to `engine/mod.rs`.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::limiter_tests`
 Expected: FAIL — "file not found for module `limiter`".
 
-- [ ] **Step 3: Implement `engine/limiter.rs`**
+- [x] **Step 3: Implement `engine/limiter.rs`**
 
 ```rust
 //! Global token bucket shared by every segment of every job.
@@ -706,12 +706,12 @@ impl Limiter {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::limiter_tests`
 Expected: 4 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/engine
