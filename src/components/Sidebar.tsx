@@ -123,13 +123,20 @@ export default function Sidebar({
                   onClick={item.onClick}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex h-6.5 w-full items-center gap-2 rounded-md px-2 text-base transition-colors duration-120",
+                    "group flex h-6.5 w-full items-center gap-2 rounded-md px-2 text-base transition-colors duration-120",
                     active ? "bg-selected text-fg" : "text-fg-secondary hover:bg-raised hover:text-fg",
                   )}
                 >
                   <span className="shrink-0">{item.icon}</span>
                   <span className="flex-1 truncate text-left">{item.label}</span>
-                  {item.badge ? <CountBadge>{item.badge}</CountBadge> : item.kbd ? <Kbd combo={item.kbd} /> : null}
+                  {item.badge ? (
+                    <CountBadge>{item.badge}</CountBadge>
+                  ) : item.kbd ? (
+                    // Key hints appear on hover/focus only; count badges above are always visible.
+                    <span className="opacity-0 transition-opacity duration-120 group-hover:opacity-100 group-focus-visible:opacity-100">
+                      <Kbd combo={item.kbd} />
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
