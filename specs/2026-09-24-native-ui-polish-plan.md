@@ -1736,7 +1736,7 @@ Behavior, data fetching, IPC calls and state logic must not change. Only markup 
   - `SETTINGS_SECTIONS: { id: "general" | "account" | "downloads" | "library" | "search" | "backup"; label: string }[]`
   - Routes: `/settings` → `/settings/general`; `/settings/:section`; unknown section → `/settings/general`; `/about` → `/settings/backup`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `src/test/settings-routes.test.tsx`:
 ```tsx
@@ -1777,12 +1777,12 @@ describe("settings routes redirect", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npm test -- settings-routes`
 Expected: FAIL — cannot resolve `../pages/settings/SettingsLayout`.
 
-- [ ] **Step 3: Write `useSettings.tsx`**
+- [x] **Step 3: Write `useSettings.tsx`**
 
 Move from `SettingsPage.tsx` into `src/pages/settings/useSettings.tsx`:
 - `FrontendSettings`, `DEFAULT_FRONTEND` (with `app_theme: "system"`), `loadFrontendSettings` and `saveFrontendSettings`
@@ -1884,7 +1884,7 @@ export function useSettings(): Ctx {
 ```
 Theme and accent do **not** go through `applyFrontend`; they use `useAppearance` (Task 1). `applyFrontend` re-reads storage before writing so it never overwrites the theme or accent keys that `useAppearance` wrote.
 
-- [ ] **Step 4: Write `SettingsLayout.tsx`**
+- [x] **Step 4: Write `SettingsLayout.tsx`**
 
 ```tsx
 import { NavLink, Navigate, Outlet, Route, useParams } from "react-router-dom";
@@ -1965,13 +1965,13 @@ export default function GeneralSettings() {
 ```
 Keep the old `SettingsPage` reachable at `/settings-legacy` until Task 11 finishes, so nothing is lost mid-migration.
 
-- [ ] **Step 5: Wire routes in `App.tsx`**
+- [x] **Step 5: Wire routes in `App.tsx`**
 
 Inside the authenticated `<Route element={<Layout />}>`, replace `<Route path="/settings" element={<SettingsPage />} />` and `<Route path="/about" element={<AboutPage />} />` with `{settingsRoutes}` and `<Route path="/settings-legacy" element={<SettingsPage />} />`. In `Layout.tsx`, `activeView` treats `/settings*` as `"settings"` (it already uses `startsWith`).
 
-- [ ] **Step 6:** Append `src/pages/settings/SettingsLayout.tsx` and `src/pages/settings/useSettings.tsx` to `CLEAN_FILES`. Run `npm test && npx tsc --noEmit`; everything passes, including the 4 route cases.
-- [ ] **Step 7: Screenshots.** Settings shell with each nav item active. Both themes.
-- [ ] **Step 8: Commit** `feat(ui): add sectioned settings shell with shared settings context`.
+- [x] **Step 6:** Append `src/pages/settings/SettingsLayout.tsx` and `src/pages/settings/useSettings.tsx` to `CLEAN_FILES`. Run `npm test && npx tsc --noEmit`; everything passes, including the 4 route cases.
+- [x] **Step 7: Screenshots.** Settings shell with each nav item active. Both themes.
+- [x] **Step 8: Commit** `feat(ui): add sectioned settings shell with shared settings context`.
 
 ---
 
