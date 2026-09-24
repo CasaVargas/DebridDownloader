@@ -26,6 +26,10 @@ pub async fn update_settings(
     settings: AppSettings,
 ) -> Result<(), String> {
     save_app_settings(&app, &settings)?;
+    let config = settings.engine_config(state.rar_tool);
     *state.settings.write().await = settings;
+    if let Ok(engine) = state.engine() {
+        engine.set_config(config);
+    }
     Ok(())
 }

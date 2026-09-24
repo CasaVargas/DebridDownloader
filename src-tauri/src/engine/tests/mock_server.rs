@@ -124,12 +124,14 @@ impl MockServer {
     pub fn data(&self) -> Vec<u8> {
         self.inner.lock().unwrap().data.clone()
     }
+    #[allow(dead_code)] // part of the harness API; no current test swaps the payload
     pub fn set_data(&self, data: Vec<u8>) {
         self.inner.lock().unwrap().data = data;
     }
     pub fn update(&self, f: impl FnOnce(&mut MockOpts)) {
         f(&mut self.inner.lock().unwrap().opts);
     }
+    #[allow(dead_code)] // part of the harness API
     pub fn requests(&self) -> usize {
         self.inner.lock().unwrap().requests
     }

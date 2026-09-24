@@ -1,7 +1,7 @@
 mod commands;
 mod providers;
-mod downloader;
 mod engine;
+mod engine_host;
 mod extractor;
 mod media_parser;
 mod media_servers;
@@ -227,6 +227,24 @@ pub fn run() {
                 });
             }
 
+            // Start the download engine (after settings are loaded)
+            {
+                let state: tauri::State<'_, AppState> = app.state();
+                let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+                let config = state.settings.blocking_read().engine_config(state.rar_tool);
+                let handle = app.handle().clone();
+                let engine = tauri::async_runtime::block_on(async move {
+                    engine::Engine::start(engine::EngineDeps::new(
+                        data_dir,
+                        config,
+                        std::sync::Arc::new(engine_host::TauriSink::new(handle.clone())),
+                        std::sync::Arc::new(engine_host::ProviderRefresher::new(handle.clone())),
+                        std::sync::Arc::new(engine_host::TauriRemoteRunner::new(handle)),
+                    ))
+                });
+                let _ = state.engine.set(engine);
+            }
+
             Ok(())
         })
         .manage(AppState::new())
@@ -261,6 +279,12 @@ pub fn run() {
             commands::downloads::get_download_tasks,
             commands::downloads::clear_completed_downloads,
             commands::downloads::get_download_history,
+            commands::downloads::pause_download,
+            commands::downloads::resume_download,
+            commands::downloads::retry_download,
+            commands::downloads::pause_all_downloads,
+            commands::downloads::resume_all_downloads,
+            commands::downloads::retry_failed_downloads,
             // Settings
             commands::settings::get_settings,
             commands::settings::update_settings,
@@ -296,6 +320,14 @@ pub fn run() {
             commands::backup::export_settings,
             commands::backup::import_settings,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Tray "Quit" and OS shutdown both end here: checkpoint downloads so they resume next launch.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(engine) = app.state::<AppState>().engine.get().cloned() {
+                    tauri::async_runtime::block_on(engine.shutdown());
+                }
+            }
+        });
 }

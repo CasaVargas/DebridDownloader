@@ -49,9 +49,11 @@ impl SegmentState {
     pub fn len(&self) -> u64 {
         self.end + 1 - self.start
     }
+    #[cfg(test)]
     pub fn pos(&self) -> u64 {
         self.start + self.done
     }
+    #[cfg(test)]
     pub fn remaining(&self) -> u64 {
         self.len().saturating_sub(self.done)
     }

@@ -29,10 +29,6 @@ impl Store {
         Self { path: data_dir.join(FILE_NAME) }
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     pub fn load(&self) -> Vec<Job> {
         let bytes = match std::fs::read(&self.path) {
             Ok(b) => b,
@@ -87,7 +83,7 @@ pub fn prune_history(jobs: &mut Vec<Job>) {
     if terminal.len() <= HISTORY_CAP {
         return;
     }
-    terminal.sort_by(|a, b| b.0.cmp(&a.0));
+    terminal.sort_by_key(|t| std::cmp::Reverse(t.0));
     let keep: std::collections::HashSet<String> = terminal.into_iter().take(HISTORY_CAP).map(|(_, id)| id).collect();
     jobs.retain(|j| !j.state.is_terminal() || keep.contains(&j.id));
 }

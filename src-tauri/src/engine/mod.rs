@@ -1,5 +1,4 @@
 //! Download engine. Must stay free of Tauri types (see specs/2026-09-23-resilient-download-engine-design.md).
-#![allow(dead_code)] // removed in Task 10 once the host uses everything
 
 pub mod actor;
 pub mod events;
@@ -17,7 +16,9 @@ mod tests;
 
 pub use events::{EngineEvent, EventSink, JobView};
 pub use refresh::{LinkRefresher, RefreshError, RefreshedLink};
-pub use remote::{NoRemote, RemoteOutcome, RemoteRunner};
+#[cfg(test)]
+pub use remote::NoRemote;
+pub use remote::{RemoteOutcome, RemoteRunner};
 pub use types::*;
 
 use std::path::PathBuf;

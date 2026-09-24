@@ -13,9 +13,11 @@ pub trait RemoteRunner: Send + Sync + 'static {
     async fn run(&self, job: Job, cancel: CancellationToken, speed_limit: Option<u64>) -> Result<RemoteOutcome, String>;
 }
 
-/// Used by tests and any host without rclone.
+/// Used by tests (and, later, any host without rclone — drop the cfg then).
+#[cfg(test)]
 pub struct NoRemote;
 
+#[cfg(test)]
 #[async_trait::async_trait]
 impl RemoteRunner for NoRemote {
     async fn run(&self, _job: Job, _cancel: CancellationToken, _speed_limit: Option<u64>) -> Result<RemoteOutcome, String> {

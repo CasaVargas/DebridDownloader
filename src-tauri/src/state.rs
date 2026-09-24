@@ -52,10 +52,35 @@ pub struct AppSettings {
     pub delete_archives_after_extract: bool,
     #[serde(default)]
     pub torbox_search_enabled: bool,
+    #[serde(default = "default_segments")]
+    pub segments_per_file: u32,
 }
 
 fn default_provider() -> String {
     "real-debrid".to_string()
+}
+
+fn default_segments() -> u32 {
+    4
+}
+
+impl AppSettings {
+    pub fn engine_config(&self, rar_tool: crate::extractor::RarTool) -> crate::engine::EngineConfig {
+        crate::engine::EngineConfig {
+            max_concurrent: self.max_concurrent_downloads.max(1),
+            segments_per_file: self.segments_per_file.clamp(1, 16),
+            speed_limit_bytes: self.speed_limit_bytes,
+            post: crate::engine::PostConfig {
+                auto_extract: self.auto_extract_archives,
+                delete_after_extract: self.delete_archives_after_extract,
+                auto_organize: self.auto_organize,
+                movies_folder: self.movies_folder.clone(),
+                tv_folder: self.tv_folder.clone(),
+                tmdb_api_key: self.tmdb_api_key.clone(),
+                rar_tool,
+            },
+        }
+    }
 }
 
 impl Default for AppSettings {
@@ -83,6 +108,7 @@ impl Default for AppSettings {
             auto_extract_archives: false,
             delete_archives_after_extract: false,
             torbox_search_enabled: false,
+            segments_per_file: default_segments(),
         }
     }
 }
@@ -110,8 +136,7 @@ pub struct AppState {
     pub provider: Arc<RwLock<Arc<dyn DebridProvider>>>,
     pub provider_id: Arc<RwLock<String>>,
     pub settings: Arc<RwLock<AppSettings>>,
-    pub active_downloads: Arc<RwLock<HashMap<String, DownloadTask>>>,
-    pub cancel_tokens: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
+    pub engine: std::sync::OnceLock<crate::engine::Engine>,
     pub streaming_port: Arc<RwLock<Option<u16>>>,
     pub stream_sessions: Arc<RwLock<HashMap<String, StreamSession>>>,
     pub watch_rules: Arc<RwLock<Vec<WatchRule>>>,
@@ -129,8 +154,7 @@ impl AppState {
             provider: Arc::new(RwLock::new(provider)),
             provider_id: Arc::new(RwLock::new("real-debrid".to_string())),
             settings: Arc::new(RwLock::new(AppSettings::default())),
-            active_downloads: Arc::new(RwLock::new(HashMap::new())),
-            cancel_tokens: Arc::new(RwLock::new(HashMap::new())),
+            engine: std::sync::OnceLock::new(),
             streaming_port: Arc::new(RwLock::new(None)),
             stream_sessions: Arc::new(RwLock::new(HashMap::new())),
             watch_rules: Arc::new(RwLock::new(Vec::new())),
@@ -145,5 +169,9 @@ impl AppState {
     /// Use this instead of holding the RwLock across async operations.
     pub async fn get_provider(&self) -> Arc<dyn DebridProvider> {
         self.provider.read().await.clone()
+    }
+
+    pub fn engine(&self) -> Result<crate::engine::Engine, String> {
+        self.engine.get().cloned().ok_or_else(|| "Download engine is not running".to_string())
     }
 }

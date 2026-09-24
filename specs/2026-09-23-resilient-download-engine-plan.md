@@ -4350,7 +4350,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `Engine`, `EngineDeps`, `EngineConfig`, `PostConfig`, `NewJob`, `JobKind`, `JobView`, `EventSink`, `LinkRefresher`, `RemoteRunner` (Tasks 1–9); `DebridProvider::refresh_link` (Task 10).
 - Produces: IPC commands `pause_download`, `resume_download`, `retry_download`, `pause_all_downloads`, `resume_all_downloads`, `retry_failed_downloads`; `get_download_tasks` now returns `Vec<JobView>`; events `download-progress` (JobView) and `downloads-changed`; `AppSettings.segments_per_file`.
 
-- [ ] **Step 1: Write the failing unit tests for the pure host helpers**
+- [x] **Step 1: Write the failing unit tests for the pure host helpers**
 
 At the bottom of `src-tauri/src/engine_host.rs` (created in Step 3) and of `commands/downloads.rs` (Step 5) there are `#[cfg(test)]` modules. Write them first:
 
@@ -4386,7 +4386,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: State and settings changes**
+- [x] **Step 2: State and settings changes**
 
 In `src-tauri/src/state.rs`:
 1. Add to `AppSettings` (after `torbox_search_enabled`):
@@ -4424,7 +4424,7 @@ impl AppSettings {
 ```
 Keep `DownloadTask` (rclone still uses it).
 
-- [ ] **Step 3: Write `src-tauri/src/engine_host.rs`**
+- [x] **Step 3: Write `src-tauri/src/engine_host.rs`**
 
 ```rust
 //! Tauri adapters for the engine's seams.
@@ -4557,7 +4557,7 @@ impl RemoteRunner for TauriRemoteRunner {
 ```
 (Append the test module from Step 1.)
 
-- [ ] **Step 4: Move `emit_progress` into `rclone.rs` and delete `downloader.rs`**
+- [x] **Step 4: Move `emit_progress` into `rclone.rs` and delete `downloader.rs`**
 
 In `src-tauri/src/rclone.rs`, replace `use crate::downloader::emit_progress;` with the struct and function copied verbatim from `downloader.rs:8-17` and `downloader.rs:124-135` (`DownloadProgress` and `emit_progress`), adding `use serde::Serialize;` and `use tauri::Emitter;` if missing. Then:
 ```bash
@@ -4565,7 +4565,7 @@ git rm src-tauri/src/downloader.rs
 ```
 and remove `mod downloader;` from `lib.rs`.
 
-- [ ] **Step 5: Rewrite `src-tauri/src/commands/downloads.rs`**
+- [x] **Step 5: Rewrite `src-tauri/src/commands/downloads.rs`**
 
 ```rust
 use crate::engine::{JobKind, JobView, NewJob};
@@ -4748,7 +4748,7 @@ fn sanitize_filename(name: &str) -> String {
 ```
 (Append the test module from Step 1. `find_single_video` now lives in `engine/pipeline.rs` — delete it here.)
 
-- [ ] **Step 6: Push config changes to the engine**
+- [x] **Step 6: Push config changes to the engine**
 
 In `commands/settings.rs` `update_settings`, replace the body with:
 ```rust
@@ -4767,7 +4767,7 @@ In `commands/backup.rs` `import_settings`, inside the `if let Ok(settings) = ...
         }
 ```
 
-- [ ] **Step 7: Wire `lib.rs`**
+- [x] **Step 7: Wire `lib.rs`**
 
 1. Modules: remove `mod downloader;`, add `mod engine_host;` (after `mod engine;`).
 2. At the end of `setup`, just before `Ok(())`, start the engine (the settings have been loaded above):
@@ -4819,14 +4819,14 @@ with
 ```
 5. Remove `#![allow(dead_code)]` from `engine/mod.rs`. Fix any genuine dead-code warnings it reveals (delete the unused item) rather than re-adding the allow.
 
-- [ ] **Step 8: Build, lint, and test**
+- [x] **Step 8: Build, lint, and test**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml`
 Expected: everything compiles; all tests pass (including the two new host tests).
 Run: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (install with `rustup component add clippy` if missing)
 Expected: no warnings in `engine/`, `engine_host.rs`, `commands/downloads.rs`. Pre-existing warnings elsewhere may be left alone — note them in the task report.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A src-tauri
