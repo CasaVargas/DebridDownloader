@@ -735,7 +735,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `prune_history(jobs: &mut Vec<Job>)`
   - `recover(jobs: &mut [Job]) -> Vec<String>` (ids whose post-processing must re-run)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `engine/tests/store_tests.rs`:
 ```rust
@@ -856,12 +856,12 @@ fn recover_resets_states_and_validates_part_files() {
 ```
 Add `pub mod store_tests;` to `engine/tests/mod.rs` (pub so later test modules can reuse `job()`), and `pub mod store;` to `engine/mod.rs`.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::store_tests`
 Expected: FAIL — module `store` not found.
 
-- [ ] **Step 3: Implement `engine/store.rs`**
+- [x] **Step 3: Implement `engine/store.rs`**
 
 ```rust
 //! `downloads.json` persistence. Atomic writes: unique temp file → fsync → rename.
@@ -987,12 +987,12 @@ pub fn recover(jobs: &mut [Job]) -> Vec<String> {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::store_tests`
 Expected: 7 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/engine

@@ -5,6 +5,7 @@ pub mod events;
 pub mod limiter;
 pub mod refresh;
 pub mod remote;
+pub mod store;
 pub mod types;
 
 #[cfg(test)]
