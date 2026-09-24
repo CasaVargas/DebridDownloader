@@ -545,12 +545,20 @@ impl Actor {
             }
             (None, Ok(TransferOutcome::Finished)) => {
                 self.offline.remove(id);
+                let needs_post = self.config.post.auto_extract || self.config.post.auto_organize;
                 let job = &mut self.jobs[idx];
-                job.state = JobState::Completed;
                 job.attempt = 0;
                 job.error = None;
-                job.post = PostStage::Extract;
-                self.start_pipeline(id);
+                if needs_post {
+                    // Not Completed until extract/organize finish, so the UI never shows
+                    // Completed and then flips back to Extracting.
+                    job.state = JobState::Extracting;
+                    job.post = PostStage::Extract;
+                    self.start_pipeline(id);
+                } else {
+                    job.state = JobState::Completed;
+                    job.post = PostStage::Done;
+                }
             }
             (None, Ok(TransferOutcome::Stopped)) => self.jobs[idx].state = JobState::Paused,
             (None, Err(TransferError::Fatal(m))) => {

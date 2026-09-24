@@ -112,3 +112,31 @@ fn recover_resets_states_and_validates_part_files() {
     assert_eq!(rerun, vec!["c".to_string()]);
     assert_eq!(jobs[3].state, JobState::Failed("x".into()));
 }
+
+#[cfg(unix)]
+#[test]
+fn unreadable_file_is_never_overwritten() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("downloads.json");
+    let original: &[u8] = br#"{"version":1,"jobs":[]} "#;
+    std::fs::write(&path, original).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+    let store = Store::new(dir.path());
+    let loaded = store.load();
+    assert!(loaded.is_empty());
+    assert!(!store.is_writable(), "a store whose file couldn't be read must refuse to write");
+    store.save(&[job("a", JobState::Pending, "/x/a")]).unwrap();
+
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), original, "the unreadable file was overwritten");
+}
+
+#[test]
+fn readable_store_is_writable() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::new(dir.path());
+    store.load();
+    assert!(store.is_writable());
+}

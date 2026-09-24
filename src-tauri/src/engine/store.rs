@@ -3,6 +3,7 @@ use super::types::{now_ms, Job, JobKind, JobState, PostStage};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub const HISTORY_CAP: usize = 500;
 const FILE_NAME: &str = "downloads.json";
@@ -22,11 +23,14 @@ struct StoreFileRef<'a> {
 
 pub struct Store {
     path: PathBuf,
+    /// False once we failed to read (or move aside) an existing file: saving would destroy
+    /// a queue we couldn't load, so the engine keeps running in memory only.
+    writable: AtomicBool,
 }
 
 impl Store {
     pub fn new(data_dir: &Path) -> Self {
-        Self { path: data_dir.join(FILE_NAME) }
+        Self { path: data_dir.join(FILE_NAME), writable: AtomicBool::new(true) }
     }
 
     pub fn load(&self) -> Vec<Job> {
@@ -34,7 +38,12 @@ impl Store {
             Ok(b) => b,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
             Err(e) => {
-                log::warn!("Failed to read {}: {}", self.path.display(), e);
+                log::error!(
+                    "Failed to read {}: {}. Downloads will not be saved this session to avoid overwriting it.",
+                    self.path.display(),
+                    e
+                );
+                self.writable.store(false, Ordering::SeqCst);
                 return Vec::new();
             }
         };
@@ -54,10 +63,24 @@ impl Store {
     fn quarantine(&self, why: &str) {
         let dest = self.path.with_file_name(format!("{}.corrupt-{}", FILE_NAME, now_ms()));
         log::warn!("{} is unreadable ({}); moving it to {}", self.path.display(), why, dest.display());
-        let _ = std::fs::rename(&self.path, dest);
+        if let Err(e) = std::fs::rename(&self.path, &dest) {
+            log::error!(
+                "Couldn't move {} aside ({}). Downloads will not be saved this session to avoid overwriting it.",
+                self.path.display(),
+                e
+            );
+            self.writable.store(false, Ordering::SeqCst);
+        }
+    }
+
+    pub fn is_writable(&self) -> bool {
+        self.writable.load(Ordering::SeqCst)
     }
 
     pub fn save(&self, jobs: &[Job]) -> std::io::Result<()> {
+        if !self.is_writable() {
+            return Ok(());
+        }
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }

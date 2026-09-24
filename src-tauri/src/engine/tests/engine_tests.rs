@@ -307,3 +307,45 @@ fn finished_transfer_wins_over_pending_stop() {
     assert_eq!(effective_stop(Some(StopReason::Pause), &stopped), Some(StopReason::Pause));
     assert_eq!(effective_stop(None, &stopped), None);
 }
+
+fn progress_statuses(sink: &RecordingSink) -> Vec<JobState> {
+    sink.events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            EngineEvent::Progress(v) => Some(v.status.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn completed_is_reported_only_after_post_processing() {
+    let zip_dir = tempfile::tempdir().unwrap();
+    let zip_path = zip_dir.path().join("pack.zip");
+    make_zip(&zip_path);
+    let bytes = std::fs::read(&zip_path).unwrap();
+    let s = MockServer::start(MockOpts { size: bytes.len(), ranges: true, data: Some(bytes.clone()), ..Default::default() }).await;
+    let mut cfg = EngineConfig::default();
+    cfg.post.auto_extract = true;
+    let h = harness(cfg);
+    h.engine.enqueue(vec![h.new_job("pack.zip", s.url(), bytes.len() as i64, "b1")]).await;
+    h.wait_until("completed", all(JobState::Completed)).await;
+    assert!(h.out.path().join("pack").join("inner.txt").exists(), "Completed must mean post-processing is done");
+    let statuses = progress_statuses(&h.sink);
+    let first_completed = statuses.iter().position(|s| *s == JobState::Completed).expect("a Completed event");
+    assert!(
+        !statuses[first_completed..].contains(&JobState::Extracting),
+        "went Completed → Extracting: {statuses:?}"
+    );
+}
+
+#[tokio::test]
+async fn without_post_processing_goes_straight_to_completed() {
+    let s = MockServer::start(MockOpts { size: 100_000, ranges: true, ..Default::default() }).await;
+    let h = harness(EngineConfig::default()); // auto_extract and auto_organize off
+    h.engine.enqueue(vec![h.new_job("a.bin", s.url(), 100_000, "b1")]).await;
+    h.wait_until("completed", all(JobState::Completed)).await;
+    assert!(!progress_statuses(&h.sink).contains(&JobState::Extracting));
+}
