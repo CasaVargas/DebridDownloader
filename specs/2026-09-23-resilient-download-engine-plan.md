@@ -1871,7 +1871,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `fn plan_segments(total: u64, max: u32, min_segment: u64) -> Vec<SegmentState>`
   - `fn build_client(cfg: &TransferConfig) -> reqwest::Client`
 
-- [ ] **Step 1: Write the failing tests (happy path + Review Focus 2–5)**
+- [x] **Step 1: Write the failing tests (happy path + Review Focus 2–5)**
 
 `engine/tests/transfer_tests.rs`:
 ```rust
@@ -2054,12 +2054,12 @@ async fn complete_part_finalizes_without_network() {
 ```
 Add `pub mod transfer_tests;` to `engine/tests/mod.rs`.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::transfer_tests`
 Expected: FAIL — `run_transfer`, `TransferDeps`, `plan_segments`, `build_client` not found.
 
-- [ ] **Step 3: Implement the transfer**
+- [x] **Step 3: Implement the transfer**
 
 Append to `src-tauri/src/engine/transfer.rs` (keep the existing `TransferConfig` + `Default` at the top; add these `use` lines above it):
 ```rust
@@ -2608,12 +2608,12 @@ fn try_split(
 ```
 If `fs4::available_space` doesn't resolve for the pinned version, check the crate docs (context7 `fs4`) for the free-space function name — only that one call changes.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::transfer_tests`
 Expected: 9 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/engine
