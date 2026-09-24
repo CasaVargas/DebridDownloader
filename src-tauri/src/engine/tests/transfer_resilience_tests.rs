@@ -198,3 +198,26 @@ async fn tail_is_split_across_free_workers() {
     assert!(max_segments > 2, "expected a split, max segments seen = {max_segments}");
     assert_eq!(read(&j.destination), s.data());
 }
+
+#[tokio::test]
+async fn forbidden_under_connection_limit_halves_segments_instead_of_refreshing() {
+    let s = MockServer::start(MockOpts {
+        size: 1_000_000,
+        ranges: true,
+        conn_limit: Some(2),
+        conn_limit_forbidden: true,
+        chunk_delay: Some(Duration::from_millis(1)),
+        ..Default::default()
+    })
+    .await;
+    let dir = tempfile::tempdir().unwrap();
+    let refresher = no_refresh();
+    let mut d = deps(refresher.clone());
+    d.cfg.segments_per_file = 8;
+    let j = http_job(&dir, "a.bin", s.url(), 1_000_000);
+    let (r, ups) = run(j.clone(), d).await;
+    assert_eq!(r, Ok(TransferOutcome::Finished));
+    assert_eq!(refresher.calls(), 0, "a 403 while other segments stream is a connection limit, not an expired link");
+    assert!(ups.iter().any(|u| matches!(u, TransferUpdate::MaxSegments(_))));
+    assert_eq!(read(&j.destination), s.data());
+}

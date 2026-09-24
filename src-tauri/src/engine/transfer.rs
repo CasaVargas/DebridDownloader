@@ -515,6 +515,16 @@ async fn run_segments(
                         not_before = Some(Instant::now() + retry_after.unwrap_or(std::time::Duration::from_secs(1)));
                         pending.push_front(i);
                     }
+                    // Spec §6: a 403 while other segments of this link are streaming means the link is
+                    // valid and the host is capping connections — shed a segment instead of refreshing.
+                    Err(SegmentError::DeadLink(w)) if w == "HTTP 403" && !active.is_empty() => {
+                        cap = (cap / 2).max(1).min(active.len().max(1));
+                        job.max_segments = cap as u32;
+                        let _ = tx.send(TransferUpdate::MaxSegments(cap as u32));
+                        log::warn!("{} refused a connection (403) with {} active; using {} segments", job.id, active.len(), cap);
+                        not_before = Some(Instant::now() + std::time::Duration::from_secs(1));
+                        pending.push_front(i);
+                    }
                     Err(SegmentError::DeadLink(w)) => {
                         stop_workers(&run_cancel, &mut set, &mut seg_rx, job, &ends, tx).await;
                         return Err(RunError::DeadLink(w));

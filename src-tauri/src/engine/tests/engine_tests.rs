@@ -231,3 +231,79 @@ async fn remove_completed_keeps_the_file() {
     h.wait_until("removed", |l| l.is_empty()).await;
     assert!(std::path::Path::new(&list[0].destination).exists());
 }
+
+// ── Final-review fixes ──
+
+#[tokio::test]
+async fn requeue_of_failed_destination_reuses_the_job() {
+    let s = MockServer::start(MockOpts {
+        size: 200_000, ranges: true, drop_after: Some(10), drop_times: 100_000, ..Default::default()
+    })
+    .await;
+    let h = harness(EngineConfig::default());
+    let a = h.engine.enqueue(vec![h.new_job("a.bin", s.url(), 200_000, "b1")]).await;
+    h.wait_until("failed", |l| matches!(l[0].status, JobState::Failed(_))).await;
+    s.update(|o| o.drop_times = 0);
+    let b = h.engine.enqueue(vec![h.new_job("a.bin", s.url(), 200_000, "b2")]).await;
+    assert_eq!(a, b, "re-adding a failed file must reuse its job, not create a second writer of the same .part");
+    let list = h.wait_until("completed", all(JobState::Completed)).await;
+    assert_eq!(list.len(), 1);
+    assert_eq!(read(&list[0].destination), s.data());
+}
+
+#[tokio::test]
+async fn clear_keeps_part_of_live_job_with_same_destination() {
+    use super::store_tests::job;
+    use crate::engine::store::Store;
+    let data = tempfile::tempdir().unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let dest = out.path().join("a.bin").to_string_lossy().to_string();
+    std::fs::write(format!("{dest}.part"), vec![0u8; 100]).unwrap();
+    let failed = job("old", JobState::Failed("x".into()), &dest);
+    let paused = job("live", JobState::Paused, &dest);
+    Store::new(data.path()).save(&[failed, paused]).unwrap();
+    let h = start(data, out, EngineConfig::default());
+    h.wait_until("loaded", |l| l.len() == 2).await;
+    h.engine.clear_inactive();
+    h.wait_until("failed job cleared", |l| l.len() == 1 && l[0].id == "live").await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(std::path::Path::new(&format!("{dest}.part")).exists(), "the paused job's .part must survive Clear");
+}
+
+#[tokio::test]
+async fn offline_with_a_queue_does_not_consume_attempts() {
+    let port = free_port();
+    let h = harness(EngineConfig { max_concurrent: 2, ..Default::default() });
+    h.engine
+        .enqueue((0..5).map(|i| h.new_job(&format!("a{i}"), format!("http://127.0.0.1:{port}/file/t0"), 100_000, "A")).collect())
+        .await;
+    h.wait_until("several waiting for network", |l| l.iter().filter(|j| j.waiting_for_network).count() >= 3).await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let list = h.engine.list().await;
+    assert!(list.iter().all(|j| j.attempt == 0), "attempts consumed while offline: {list:#?}");
+}
+
+#[tokio::test]
+async fn remove_then_pause_still_removes() {
+    let s = MockServer::start(slow(2_000_000)).await;
+    let h = harness(EngineConfig::default());
+    let ids = h.engine.enqueue(vec![h.new_job("a.bin", s.url(), 2_000_000, "b1")]).await;
+    h.wait_until("downloading", |l| l[0].downloaded_bytes > 0).await;
+    h.engine.remove(&ids[0]);
+    h.engine.pause(&ids[0]);
+    h.wait_until("removed", |l| l.is_empty()).await;
+}
+
+#[test]
+fn finished_transfer_wins_over_pending_stop() {
+    use crate::engine::actor::{effective_stop, StopReason};
+    use crate::engine::transfer::{TransferError, TransferOutcome};
+    let fin: Result<TransferOutcome, TransferError> = Ok(TransferOutcome::Finished);
+    let stopped: Result<TransferOutcome, TransferError> = Ok(TransferOutcome::Stopped);
+    assert_eq!(effective_stop(Some(StopReason::Pause), &fin), None);
+    assert_eq!(effective_stop(Some(StopReason::Cancel), &fin), None);
+    assert_eq!(effective_stop(Some(StopReason::Shutdown), &fin), None);
+    assert_eq!(effective_stop(Some(StopReason::Remove), &fin), Some(StopReason::Remove));
+    assert_eq!(effective_stop(Some(StopReason::Pause), &stopped), Some(StopReason::Pause));
+    assert_eq!(effective_stop(None, &stopped), None);
+}

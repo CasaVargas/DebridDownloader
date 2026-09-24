@@ -33,6 +33,8 @@ pub struct MockOpts {
     pub stall_times: usize,
     /// Reply 429 when this many bodies are already streaming.
     pub conn_limit: Option<usize>,
+    /// Refuse over-limit connections with 403 instead of 429 (some hosts do).
+    pub conn_limit_forbidden: bool,
     /// Reply with an HTML page instead of the file.
     pub html: bool,
     /// Sleep between 16 KiB chunks.
@@ -173,6 +175,9 @@ async fn handler(State(inner): State<Shared>, Path(token): Path<String>, headers
     }
     if let Some(limit) = g.opts.conn_limit {
         if g.active >= limit {
+            if g.opts.conn_limit_forbidden {
+                return (StatusCode::FORBIDDEN, "too many connections").into_response();
+            }
             return (StatusCode::TOO_MANY_REQUESTS, [(header::RETRY_AFTER, "0")], "").into_response();
         }
     }

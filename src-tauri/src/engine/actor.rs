@@ -43,11 +43,33 @@ pub enum EngineMsg {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum StopReason {
+pub(crate) enum StopReason {
     Pause,
     Cancel,
     Remove,
     Shutdown,
+}
+
+impl StopReason {
+    /// Higher wins when two stops race (e.g. Remove then Pause).
+    fn rank(self) -> u8 {
+        match self {
+            StopReason::Pause => 0,
+            StopReason::Shutdown => 1,
+            StopReason::Cancel => 2,
+            StopReason::Remove => 3,
+        }
+    }
+}
+
+/// The stop that actually applies once a transfer reports back. A transfer that already
+/// finished (file renamed into place) stays finished unless the job is being removed.
+pub(crate) fn effective_stop(stop: Option<StopReason>, result: &Result<TransferOutcome, TransferError>) -> Option<StopReason> {
+    match (stop, result) {
+        (Some(StopReason::Remove), _) => Some(StopReason::Remove),
+        (_, Ok(TransferOutcome::Finished)) => None,
+        (s, _) => s,
+    }
 }
 
 struct Running {
@@ -56,7 +78,8 @@ struct Running {
     downloaded: u64,
     speed: f64,
     segments_active: u32,
-    last_bytes_at: Instant,
+    /// When bytes last arrived; None until the first bytes (a fresh job is not "moving").
+    last_bytes_at: Option<Instant>,
 }
 
 struct SaveReq {
@@ -175,7 +198,9 @@ impl Actor {
             EngineMsg::Shutdown(reply) => {
                 self.shutting_down = Some(reply);
                 for r in self.running.values_mut() {
-                    r.stop = Some(StopReason::Shutdown);
+                    if r.stop.is_none_or(|s| StopReason::Shutdown.rank() > s.rank()) {
+                        r.stop = Some(StopReason::Shutdown);
+                    }
                     r.cancel.cancel();
                 }
                 if self.running.is_empty() {
@@ -255,6 +280,25 @@ impl Actor {
     fn enqueue(&mut self, n: NewJob) -> String {
         if let Some(existing) = self.jobs.iter().find(|j| j.destination == n.destination && !j.state.is_terminal()) {
             return existing.id.clone();
+        }
+        // Re-adding a failed/cancelled file revives that job (fresh link, resume from checkpoint)
+        // instead of creating a second writer of the same `.part`.
+        if let Some(j) = self
+            .jobs
+            .iter_mut()
+            .rev()
+            .find(|j| j.destination == n.destination && matches!(j.state, JobState::Failed(_) | JobState::Cancelled))
+        {
+            j.url = n.url;
+            j.source = n.source;
+            j.batch_id = n.batch_id;
+            j.state = JobState::Pending;
+            j.attempt = 0;
+            j.error = None;
+            j.retry_at = None;
+            j.size_resets = 0;
+            j.updated_at = now_ms();
+            return j.id.clone();
         }
         let job = Job::from_new(n, uuid::Uuid::new_v4().to_string(), now_ms());
         let id = job.id.clone();
@@ -352,7 +396,7 @@ impl Actor {
                 downloaded: snapshot.downloaded(),
                 speed: 0.0,
                 segments_active: 0,
-                last_bytes_at: Instant::now(),
+                last_bytes_at: None,
             },
         );
         let tx = self.tx.clone();
@@ -404,7 +448,7 @@ impl Actor {
             TransferUpdate::Progress { downloaded, speed, segments_active } => {
                 if let Some(r) = self.running.get_mut(id) {
                     if downloaded > r.downloaded {
-                        r.last_bytes_at = Instant::now();
+                        r.last_bytes_at = Some(Instant::now());
                         self.offline.remove(id);
                     }
                     r.downloaded = downloaded;
@@ -444,7 +488,15 @@ impl Actor {
         self.emit(id, force);
     }
 
-    fn delete_part(job: &Job) {
+    /// True when a different unfinished job writes to the same destination (and thus the same `.part`).
+    fn destination_busy(&self, job: &Job) -> bool {
+        self.jobs.iter().any(|o| o.id != job.id && o.destination == job.destination && !o.state.is_terminal())
+    }
+
+    fn delete_part(&self, job: &Job) {
+        if self.destination_busy(job) {
+            return; // another live job owns this .part
+        }
         let part = job.part_path();
         tokio::spawn(async move {
             let _ = tokio::fs::remove_file(part).await;
@@ -468,7 +520,7 @@ impl Actor {
     }
 
     fn on_transfer_done(&mut self, id: &str, result: Result<TransferOutcome, TransferError>) {
-        let stop = self.running.remove(id).and_then(|r| r.stop);
+        let stop = effective_stop(self.running.remove(id).and_then(|r| r.stop), &result);
         let Some(idx) = self.jobs.iter().position(|j| j.id == id) else {
             self.schedule();
             return;
@@ -477,12 +529,12 @@ impl Actor {
             (Some(StopReason::Shutdown), _) => {} // stays Downloading → resumes next launch
             (Some(StopReason::Pause), _) => self.jobs[idx].state = JobState::Paused,
             (Some(StopReason::Cancel), _) => {
-                Self::delete_part(&self.jobs[idx]);
+                self.delete_part(&self.jobs[idx]);
                 self.jobs[idx].segments.clear();
                 self.jobs[idx].state = JobState::Cancelled;
             }
             (Some(StopReason::Remove), _) => {
-                Self::delete_part(&self.jobs[idx]);
+                self.delete_part(&self.jobs[idx]);
                 self.jobs.remove(idx);
                 self.offline.remove(id);
                 self.sink.emit(EngineEvent::ListChanged);
@@ -509,7 +561,7 @@ impl Actor {
             (None, Err(TransferError::Transient(m))) => self.backoff(idx, m),
             (None, Err(TransferError::Offline(m))) => {
                 let idle = self.transfer_cfg.idle_timeout;
-                let nobody_else_moving = self.running.values().all(|r| r.last_bytes_at.elapsed() > idle);
+                let nobody_else_moving = self.running.values().all(|r| r.last_bytes_at.is_none_or(|t| t.elapsed() > idle));
                 if nobody_else_moving {
                     log::info!("Download {} waiting for network: {}", id, m);
                     self.offline.insert(id.to_string());
@@ -633,7 +685,7 @@ impl Actor {
             }
             Control::ClearInactive => {
                 for j in self.jobs.iter().filter(|j| matches!(j.state, JobState::Failed(_))) {
-                    Self::delete_part(j);
+                    self.delete_part(j);
                 }
                 self.jobs.retain(|j| {
                     matches!(j.state, JobState::Pending | JobState::Downloading | JobState::Paused | JobState::Extracting)
@@ -652,7 +704,9 @@ impl Actor {
 
     fn stop_running(&mut self, id: &str, reason: StopReason) -> bool {
         if let Some(r) = self.running.get_mut(id) {
-            r.stop = Some(reason);
+            if r.stop.is_none_or(|s| reason.rank() > s.rank()) {
+                r.stop = Some(reason);
+            }
             r.cancel.cancel();
             return true;
         }
@@ -687,19 +741,28 @@ impl Actor {
         if self.stop_running(id, StopReason::Cancel) {
             return;
         }
+        let mut cancelled = None;
         if let Some(j) = self.job_mut(id) {
             if matches!(j.state, JobState::Pending | JobState::Paused) {
                 j.state = JobState::Cancelled;
                 j.segments.clear();
-                let snapshot = j.clone();
-                Self::delete_part(&snapshot);
+                cancelled = Some(j.clone());
             }
+        }
+        if let Some(snapshot) = cancelled {
+            self.delete_part(&snapshot);
         }
         self.offline.remove(id);
         self.emit(id, true);
     }
 
     fn retry(&mut self, id: &str) {
+        if let Some(j) = self.jobs.iter().find(|j| j.id == id) {
+            if j.state.is_terminal() && self.destination_busy(j) {
+                log::warn!("Not retrying {}: another download of {} is active", id, j.destination);
+                return;
+            }
+        }
         if let Some(j) = self.job_mut(id) {
             if matches!(j.state, JobState::Failed(_) | JobState::Cancelled) || (j.state == JobState::Pending && j.retry_at.is_some()) {
                 j.state = JobState::Pending;
@@ -719,7 +782,7 @@ impl Actor {
         if let Some(idx) = self.jobs.iter().position(|j| j.id == id) {
             let job = self.jobs.remove(idx);
             if job.state != JobState::Completed {
-                Self::delete_part(&job); // never touch the finished file
+                self.delete_part(&job); // never touch the finished file
             }
             self.offline.remove(id);
             self.sink.emit(EngineEvent::ListChanged);
