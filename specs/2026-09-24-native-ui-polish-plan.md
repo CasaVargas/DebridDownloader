@@ -1676,14 +1676,14 @@ Behavior, data fetching, IPC calls and state logic must not change. Only markup 
 
 **Files:** Modify `src/pages/CompletedPage.tsx`, `src/test/no-style-literals.test.ts`
 
-- [ ] **Step 1:** Append the file to `CLEAN_FILES`. Run `npm test`; it fails.
-- [ ] **Step 2:** Apply the recipe.
+- [x] **Step 1:** Append the file to `CLEAN_FILES`. Run `npm test`; it fails.
+- [x] **Step 2:** Apply the recipe.
   - Toolbar: "Completed", subtitle with count/total.
   - Rows: name, size, destination (`text-sm text-fg-muted truncate`), with `IconButton`s for Show in Folder / Play (when streamable) / Remove (`danger`).
   - Selecting a row opens `Inspector id="completed"` showing destination, size and completion time, with a footer of Show in Folder / Remove.
-- [ ] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
-- [ ] **Step 4: Screenshots.** Empty, populated, with the inspector. Both themes, two accents.
-- [ ] **Step 5: Commit** `feat(ui): restyle Completed`.
+- [x] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
+- [x] **Step 4: Screenshots.** Empty, populated, with the inspector. Both themes, two accents.
+- [x] **Step 5: Commit** `feat(ui): restyle Completed`.
 
 ---
 

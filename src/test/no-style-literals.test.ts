@@ -42,6 +42,8 @@ export const CLEAN_FILES: string[] = [
   "src/pages/SearchPage.tsx",
   // Task 6: Watch List
   "src/pages/WatchListPage.tsx",
+  // Task 7: Completed
+  "src/pages/CompletedPage.tsx",
 ];
 
 const RULES: { name: string; re: RegExp }[] = [
