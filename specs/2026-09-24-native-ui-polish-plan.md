@@ -73,11 +73,11 @@
 **Interfaces:**
 - Produces: `npm test` (Vitest, jsdom). `CLEAN_FILES` in `src/test/no-style-literals.test.ts`: every later task appends the files it migrates.
 
-- [ ] **Step 1: Create the branch**
+- [x] **Step 1: Create the branch**
 
 Work in a fresh worktree off the branch that holds the specs (`claude/app-supercharging-ideas-e36ea4` or its successor on `main`). Name the branch `feat/native-ui-polish`.
 
-- [ ] **Step 2: Install dev dependencies and Radix**
+- [x] **Step 2: Install dev dependencies and Radix**
 
 ```bash
 npm install @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-context-menu @radix-ui/react-select @radix-ui/react-tooltip
@@ -85,7 +85,7 @@ npm install -D vitest jsdom @testing-library/react @testing-library/jest-dom @ty
 ```
 Add to `package.json` `"scripts"`: `"test": "vitest run"`.
 
-- [ ] **Step 3: Configure Vitest**
+- [x] **Step 3: Configure Vitest**
 
 `vitest.config.ts`:
 ```ts
@@ -106,7 +106,7 @@ export default defineConfig({
 import "@testing-library/jest-dom/vitest";
 ```
 
-- [ ] **Step 4: Write the guard test (starts empty and passing)**
+- [x] **Step 4: Write the guard test (starts empty and passing)**
 
 `src/test/no-style-literals.test.ts`:
 ```ts
@@ -159,12 +159,12 @@ describe("no raw style literals in migrated files", () => {
 ```
 SVG `d="..."` attributes don't contain `px` or `#`, so icons pass without exceptions. Use `// style-literal-ok` only for values that genuinely can't be tokens (e.g. a video element's intrinsic aspect ratio), and justify each one in the commit message.
 
-- [ ] **Step 5: Run it**
+- [x] **Step 5: Run it**
 
 Run: `npm test`
 Expected: 1 passed (the detector test).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add package.json package-lock.json vitest.config.ts src/test
