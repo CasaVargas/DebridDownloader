@@ -10,7 +10,7 @@ export { Spinner } from "./Spinner";
 export { EmptyState } from "./EmptyState";
 export { Toolbar } from "./Toolbar";
 export { Inspector } from "./Inspector";
-export { SettingsGroup, SettingsRow } from "./SettingsGroup";
+export { SettingsField, SettingsGroup, SettingsRow } from "./SettingsGroup";
 export { Dialog } from "./Dialog";
 export { Menu, type MenuItem } from "./Menu";
 export { ContextMenu } from "./ContextMenu";

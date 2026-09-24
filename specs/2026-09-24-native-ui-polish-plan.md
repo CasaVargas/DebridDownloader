@@ -1995,28 +1995,28 @@ Move each block from `src/pages/SettingsPage.tsx` into its section file. Section
 
 Move each block's local state and handlers along with it: e.g. tracker form state and `handleAddTracker`/`handleTestTracker`/… go to `SearchSettings`; media-server state and `handleTestServer` go to `LibrarySettings`; provider state and `handleSwitchProvider` go to `AccountSettings`. Keep the logic verbatim and replace only the markup.
 
-- [ ] **Step 1:** Append the five section files to `CLEAN_FILES`. Run `npm test`; the stubs pass, so the new content must stay clean as you move it in.
-- [ ] **Step 2: General.**
+- [x] **Step 1:** Append the five section files to `CLEAN_FILES`. Run `npm test`; the stubs pass, so the new content must stay clean as you move it in.
+- [x] **Step 2: General.**
   - `SettingsGroup title="Startup"`: Launch at login, Default magnet handler, Notify when download completes. Each is a `SettingsRow` + `Toggle`, with handlers and descriptions verbatim from the old `ToggleRow`s.
   - `SettingsGroup title="Appearance"`:
     - A Theme row with a segmented control: three `Button size="sm"` in a `rounded-md border border-border p-0.5` wrapper; the selected one is `variant="primary"`, the others `ghost`. Options System / Light / Dark, via `appearance.setTheme`.
     - An Accent row: six swatch buttons `size-5 rounded-full` with `style={{ background: ACCENTS[a][resolvedTheme] }}` (the hex lives in `accents.ts`, not in this file), `aria-label={ACCENTS[a].label}` and `aria-pressed`. The selected one gets `outline-2 outline-offset-2 outline-fg`.
-- [ ] **Step 3: Account.**
+- [x] **Step 3: Account.**
   - One `SettingsGroup`: an Active provider `Select` over `providers` (labels via `providerName`), calling `handleSwitchProvider` with the switching state shown by `Spinner size="sm"`.
   - An account row showing username, plan and days left, with a Sign out `Button variant="danger" size="sm"`.
-- [ ] **Step 4: Library.**
+- [x] **Step 4: Library.**
   - Groups: "Organize" (auto-organize toggle, Movies folder, TV folder, TMDB key) · "Media servers" (Plex / Jellyfin / Emby URL + token `Input`s, each with a Test `Button size="sm"` and a result line in `text-sm text-success`/`text-danger`) · "Symlink mode" (toggle, mount path, library folder).
   - Folder rows: the path in `text-sm text-fg-muted truncate` + a "Choose…" secondary button.
   - Debounced text inputs keep their existing debounce logic.
-- [ ] **Step 5: Search.**
+- [x] **Step 5: Search.**
   - Group "Trackers": one row per tracker (name, type, URL in `text-sm text-fg-muted`, enabled `Toggle`, Edit/Delete `IconButton`s).
   - "Add tracker" is a primary button that opens a `Dialog` holding the existing add/edit form: name `Input`, URL `Input`, type `Select`, API key `Input`, Test (secondary) with the result line, and Save (primary) / Cancel (ghost).
   - Group "Built-in": TorBox Search toggle.
-- [ ] **Step 6: About & Backup.**
+- [x] **Step 6: About & Backup.**
   - Group "About": version (`getVersion`), Check for updates (secondary) with the existing update/download/relaunch flow and its progress shown as a progress bar, plus links (GitHub, Discussions, Releases) as `text-accent` links.
   - Group "Support": the sponsor link, and "More from CasaVargas" (Beltr) as a plain row with a link. No promo art beyond the existing icon image.
   - Group "Backup": Export (with the include-credentials `Toggle`) and Import buttons, logic verbatim. Replace the `document.getElementById("include-credentials")` lookup with React state.
-- [ ] **Step 7: Retire the legacy page.** Check off every setting from the old page against the new sections using this checklist, and verify each one **persists across an app restart** in `npm run tauri dev`:
+- [x] **Step 7: Retire the legacy page.** Check off every setting from the old page against the new sections using this checklist, and verify each one **persists across an app restart** in `npm run tauri dev`:
   - Provider
   - download folder, subfolders, auto-start, concurrency, speed limit, extraction ×2 *(Downloads, which stays on `/settings-legacy` until Task 12)*
   - auto-organize, movies, TV, TMDB
@@ -2029,9 +2029,9 @@ Move each block's local state and handlers along with it: e.g. tracker form stat
   - export/import
 
   Keep `/settings-legacy` routed only for the Downloads block until Task 12.
-- [ ] **Step 8:** Run `npm test && npx tsc --noEmit`; everything passes, including `settings-routes` now that real sections render. If a section imports a Tauri plugin that bypasses `@tauri-apps/api/core` and throws in jsdom, add a `vi.mock` for that plugin module in `settings-routes.test.tsx` (resolve to harmless defaults). Never skip the test.
-- [ ] **Step 9: Screenshots.** Each section, both themes, two accents, with the tracker dialog open.
-- [ ] **Step 10: Commit** `feat(ui): move settings into General, Account, Library, Search, About & Backup`.
+- [x] **Step 8:** Run `npm test && npx tsc --noEmit`; everything passes, including `settings-routes` now that real sections render. If a section imports a Tauri plugin that bypasses `@tauri-apps/api/core` and throws in jsdom, add a `vi.mock` for that plugin module in `settings-routes.test.tsx` (resolve to harmless defaults). Never skip the test.
+- [x] **Step 9: Screenshots.** Each section, both themes, two accents, with the tracker dialog open.
+- [x] **Step 10: Commit** `feat(ui): move settings into General, Account, Library, Search, About & Backup`.
 
 ---
 
