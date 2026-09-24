@@ -658,7 +658,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `Tooltip` props: `{ content: string; children: ReactElement }`; `TooltipProvider`
   - `isMac: boolean`, `formatCombo(combo: string): string` from `src/lib/platform.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `src/test/primitives.test.tsx`:
 ```tsx
@@ -703,12 +703,12 @@ describe("primitives", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npm test -- primitives`
 Expected: FAIL — cannot resolve `../components/ui`.
 
-- [ ] **Step 3: Write `src/lib/platform.ts`**
+- [x] **Step 3: Write `src/lib/platform.ts`**
 
 ```ts
 export const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -726,7 +726,7 @@ export function formatCombo(combo: string, mac: boolean = isMac): string {
 ```
 (`"/"` has no `+`, so it's returned unchanged; `toUpperCase` leaves it alone.)
 
-- [ ] **Step 4: Write the primitives**
+- [x] **Step 4: Write the primitives**
 
 `src/components/ui/cn.ts`:
 ```ts
@@ -1257,24 +1257,24 @@ export { Select } from "./Select";
 export { Tooltip, TooltipProvider } from "./Tooltip";
 ```
 
-- [ ] **Step 5: Mount the tooltip provider**
+- [x] **Step 5: Mount the tooltip provider**
 
 In `src/App.tsx`, import `{ TooltipProvider } from "./components/ui"` and wrap the returned tree: `<TooltipProvider><MiniPlayerProvider>…</MiniPlayerProvider></TooltipProvider>`.
 
-- [ ] **Step 6: Add the primitives to the guard**
+- [x] **Step 6: Add the primitives to the guard**
 
 Append to `CLEAN_FILES` in `src/test/no-style-literals.test.ts`: every file in `src/components/ui/` and `src/lib/platform.ts`. Do **not** add `src/theme/accents.ts` or `src/styles/tokens.css`: they are where the raw values legitimately live.
 
-- [ ] **Step 7: Run tests and type-check**
+- [x] **Step 7: Run tests and type-check**
 
 Run: `npm test && npx tsc --noEmit`
 Expected: all pass. If a Tailwind class like `size-1.75` or `w-140` doesn't generate, check it in the running app (Step 8). Tailwind v4 generates arbitrary multiples of `--spacing`, so they should.
 
-- [ ] **Step 8: Visual check**
+- [x] **Step 8: Visual check**
 
 Temporarily render one of each primitive at the top of `TorrentsPage` in dev, then screenshot it in dark and light (emerald + rose), with a Dialog, Menu, Select and Tooltip open. Compare against `tokens.html` from the mockups. **Remove the temporary render before committing.**
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A src/components/ui src/lib src/test src/App.tsx

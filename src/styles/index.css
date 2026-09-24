@@ -3,30 +3,33 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-html, body, #root { height: 100%; }
+/* Globals live in the base layer so Tailwind utilities (e.g. outline-none) can override them. */
+@layer base {
+  html, body, #root { height: 100%; }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 18px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 18px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  :focus:not(:focus-visible) { outline: none; }
+
+  ::selection { background: var(--selected); }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 }
-
-*, *::before, *::after { box-sizing: border-box; }
-
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-:focus:not(:focus-visible) { outline: none; }
-
-::selection { background: var(--selected); }
-
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; border: 2px solid var(--bg); }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 .tabular { font-variant-numeric: tabular-nums; }
 

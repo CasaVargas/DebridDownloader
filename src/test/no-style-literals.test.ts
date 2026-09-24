@@ -6,7 +6,29 @@ import { describe, expect, it } from "vitest";
  * Files that have been migrated to tokens + primitives. Each screen task appends its files.
  * Task 13 replaces this list with "every file under src/pages and src/components".
  */
-export const CLEAN_FILES: string[] = [];
+export const CLEAN_FILES: string[] = [
+  // Task 2: primitives
+  "src/components/ui/cn.ts",
+  "src/components/ui/Button.tsx",
+  "src/components/ui/IconButton.tsx",
+  "src/components/ui/Input.tsx",
+  "src/components/ui/Toggle.tsx",
+  "src/components/ui/StatusDot.tsx",
+  "src/components/ui/CountBadge.tsx",
+  "src/components/ui/Kbd.tsx",
+  "src/components/ui/Spinner.tsx",
+  "src/components/ui/EmptyState.tsx",
+  "src/components/ui/Toolbar.tsx",
+  "src/components/ui/Inspector.tsx",
+  "src/components/ui/SettingsGroup.tsx",
+  "src/components/ui/Dialog.tsx",
+  "src/components/ui/Menu.tsx",
+  "src/components/ui/ContextMenu.tsx",
+  "src/components/ui/Select.tsx",
+  "src/components/ui/Tooltip.tsx",
+  "src/components/ui/index.ts",
+  "src/lib/platform.ts",
+];
 
 const RULES: { name: string; re: RegExp }[] = [
   { name: "hex color", re: /#[0-9a-fA-F]{3,8}\b/ },

@@ -16,6 +16,7 @@ import { MiniPlayerProvider, useMiniPlayer } from "./contexts/MiniPlayerContext"
 import MiniPlayer from "./components/MiniPlayer";
 import Toast from "./components/Toast";
 import Layout from "./components/Layout";
+import { TooltipProvider } from "./components/ui";
 import AuthPage from "./pages/AuthPage";
 import TorrentsPage from "./pages/TorrentsPage";
 import DownloadsPage from "./pages/DownloadsPage";
@@ -173,6 +174,7 @@ function App() {
   }
 
   return (
+    <TooltipProvider>
     <MiniPlayerProvider>
       <AuthContext.Provider value={authState}>
         <BrowserRouter>
@@ -204,6 +206,7 @@ function App() {
         <MiniPlayerLogoutCleanup />
       </AuthContext.Provider>
     </MiniPlayerProvider>
+    </TooltipProvider>
   );
 }
 
