@@ -1450,7 +1450,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `async fn run_segment(ctx: &SegmentCtx, index: usize, start: u64, done: u64, end: Arc<AtomicU64>, tx: &mpsc::UnboundedSender<SegmentMsg>) -> Result<u64, SegmentError>` — returns final `done`.
   - helpers: `classify_reqwest(reqwest::Error) -> SegmentError`, `parse_retry_after(&HeaderMap) -> Option<Duration>`, `is_html(&HeaderMap) -> bool`, `content_range_start(&HeaderMap) -> Option<u64>`, `content_range_total(&HeaderMap) -> Option<u64>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `engine/tests/segment_tests.rs`:
 ```rust
@@ -1614,12 +1614,12 @@ async fn cancel_checkpoints_and_returns_cancelled() {
 ```
 Add `mod segment_tests;` to `engine/tests/mod.rs` and `pub mod segment;` to `engine/mod.rs`.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::segment_tests`
 Expected: FAIL — module `segment` not found.
 
-- [ ] **Step 3: Implement `engine/segment.rs`**
+- [x] **Step 3: Implement `engine/segment.rs`**
 
 ```rust
 //! One Range worker: stream → limiter → sequential writes at an offset → durable checkpoints.
@@ -1838,12 +1838,12 @@ pub async fn run_segment(
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::segment_tests`
 Expected: 9 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/engine
