@@ -1618,8 +1618,8 @@ Behavior, data fetching, IPC calls and state logic must not change. Only markup 
 **Interfaces:**
 - Consumes: `Toolbar`, `Inspector`, `Button`, `IconButton`, `StatusDot`, `ContextMenu`, `Menu`, `Dialog`, `EmptyState`, `Spinner` (Task 2); events from Task 3; `DataTable.onKeyboardSelect`.
 
-- [ ] **Step 1:** Append `src/pages/TorrentsPage.tsx` and `src/components/AddTorrentModal.tsx` to `CLEAN_FILES`. Run `npm test`, which fails and lists about 28 literals.
-- [ ] **Step 2: Torrents page.** Apply the recipe, plus:
+- [x] **Step 1:** Append `src/pages/TorrentsPage.tsx` and `src/components/AddTorrentModal.tsx` to `CLEAN_FILES`. Run `npm test`, which fails and lists about 28 literals.
+- [x] **Step 2: Torrents page.** Apply the recipe, plus:
   - **Toolbar:** title "Torrents", subtitle `"{n} items · {total size}"`, filter, and the action `<Button variant="primary" kbd="Mod+N" onClick={openAdd}>Add Torrent</Button>`.
   - Listen for `open-add-torrent` → `openAdd()`.
   - **Right-click menu:** replace the `contextMenu` state, its positioned `div` (around lines 684–740) and its Escape effect with a `ContextMenu` wrapping each row. `DataTable`'s row render gets it by wrapping the first column cell's content, or add a `rowWrapper?: (item, row: ReactNode) => ReactNode` prop to `DataTable` that defaults to identity. Menu items are the existing context actions with unchanged handlers.
@@ -1627,14 +1627,14 @@ Behavior, data fetching, IPC calls and state logic must not change. Only markup 
   - **Detail view:** replace the `SlideOverPanel` detail with `Inspector id="torrents"`:
     - body: file list, a definition list of size / added / status / hash
     - footer: Download (primary), Stream (secondary, when available), Delete (danger)
-- [ ] **Step 3: Add Torrent dialog.** Rebuild `AddTorrentModal` on `Dialog`:
+- [x] **Step 3: Add Torrent dialog.** Rebuild `AddTorrentModal` on `Dialog`:
   - title "Add Torrent"
   - body: magnet `Input` (autofocused) + "Choose .torrent file…" secondary button
   - footer: Cancel (ghost) + Add (primary, disabled until input)
   - Keep its props and logic.
-- [ ] **Step 4:** Run `npm test && npx tsc --noEmit`; everything passes.
-- [ ] **Step 5: Screenshots.** Empty list, populated, a row selected with the inspector open, the right-click menu, the Add dialog. Dark and light, emerald and violet. Keyboard: ↑/↓ moves the selection, Enter runs the default action, ⌘N opens Add, Esc closes it, `/` focuses the filter.
-- [ ] **Step 6: Commit** `feat(ui): restyle Torrents and Add Torrent dialog` (with the trailer).
+- [x] **Step 4:** Run `npm test && npx tsc --noEmit`; everything passes.
+- [x] **Step 5: Screenshots.** Empty list, populated, a row selected with the inspector open, the right-click menu, the Add dialog. Dark and light, emerald and violet. Keyboard: ↑/↓ moves the selection, Enter runs the default action, ⌘N opens Add, Esc closes it, `/` focuses the filter.
+- [x] **Step 6: Commit** `feat(ui): restyle Torrents and Add Torrent dialog` (with the trailer).
 
 ---
 

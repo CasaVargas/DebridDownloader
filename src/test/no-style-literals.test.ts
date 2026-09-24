@@ -35,6 +35,9 @@ export const CLEAN_FILES: string[] = [
   "src/components/Toast.tsx",
   "src/hooks/useShortcut.ts",
   "src/lib/providers.ts",
+  // Task 4: Torrents
+  "src/pages/TorrentsPage.tsx",
+  "src/components/AddTorrentModal.tsx",
 ];
 
 const RULES: { name: string; re: RegExp }[] = [

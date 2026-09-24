@@ -1,10 +1,11 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type ReactElement, type ReactNode } from "react";
 import { cn, EmptyState, Spinner } from "./ui";
 
 export interface Column<T> {
   key: string;
   header: string;
-  width: string;
+  /** CSS grid track (e.g. "1fr") or a number of --spacing units. */
+  width: string | number;
   sortable?: boolean;
   render: (item: T) => ReactNode;
 }
@@ -17,6 +18,8 @@ interface DataTableProps<T> {
   onRowContextMenu?: (item: T, e: React.MouseEvent) => void;
   /** Called when ↑/↓ moves the selection; falls back to onRowClick. */
   onKeyboardSelect?: (item: T) => void;
+  /** Wraps each rendered row, e.g. in a ContextMenu. The wrapper owns right-click when set. */
+  rowWrapper?: (item: T, row: ReactElement) => ReactNode;
   selectedId?: string | null;
   sortKey?: string | null;
   sortDirection?: "asc" | "desc";
@@ -33,6 +36,7 @@ export default function DataTable<T>({
   onRowClick,
   onRowContextMenu,
   onKeyboardSelect,
+  rowWrapper,
   selectedId,
   sortKey,
   sortDirection,
@@ -41,7 +45,9 @@ export default function DataTable<T>({
   emptySubtext,
   loading,
 }: DataTableProps<T>) {
-  const gridTemplateColumns = columns.map((c) => c.width).join(" ");
+  const gridTemplateColumns = columns
+    .map((c) => (typeof c.width === "number" ? `calc(var(--spacing) * ${c.width})` : c.width))
+    .join(" ");
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
 
   // Keep the latest values for the window listeners without re-subscribing every render.
@@ -55,6 +61,8 @@ export default function DataTable<T>({
       const current = selectedId ? data.findIndex((d) => rowKey(d) === selectedId) : -1;
       const next = current === -1 ? 0 : Math.min(data.length - 1, Math.max(0, current + delta));
       const item = data[next];
+      // Advance immediately so fast key-repeat doesn't read a stale selection before React re-renders.
+      latest.current.selectedId = rowKey(item);
       (onKeyboardSelect ?? onRowClick)?.(item);
       rowRefs.current.get(rowKey(item))?.scrollIntoView({ block: "nearest" });
     };
@@ -119,7 +127,7 @@ export default function DataTable<T>({
       {data.map((item) => {
         const id = rowKey(item);
         const selected = selectedId === id;
-        return (
+        const row = (
           <div
             key={id}
             ref={(el) => {
@@ -129,10 +137,14 @@ export default function DataTable<T>({
             role="row"
             aria-selected={selected}
             onClick={() => onRowClick?.(item)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              onRowContextMenu?.(item, e);
-            }}
+            onContextMenu={
+              rowWrapper
+                ? undefined
+                : (e) => {
+                    e.preventDefault();
+                    onRowContextMenu?.(item, e);
+                  }
+            }
             className={cn(
               "grid min-h-7.5 cursor-default items-center gap-3 border-b border-border-subtle px-4 py-1",
               selected ? "bg-selected" : "hover:bg-raised",
@@ -146,6 +158,7 @@ export default function DataTable<T>({
             ))}
           </div>
         );
+        return rowWrapper ? <Fragment key={id}>{rowWrapper(item, row)}</Fragment> : row;
       })}
     </div>
   );

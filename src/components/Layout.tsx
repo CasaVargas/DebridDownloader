@@ -83,7 +83,11 @@ export default function Layout() {
   useShortcut("Mod+R", fire("refresh-list"));
   useShortcut("Mod+I", fire("toggle-inspector"));
   useShortcut("/", fire("focus-filter"));
-  useShortcut("Escape", fire("deselect-item"), { allowInInputs: true });
+  // Esc inside an open menu/dialog closes that layer only (Radix handles it), not the selection.
+  useShortcut("Escape", (e) => {
+    if (e.target instanceof Element && e.target.closest('[role="menu"],[role="dialog"],[role="listbox"]')) return;
+    fire("deselect-item")();
+  }, { allowInInputs: true });
   useShortcut(["Delete", "Backspace"], fire("delete-selected"));
   useShortcut("Enter", fire("action-selected"));
   useShortcut("Space", fire("toggle-selected"));
