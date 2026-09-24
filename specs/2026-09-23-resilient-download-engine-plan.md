@@ -3107,7 +3107,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `struct EngineDeps { data_dir: PathBuf, config: EngineConfig, sink: Arc<dyn EventSink>, refresher: Arc<dyn LinkRefresher>, remote: Arc<dyn RemoteRunner>, transfer: TransferConfig, timing: Timing }` + `EngineDeps::new(data_dir, config, sink, refresher, remote)` (defaults for `transfer`/`timing`).
   - `#[derive(Clone)] struct Engine` with: `fn start(deps: EngineDeps) -> Engine` (call inside a Tokio runtime); `async fn enqueue(&self, jobs: Vec<NewJob>) -> Vec<String>`; `async fn add_completed(&self, job: NewJob) -> String`; `async fn list(&self) -> Vec<JobView>`; `fn pause(&self, id: &str)`, `fn resume`, `fn cancel`, `fn retry`, `fn remove`; `fn pause_all(&self)`, `fn resume_all`, `fn retry_failed`, `fn cancel_all`, `fn clear_inactive`; `fn set_config(&self, cfg: EngineConfig)`; `async fn shutdown(&self)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `engine/tests/engine_tests.rs`:
 ```rust
@@ -3347,12 +3347,12 @@ async fn remove_completed_keeps_the_file() {
 ```
 Add `mod engine_tests;` to `engine/tests/mod.rs`.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::engine_tests`
 Expected: FAIL — `Engine`, `EngineDeps`, `Timing` not found.
 
-- [ ] **Step 3: Add `Engine`, `EngineDeps`, `Timing` to `engine/mod.rs`**
+- [x] **Step 3: Add `Engine`, `EngineDeps`, `Timing` to `engine/mod.rs`**
 
 Add `pub mod actor;` to the module list, then append:
 ```rust
@@ -3471,7 +3471,7 @@ impl Engine {
 }
 ```
 
-- [ ] **Step 4: Implement `engine/actor.rs`**
+- [x] **Step 4: Implement `engine/actor.rs`**
 
 ```rust
 //! The single owner of job state. Everything else talks to it through `EngineMsg`.
@@ -4234,12 +4234,12 @@ fn spawn_saver(store: Arc<Store>) -> mpsc::UnboundedSender<SaveReq> {
 ```
 Note: `Option::is_none_or` needs Rust 1.82+; if the toolchain is older use `j.retry_at.map_or(true, |t| t <= now)`.
 
-- [ ] **Step 5: Run the engine tests**
+- [x] **Step 5: Run the engine tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::engine_tests`
 Expected: 10 passed. Then the full engine suite 5× as in Task 7 Step 3; all clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/engine

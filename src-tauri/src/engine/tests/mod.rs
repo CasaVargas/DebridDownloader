@@ -8,3 +8,4 @@ mod segment_tests;
 pub mod transfer_tests;
 mod transfer_resilience_tests;
 pub mod pipeline_tests;
+mod engine_tests;
