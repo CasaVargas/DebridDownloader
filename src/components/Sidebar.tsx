@@ -4,6 +4,7 @@ import { useDownloadTasks } from "../hooks/useDownloadTasks";
 import { getActiveProvider } from "../api/providers";
 import { check } from "@tauri-apps/plugin-updater";
 import { providerName } from "../lib/providers";
+import { isActiveStatus } from "../lib/downloadStatus";
 import { cn, CountBadge, Kbd, Menu, StatusDot } from "./ui";
 
 interface SidebarProps {
@@ -53,7 +54,8 @@ export default function Sidebar({
       )
     : 0;
 
-  const activeDownloads = tasks.filter((t) => t.status === "Downloading" || t.status === "Pending").length;
+  // Same definition as the Downloads toolbar's "N active" (includes post-processing).
+  const activeDownloads = tasks.filter((t) => isActiveStatus(t.status)).length;
 
   const sections: { section: string; items: NavItem[] }[] = [
     {

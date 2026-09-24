@@ -2043,9 +2043,9 @@ Move each block's local state and handlers along with it: e.g. tracker form stat
 **Interfaces:**
 - Consumes: the engine branch's `DownloadTask` fields (`attempt`, `retry_at`, `segments_active`, `resumable`, `error`, `waiting_for_network`), its API (`pauseDownload`, `resumeDownload`, `retryDownload`, `pauseAllDownloads`, `resumeAllDownloads`, `retryFailedDownloads`) and `AppSettings.segments_per_file`, as defined in `specs/2026-09-23-resilient-download-engine-plan.md` Tasks 11–12.
 
-- [ ] **Step 1: Rebase onto the engine.** Get the engine branch name from the human, then run `git fetch` and `git rebase <engine-branch>`. If the engine branch isn't finished (its plan file doesn't have Tasks 11–12 all checked), **stop here and report**. Don't implement against a guessed API. Resolve conflicts in `SettingsPage.tsx` in favor of the engine's additions; they're about to move anyway.
-- [ ] **Step 2:** Append `src/pages/DownloadsPage.tsx` and `src/pages/settings/DownloadsSettings.tsx` to `CLEAN_FILES`. Run `npm test`; it fails.
-- [ ] **Step 3: Downloads page.** Apply the recipe to the engine's version of the page, keeping all of its behavior (`statusDetail`, the pause/resume/retry handlers, bulk actions, the 1 s clock).
+- [x] **Step 1: Rebase onto the engine.** Get the engine branch name from the human, then run `git fetch` and `git rebase <engine-branch>`. If the engine branch isn't finished (its plan file doesn't have Tasks 11–12 all checked), **stop here and report**. Don't implement against a guessed API. Resolve conflicts in `SettingsPage.tsx` in favor of the engine's additions; they're about to move anyway.
+- [x] **Step 2:** Append `src/pages/DownloadsPage.tsx` and `src/pages/settings/DownloadsSettings.tsx` to `CLEAN_FILES`. Run `npm test`; it fails.
+- [x] **Step 3: Downloads page.** Apply the recipe to the engine's version of the page, keeping all of its behavior (`statusDetail`, the pause/resume/retry handlers, bulk actions, the 1 s clock).
   - **Toolbar:** "Downloads", subtitle `"{active} active · {total speed}"`, filter, and actions Pause All / Resume All / Retry Failed / Clear Inactive (secondary, shown under the engine's existing conditions) plus Cancel All (danger).
   - **Rows:**
     - name + progress bar (accent) or the status sub-line: `StatusDot` with `warning` for "Retrying…"/"Waiting for network", `danger` for errors, `idle` for Paused
@@ -2058,15 +2058,15 @@ Move each block's local state and handlers along with it: e.g. tracker form stat
     - a definition list: Speed, Connections, Resumable (Yes/No), Saves to, Then (Extract → Organize → media scan, from the settings flags), Error (if any)
     - footer: Pause/Resume/Retry, Show in Folder, Cancel (danger)
   - Listen for `toggle-selected` (Space): pause if Downloading/Pending, resume if Paused. Listen for `toggle-inspector`.
-- [ ] **Step 4: Settings → Downloads.** Move the Downloads block (plus Remote Downloads/rclone) from `SettingsPage.tsx` into `DownloadsSettings.tsx`:
+- [x] **Step 4: Settings → Downloads.** Move the Downloads block (plus Remote Downloads/rclone) from `SettingsPage.tsx` into `DownloadsSettings.tsx`:
   - Group 1: Download folder (path input with rclone validation and error line, "Choose…"), Create a folder per torrent, Start downloads automatically.
   - Group "Speed": Simultaneous downloads (`Select` 1/2/3/4/5/8/10), Connections per file (`Select` 1/2/4/8/16 with description "Lower this if your provider limits connections"), Speed limit (`Select`, with the existing options).
   - Group "After download": Auto-extract, Delete archives after extract (with the rar-tool hint line).
   - Group "Remote (rclone)": status line + remote chips as `Button size="sm"`.
-- [ ] **Step 5: Remove the legacy page.** Delete the `/settings-legacy` route from `App.tsx`. Run through the Task 11 Step 7 checklist for the Downloads items.
-- [ ] **Step 6:** Run `npm test && npx tsc --noEmit`; everything passes.
-- [ ] **Step 7: Screenshots and keyboard.** Downloads with a live download (inspector open showing connections), a retrying row, a paused row, a failed row, bulk actions, Settings → Downloads. Both themes, two accents. Space pauses and resumes the selected row, ⌘I toggles the inspector, Delete cancels. If no debrid account is available, say so and list the live-download screenshots as NOT DONE.
-- [ ] **Step 8: Commit** `feat(ui): restyle Downloads with docked inspector; move download settings`.
+- [x] **Step 5: Remove the legacy page.** Delete the `/settings-legacy` route from `App.tsx`. Run through the Task 11 Step 7 checklist for the Downloads items.
+- [x] **Step 6:** Run `npm test && npx tsc --noEmit`; everything passes.
+- [x] **Step 7: Screenshots and keyboard.** Downloads with a live download (inspector open showing connections), a retrying row, a paused row, a failed row, bulk actions, Settings → Downloads. Both themes, two accents. Space pauses and resumes the selected row, ⌘I toggles the inspector, Delete cancels. If no debrid account is available, say so and list the live-download screenshots as NOT DONE.
+- [x] **Step 8: Commit** `feat(ui): restyle Downloads with docked inspector; move download settings`.
 
 ---
 

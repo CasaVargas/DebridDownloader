@@ -57,6 +57,10 @@ export const CLEAN_FILES: string[] = [
   "src/pages/settings/LibrarySettings.tsx",
   "src/pages/settings/SearchSettings.tsx",
   "src/pages/settings/BackupSettings.tsx",
+  // Task 12: Downloads
+  "src/pages/DownloadsPage.tsx",
+  "src/pages/settings/DownloadsSettings.tsx",
+  "src/lib/downloadStatus.ts",
 ];
 
 const RULES: { name: string; re: RegExp }[] = [

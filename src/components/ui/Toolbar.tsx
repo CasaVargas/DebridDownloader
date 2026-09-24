@@ -15,13 +15,13 @@ export function Toolbar({ title, subtitle, filter, actions }: {
 }) {
   return (
     <div className="flex h-11 shrink-0 items-center gap-3 border-b border-border px-4">
-      <h1 className="text-lg font-semibold text-fg">{title}</h1>
-      {subtitle && <span className="truncate text-sm text-fg-muted tabular">{subtitle}</span>}
-      <div className="ml-auto flex items-center gap-2">
+      <h1 className="shrink-0 text-lg font-semibold text-fg">{title}</h1>
+      {subtitle && <span className="min-w-0 truncate text-sm text-fg-muted tabular">{subtitle}</span>}
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         {filter && (
           <Input
             ref={filter.inputRef}
-            className="w-56"
+            className="w-40 xl:w-56"
             icon={<SearchIcon />}
             kbd="/"
             value={filter.value}
