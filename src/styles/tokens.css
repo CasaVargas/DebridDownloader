@@ -1,0 +1,123 @@
+/* Single source of visual values. See specs/2026-09-24-native-ui-polish-design.md §3. */
+
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --motion: 120ms;
+  color-scheme: dark;
+}
+
+[data-theme="dark"] {
+  --bg: #1e1e1e;
+  --surface: #252526;
+  --raised: #2d2d30;
+  --border: #3a3a3a;
+  --border-subtle: #2a2a2a;
+  --text: #e8e8e8;
+  --text-secondary: #a8a8a8;
+  --text-muted: #919191;
+  --success: #3fb950;
+  --info: #58a6ff;
+  --warning: #d29922;
+  --danger: #f85149;
+  --idle: #8a8a8a;
+  --shadow-color: rgb(0 0 0 / 0.4);
+  --selected-mix: 16%;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg: #ffffff;
+  --surface: #f5f5f5;
+  --raised: #f0f0f0;
+  --border: #e0e0e0;
+  --border-subtle: #ededed;
+  --text: #1f1f1f;
+  --text-secondary: #555555;
+  --text-muted: #6b6b6b;
+  --success: #1a7f37;
+  --info: #0969da;
+  --warning: #9a6700;
+  --danger: #cf222e;
+  --idle: #8c8c8c;
+  --shadow-color: rgb(0 0 0 / 0.08);
+  --selected-mix: 12%;
+  color-scheme: light;
+}
+
+:root {
+  /* Accent defaults; useAppearance overwrites these at runtime. */
+  --accent: #10b981;
+  --accent-hover: #34d399;
+  --accent-fg: #111111;
+  --selected: color-mix(in srgb, var(--accent) var(--selected-mix, 16%), transparent);
+  --accent-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+@theme inline {
+  --font-sans: var(--font-ui);
+  --spacing: 4px;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-fg: var(--text);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-muted: var(--text-muted);
+  --color-selected: var(--selected);
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-idle: var(--idle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-subtle: var(--accent-subtle);
+
+  --text-xs: 11px;
+  --text-xs--line-height: 16px;
+  --text-sm: 12px;
+  --text-sm--line-height: 16px;
+  --text-base: 13px;
+  --text-base--line-height: 18px;
+  --text-md: 14px;
+  --text-md--line-height: 20px;
+  --text-lg: 15px;
+  --text-lg--line-height: 20px;
+  --text-xl: 20px;
+  --text-xl--line-height: 26px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --shadow-panel: 0 8px 24px var(--shadow-color);
+}
+
+/* Temporary aliases so un-migrated screens keep working. Deleted in Task 13. */
+:root, [data-theme] {
+  --theme-bg: var(--bg);
+  --theme-bg-content: var(--bg);
+  --theme-bg-sidebar: var(--surface);
+  --theme-bg-surface: var(--surface);
+  --theme-bg-input: var(--surface);
+  --theme-border: var(--border);
+  --theme-border-subtle: var(--border-subtle);
+  --theme-border-hover: var(--border);
+  --theme-hover: var(--raised);
+  --theme-selected: var(--raised);
+  --theme-text-primary: var(--text);
+  --theme-text-secondary: var(--text-secondary);
+  --theme-text-muted: var(--text-muted);
+  --theme-text-ghost: var(--text-muted);
+  --theme-text-faint: var(--border);
+  --theme-shadow: var(--shadow-color);
+  --theme-scrim: rgb(0 0 0 / 0.4);
+  --theme-scrollbar: var(--border);
+  --theme-scrollbar-hover: var(--text-muted);
+  --accent-bg-subtle: var(--accent-subtle);
+  --accent-bg-light: var(--accent-subtle);
+  --accent-bg-medium: var(--selected);
+}

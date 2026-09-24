@@ -5,11 +5,11 @@ import { isPermissionGranted, requestPermission, sendNotification } from "@tauri
 import Sidebar from "./Sidebar";
 import Toast from "./Toast";
 import { DownloadTasksProvider } from "../hooks/useDownloadTasks";
-import { useAccentColor } from "../hooks/useAccentColor";
+import { useAppearance } from "../hooks/useAppearance";
 import type { WatchMatch } from "../types";
 
 export default function Layout() {
-  useAccentColor();
+  useAppearance();
   const navigate = useNavigate();
   const location = useLocation();
 

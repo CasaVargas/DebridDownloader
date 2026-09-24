@@ -189,7 +189,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `useAppearance(): { theme: ThemePref; resolvedTheme: "light" | "dark"; accent: AccentName; setTheme(t: ThemePref): void; setAccent(a: AccentName): void }`
   - Tailwind utilities: colors `bg`, `surface`, `raised`, `border`, `border-subtle`, `fg`, `fg-secondary`, `fg-muted`, `selected`, `success`, `info`, `warning`, `danger`, `idle`, `accent`, `accent-hover`, `accent-fg`, `accent-subtle`; text sizes `xs sm base md lg xl`; radii `sm md lg`; `shadow-panel`; `font-sans`; `duration-120`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `src/test/contrast.test.ts`:
 ```ts
@@ -310,12 +310,12 @@ describe("useAppearance", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npm test`
 Expected: FAIL — cannot resolve `../theme/accents`, `../hooks/useAppearance`, `../styles/tokens.css`.
 
-- [ ] **Step 3: Write `src/theme/accents.ts`**
+- [x] **Step 3: Write `src/theme/accents.ts`**
 
 ```ts
 export type AccentName = "emerald" | "blue" | "violet" | "rose" | "amber" | "cyan";
@@ -351,7 +351,7 @@ export function pickAccentFg(accentHex: string): "#ffffff" | "#111111" {
 }
 ```
 
-- [ ] **Step 4: Write `src/styles/tokens.css`**
+- [x] **Step 4: Write `src/styles/tokens.css`**
 
 ```css
 /* Single source of visual values. See specs/2026-09-24-native-ui-polish-design.md §3. */
@@ -480,7 +480,7 @@ export function pickAccentFg(accentHex: string): "#ffffff" | "#111111" {
 ```
 The contrast test parses the `[data-theme="…"] { … }` blocks, so keep one declaration per line in the form `--name: #rrggbb;`.
 
-- [ ] **Step 5: Rewrite `src/styles/index.css`**
+- [x] **Step 5: Rewrite `src/styles/index.css`**
 
 Replace the whole file with:
 ```css
@@ -525,7 +525,7 @@ body {
 ```
 The old `input[type="checkbox"]` and `select` global styles are deliberately dropped; `Toggle` and `Select` replace them in the screens that use them. Until those screens are migrated in later tasks, the native controls fall back to OS styling.
 
-- [ ] **Step 6: Write `src/hooks/useAppearance.ts`**
+- [x] **Step 6: Write `src/hooks/useAppearance.ts`**
 
 ```ts
 import { useCallback, useEffect, useState } from "react";
@@ -601,7 +601,7 @@ export function useAppearance() {
 ```
 The hook listens for `appearance-changed`, which it fires itself after every write, so multiple mounted instances (Layout and Settings) stay in sync.
 
-- [ ] **Step 7: Wire it in**
+- [x] **Step 7: Wire it in**
 
 1. `src/components/Layout.tsx`: replace `import { useAccentColor } from "../hooks/useAccentColor";` with `import { useAppearance } from "../hooks/useAppearance";` and `useAccentColor();` with `useAppearance();`.
 2. `src/pages/SettingsPage.tsx` (temporary until Task 11):
@@ -613,16 +613,16 @@ The hook listens for `appearance-changed`, which it fires itself after every wri
 3. Replace the `App.tsx` loading screen's `text-zinc-400 text-lg` with `text-fg-muted text-base` and `bg-[var(--theme-bg)]` with `bg-bg`.
 4. Keep `src/hooks/useAccentColor.ts` for now (deleted in Task 13), but it's no longer imported anywhere. Verify with `grep -rn useAccentColor src`: only the file itself remains.
 
-- [ ] **Step 8: Run tests and type-check**
+- [x] **Step 8: Run tests and type-check**
 
 Run: `npm test && npx tsc --noEmit`
 Expected: all pass. If a contrast assertion fails, fix the **token value** in `tokens.css` (keep the spec's intent: neutral grays, AA), update the spec table to match, and note it in the commit message.
 
-- [ ] **Step 9: Visual check**
+- [x] **Step 9: Visual check**
 
 Run `npm run tauri dev`. Screenshot the Torrents screen in Dark, Light, and System (toggle the OS appearance while the app is open) with emerald and violet. Un-migrated screens should look roughly as before through the aliases, just with neutral grays. Nothing may be unreadable.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add -A src/styles src/theme src/hooks/useAppearance.ts src/test src/components/Layout.tsx src/pages/SettingsPage.tsx src/App.tsx

@@ -72,7 +72,7 @@ All values live in `src/styles/tokens.css`. Components never reference raw value
 | `--idle` | `#8a8a8a` | `#8c8c8c` | Paused / queued |
 | `--accent`, `--accent-hover`, `--accent-fg`, `--accent-subtle` | per accent | per accent | set by `useAppearance` |
 
-- Accents: emerald, blue, violet, rose, amber, cyan. Dark theme uses the existing values (`#10b981`, `#3b82f6`, `#8b5cf6`, `#f43f5e`, `#f59e0b`, `#06b6d4`); light theme uses one step darker for contrast on white (`#059669`, `#2563eb`, `#7c3aed`, `#e11d48`, `#d97706`, `#0891b2`).
+- Accents: emerald, blue, violet, rose, amber, cyan. Dark theme uses the existing values (`#10b981`, `#3b82f6`, `#8f62f7`, `#f43f5e`, `#f59e0b`, `#06b6d4`; violet nudged from `#8b5cf6`, whose best text color reached only 4.46:1); light theme uses one step darker for contrast on white (`#059669`, `#2563eb`, `#7c3aed`, `#e11d48`, `#d97706`, `#0891b2`).
 - `--accent-fg` (text on a filled accent button) is a static per-accent, per-theme table choosing whichever of `#ffffff` / `#111111` has the higher contrast ratio against that accent; the contrast test (§7) asserts every entry is ≥ 4.5:1.
 - Status colors are independent of the accent.
 - No gradients, glows, blur, or accent-tinted borders anywhere.

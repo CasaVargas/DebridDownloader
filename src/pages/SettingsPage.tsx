@@ -6,7 +6,8 @@ import type { AppSettings, TrackerConfig, ProviderInfo } from "../types";
 import { open } from "@tauri-apps/plugin-dialog";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { setMagnetHandler } from "../api/magnet";
-import { ACCENT_COLORS } from "../hooks/useAccentColor";
+import { ACCENTS, type AccentName } from "../theme/accents";
+import { useAppearance, type ThemePref } from "../hooks/useAppearance";
 import { useRclone, isRclonePath } from "../hooks/useRclone";
 import { validateRcloneRemote } from "../api/rclone";
 
@@ -26,7 +27,7 @@ const DEFAULT_FRONTEND: FrontendSettings = {
   launch_at_login: false,
   handle_magnet_links: false,
   accent_color: "emerald",
-  app_theme: "dark",
+  app_theme: "system",
   default_sort_key: "added",
   default_sort_direction: "desc",
   notify_on_complete: true,
@@ -47,6 +48,7 @@ function saveFrontendSettings(s: FrontendSettings) {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [frontend, setFrontend] = useState<FrontendSettings>(loadFrontendSettings);
+  const appearance = useAppearance();
   const [trackers, setTrackers] = useState<TrackerConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [savedField, setSavedField] = useState<string | null>(null);
@@ -123,15 +125,11 @@ export default function SettingsPage() {
   }
 
   function applyFrontend(patch: Partial<FrontendSettings>) {
-    const next = { ...frontend, ...patch };
+    // Theme/accent are owned by useAppearance; re-read them so a stale copy never overwrites them.
+    const stored = loadFrontendSettings();
+    const next = { ...frontend, app_theme: stored.app_theme, accent_color: stored.accent_color, ...patch };
     setFrontend(next);
     saveFrontendSettings(next);
-    if (patch.accent_color) {
-      window.dispatchEvent(new Event("accent-changed"));
-    }
-    if (patch.app_theme) {
-      window.dispatchEvent(new Event("theme-changed"));
-    }
   }
 
   async function handleAddTracker() {
@@ -349,7 +347,7 @@ export default function SettingsPage() {
     );
   }
 
-  const accentColor = ACCENT_COLORS[frontend.accent_color]?.primary ?? "#10b981";
+  const accentColor = ACCENTS[appearance.accent as AccentName]?.dark ?? ACCENTS.emerald.dark;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -1215,15 +1213,16 @@ export default function SettingsPage() {
                   Choose between dark and light appearance
                 </p>
                 <div className="flex gap-4">
-                  {[
+                  {([
+                    { id: "system", label: "System" },
                     { id: "dark", label: "Dark" },
                     { id: "light", label: "Light" },
-                  ].map((opt) => {
-                    const isSelected = frontend.app_theme === opt.id;
+                  ] as { id: ThemePref; label: string }[]).map((opt) => {
+                    const isSelected = appearance.theme === opt.id;
                     return (
                       <button
                         key={opt.id}
-                        onClick={() => applyFrontend({ app_theme: opt.id })}
+                        onClick={() => appearance.setTheme(opt.id)}
                         className="flex-1 flex items-center justify-center gap-3 py-4 rounded-xl transition-all text-[15px] font-medium"
                         style={{
                           background: isSelected ? "var(--accent-bg-medium)" : "var(--theme-bg)",
@@ -1265,12 +1264,12 @@ export default function SettingsPage() {
                     { id: "amber", label: "Amber" },
                     { id: "cyan", label: "Cyan" },
                   ].map((opt) => {
-                    const color = ACCENT_COLORS[opt.id]?.primary ?? "#10b981";
-                    const isSelected = frontend.accent_color === opt.id;
+                    const color = ACCENTS[opt.id as AccentName]?.dark ?? ACCENTS.emerald.dark;
+                    const isSelected = appearance.accent === opt.id;
                     return (
                       <button
                         key={opt.id}
-                        onClick={() => applyFrontend({ accent_color: opt.id })}
+                        onClick={() => appearance.setAccent(opt.id as AccentName)}
                         className="flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all"
                         style={{
                           background: isSelected ? "var(--theme-bg)" : "transparent",
