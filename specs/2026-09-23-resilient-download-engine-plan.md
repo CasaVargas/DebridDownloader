@@ -2633,7 +2633,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: everything from Task 6. This task adds no new API — it pins the error table (spec §6) with tests and fixes whatever they expose.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `engine/tests/transfer_resilience_tests.rs`:
 ```rust
@@ -2840,17 +2840,17 @@ async fn tail_is_split_across_free_workers() {
 ```
 Add `mod transfer_resilience_tests;` to `engine/tests/mod.rs`.
 
-- [ ] **Step 2: Run the tests**
+- [x] **Step 2: Run the tests**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml engine::tests::transfer_resilience_tests`
 Expected: all 12 pass. For any failure, use superpowers:systematic-debugging, fix `transfer.rs`/`segment.rs` (not the test's expectation — the tests encode spec §6), and re-run until green.
 
-- [ ] **Step 3: Run the whole engine suite 5 times to flush out flakiness**
+- [x] **Step 3: Run the whole engine suite 5 times to flush out flakiness**
 
 Run: `for i in 1 2 3 4 5; do cargo test --manifest-path src-tauri/Cargo.toml engine:: || break; done`
 Expected: 5 clean runs. A test that fails intermittently is a race in the engine or an over-tight timing in the test — fix the race; only widen a timeout if the logic is proven correct.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src-tauri/src/engine

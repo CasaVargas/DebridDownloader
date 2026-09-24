@@ -6,3 +6,4 @@ pub mod support;
 mod mock_tests;
 mod segment_tests;
 pub mod transfer_tests;
+mod transfer_resilience_tests;
