@@ -1691,8 +1691,8 @@ Behavior, data fetching, IPC calls and state logic must not change. Only markup 
 
 **Files:** Modify `src/pages/AuthPage.tsx`, `src/test/no-style-literals.test.ts`
 
-- [ ] **Step 1:** Append the file to `CLEAN_FILES`. Run `npm test`; it fails and lists about 13 literals.
-- [ ] **Step 2:** Apply the recipe. The auth screen is a centered card `w-96 rounded-lg border border-border bg-surface p-6 shadow-panel` on `bg-bg`:
+- [x] **Step 1:** Append the file to `CLEAN_FILES`. Run `npm test`; it fails and lists about 13 literals.
+- [x] **Step 2:** Apply the recipe. The auth screen is a centered card `w-96 rounded-lg border border-border bg-surface p-6 shadow-panel` on `bg-bg`:
   - app name at `text-xl font-semibold`
   - provider `Select` (Real-Debrid / TorBox / Premiumize via `providerName`)
   - either "Sign in with Real-Debrid" (primary, OAuth) or an API token `Input` + Sign in (primary)
@@ -1700,9 +1700,9 @@ Behavior, data fetching, IPC calls and state logic must not change. Only markup 
   - errors in `text-sm text-danger`
   
   Remove gradients and any glow. `useAppearance()` must also run on this screen: call it at the top of `AuthPage` so theme and accent apply before login.
-- [ ] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
-- [ ] **Step 4: Screenshots.** Each provider's form, the OAuth waiting state, the error state. Both themes.
-- [ ] **Step 5: Commit** `feat(ui): restyle sign-in`.
+- [x] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
+- [x] **Step 4: Screenshots.** Each provider's form, the OAuth waiting state, the error state. Both themes.
+- [x] **Step 5: Commit** `feat(ui): restyle sign-in`.
 
 ---
 
