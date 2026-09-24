@@ -5127,7 +5127,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Create: `.github/workflows/test.yml`
 - Modify: `AGENTS.md`, `README.md`
 
-- [ ] **Step 1: Add a test workflow that runs on every push and PR**
+- [x] **Step 1: Add a test workflow that runs on every push and PR**
 
 `.github/workflows/test.yml`:
 ```yaml
@@ -5161,13 +5161,13 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-- [ ] **Step 2: Update `AGENTS.md`**
+- [x] **Step 2: Update `AGENTS.md`**
 
 - In the Commands table add a row: `| Rust tests (download engine) | cargo test --manifest-path src-tauri/Cargo.toml |`.
 - Replace the paragraph starting "There is no test runner configured…" with: "Rust tests live in `src-tauri/src/engine/tests/` (mock CDN in `mock_server.rs`) and run in CI via `.github/workflows/test.yml`. There is no frontend test runner — verify UI changes manually in `npm run tauri dev`."
 - Replace the `### Downloads` section body with: "`engine/` is the download engine (Tauri-free; see `specs/2026-09-23-resilient-download-engine-design.md`). One actor (`engine/actor.rs`) owns all jobs, persisted to `{app_data_dir}/downloads.json`. Transfers write `{dest}.part` with segmented `Range` requests and durable checkpoints, then rename. `engine_host.rs` adapts it to Tauri (events, provider link refresh, rclone). `commands/downloads.rs` is a thin IPC layer. Post-download extract/organize runs in `engine/pipeline.rs`; media-server scans fire on `BatchFinished`."
 
-- [ ] **Step 3: Update `README.md`**
+- [x] **Step 3: Update `README.md`**
 
 In the Features table, replace the `📥 Download Engine` row with:
 ```markdown
@@ -5187,7 +5187,7 @@ Then the manual checklist from spec §10.2 in `npm run tauri dev`, recording the
 5. Same 5 GB+ file, same provider: time it on v1.6.4 (installed release) vs this build. Record both numbers.
 6. Enable auto-extract; download a multi-part RAR set → extracts once, after the last part, with no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/test.yml AGENTS.md README.md

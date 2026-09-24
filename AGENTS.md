@@ -10,8 +10,9 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 | Production bundle for current platform | `npm run tauri build` |
 | Type-check only (no emit) | `npx tsc --noEmit` |
 | Frontend-only build (tsc + Vite, no native bundle) | `npm run build` |
+| Rust tests (download engine) | `cargo test --manifest-path src-tauri/Cargo.toml` |
 
-There is no test runner configured for either side (no `test` script in `package.json`; only `tempfile` in `[dev-dependencies]` of `Cargo.toml`, with no `tests/` tree). Don't claim "tests pass" — verify manually in `npm run tauri dev`.
+Rust tests live in `src-tauri/src/engine/tests/` (mock CDN in `mock_server.rs`) and run in CI via `.github/workflows/test.yml`. There is no frontend test runner — verify UI changes manually in `npm run tauri dev`.
 
 Native bundles land in `src-tauri/target/release/bundle/`. Vite dev URL is `http://localhost:1420` (hardcoded in `tauri.conf.json` — don't change without updating both sides).
 
@@ -59,7 +60,7 @@ Secrets (API tokens, OAuth client id/secret, refresh tokens) live in the OS keyr
 
 ### Downloads
 
-`downloader.rs` is the engine; `commands/downloads.rs` is the IPC surface. Each task lives in `state.active_downloads` keyed by id, with a `tokio::sync::watch::Sender<bool>` cancellation handle in `state.cancel_tokens`. Progress is pushed to the frontend via `Emitter::emit` events (consumed by `src/hooks/useDownloadTasks.tsx`) — there is no polling on the TS side. After download, optional steps run in this order: archive extraction (`extractor.rs`), media parsing/organizing (`media_parser.rs` + `organizer.rs`, TMDB lookups via `tmdb.rs`), media-server library refresh (`media_servers.rs` for Plex/Jellyfin/Emby), and rclone sync (`rclone.rs`).
+`engine/` is the download engine (Tauri-free; see `specs/2026-09-23-resilient-download-engine-design.md`). One actor (`engine/actor.rs`) owns all jobs, persisted to `{app_data_dir}/downloads.json`. Transfers write `{dest}.part` with segmented `Range` requests and durable checkpoints, then rename. `engine_host.rs` adapts it to Tauri (events, provider link refresh, rclone). `commands/downloads.rs` is a thin IPC layer. Post-download extract/organize runs in `engine/pipeline.rs`; media-server scans fire on `BatchFinished`.
 
 ### Frontend conventions
 
