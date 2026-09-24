@@ -1660,15 +1660,15 @@ Behavior, data fetching, IPC calls and state logic must not change. Only markup 
 
 **Files:** Modify `src/pages/WatchListPage.tsx`, `src/test/no-style-literals.test.ts`
 
-- [ ] **Step 1:** Append the file to `CLEAN_FILES`. Run `npm test`; it fails.
-- [ ] **Step 2:** Apply the recipe.
+- [x] **Step 1:** Append the file to `CLEAN_FILES`. Run `npm test`; it fails.
+- [x] **Step 2:** Apply the recipe.
   - Rules list: each rule is a `SettingsGroup`-style card showing name, query, trackers, interval, an enabled `Toggle` and a `…` `Menu` (Edit / Run now / Delete).
   - Matches list uses `DataTable` rows with `StatusDot`.
   - The add/edit rule form is a `Dialog` with `Input`s and `Select`s (it replaces the page's two `<select>`s).
   - Toolbar primary action: "New Rule".
-- [ ] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
-- [ ] **Step 4: Screenshots.** No rules, rules with matches, the edit dialog. Both themes, two accents.
-- [ ] **Step 5: Commit** `feat(ui): restyle Watch List`.
+- [x] **Step 3:** Run `npm test && npx tsc --noEmit`; everything passes.
+- [x] **Step 4: Screenshots.** No rules, rules with matches, the edit dialog. Both themes, two accents.
+- [x] **Step 5: Commit** `feat(ui): restyle Watch List`.
 
 ---
 
