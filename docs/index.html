@@ -570,6 +570,29 @@ footer a:hover { color: var(--green); }
         <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
         <div class="changelog-content">
           <div class="changelog-header">
+            <span class="changelog-version">v1.7.0</span>
+            <span class="changelog-date">September 2026</span>
+          </div>
+          <div class="changelog-title">New Download Engine &amp; Redesign</div>
+          <ul class="changelog-items">
+            <li>New download engine: multiple connections per file (up to 16)</li>
+            <li>Downloads resume after connection drops, app restarts, and crashes instead of starting over</li>
+            <li>Expired download links refresh automatically</li>
+            <li>Pause and resume downloads one at a time or all at once; retry failed downloads</li>
+            <li>Speed limit and simultaneous-download limit now apply app-wide and take effect instantly</li>
+            <li>Waits for the network to come back instead of failing</li>
+            <li>Redesigned interface: native look with System, Light, and Dark mode</li>
+            <li>Keyboard shortcuts on every platform (⌘ on macOS, Ctrl on Windows and Linux)</li>
+            <li>Details panel with per-connection progress; Settings reorganized into sections</li>
+            <li>Plain-language error messages from Real-Debrid, TorBox, and Premiumize</li>
+            <li>Closing the window keeps DebridDownloader running in the tray</li>
+          </ul>
+        </div>
+      </div>
+      <div class="changelog-entry">
+        <div class="changelog-marker"><div class="changelog-dot"></div><div class="changelog-line"></div></div>
+        <div class="changelog-content">
+          <div class="changelog-header">
             <span class="changelog-version">v1.6.4</span>
             <span class="changelog-date">May 2026</span>
           </div>
@@ -930,13 +953,13 @@ footer a:hover { color: var(--green); }
 
   <script>
 (function() {
-  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.6.4/';
+  var BASE = 'https://github.com/CasaVargas/DebridDownloader/releases/download/v1.7.0/';
   var LATEST = 'https://github.com/CasaVargas/DebridDownloader/releases/latest';
 
   var directLinks = {
-    mac: BASE + 'DebridDownloader_1.6.4_aarch64.dmg',
-    win: BASE + 'DebridDownloader_1.6.4_x64-setup.exe',
-    linux: BASE + 'DebridDownloader_1.6.4_amd64.deb'
+    mac: BASE + 'DebridDownloader_1.7.0_aarch64.dmg',
+    win: BASE + 'DebridDownloader_1.7.0_x64-setup.exe',
+    linux: BASE + 'DebridDownloader_1.7.0_amd64.deb'
   };
 
   function detectOS() {
@@ -966,7 +989,7 @@ footer a:hover { color: var(--green); }
   }
 
   // Download cards — direct download links
-  var cardLinks = { mac: BASE + 'DebridDownloader_1.6.4_aarch64.dmg', win: BASE + 'DebridDownloader_1.6.4_x64-setup.exe', linux: BASE + 'DebridDownloader_1.6.4_amd64.deb' };
+  var cardLinks = { mac: BASE + 'DebridDownloader_1.7.0_aarch64.dmg', win: BASE + 'DebridDownloader_1.7.0_x64-setup.exe', linux: BASE + 'DebridDownloader_1.7.0_amd64.deb' };
   var cards = document.querySelectorAll('.dl-card[data-os]');
   var found = false;
   cards.forEach(function(card) {

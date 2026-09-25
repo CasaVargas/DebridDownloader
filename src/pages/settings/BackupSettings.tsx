@@ -15,6 +15,23 @@ type UpdateStatus =
 
 const CHANGELOG: { version: string; title: string; items: string[] }[] = [
   {
+    version: "1.7.0",
+    title: "New Download Engine & Redesign",
+    items: [
+      "New download engine: multiple connections per file (up to 16)",
+      "Downloads resume after connection drops, app restarts, and crashes instead of starting over",
+      "Expired download links refresh automatically",
+      "Pause and resume downloads one at a time or all at once; retry failed downloads",
+      "Speed limit and simultaneous-download limit now apply app-wide and take effect instantly",
+      "Waits for the network to come back instead of failing",
+      "Redesigned interface: native look with System, Light, and Dark mode",
+      "Keyboard shortcuts on every platform (⌘ on macOS, Ctrl on Windows and Linux)",
+      "Details panel with per-connection progress; Settings reorganized into sections",
+      "Plain-language error messages from Real-Debrid, TorBox, and Premiumize",
+      "Closing the window keeps DebridDownloader running in the tray",
+    ],
+  },
+  {
     version: "1.6.3",
     title: "Auto-Extract Archives",
     items: [
