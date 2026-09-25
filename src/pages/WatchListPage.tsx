@@ -2,6 +2,20 @@ import { useState, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import * as watchlistApi from "../api/watchlist";
 import type { WatchRule, WatchMatch } from "../types";
+import DataTable, { type Column } from "../components/DataTable";
+import { Button, cn, Dialog, EmptyState, IconButton, Input, Menu, Select, Spinner, StatusDot, Toggle, Toolbar } from "../components/ui";
+
+/** Radix Select can't use "" as a value; "All" categories maps to this sentinel. */
+const ALL = "__all__";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <span className="text-sm text-fg-muted">{label}</span>
+      {children}
+    </div>
+  );
+}
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -116,154 +130,114 @@ function RuleModal({ rule, onClose, onSave }: RuleModalProps) {
     { value: 360, label: "6 hours" },
   ];
 
-  const inputClass = "w-full px-3 py-2 rounded-lg text-[13px] bg-[var(--theme-bg)] text-[var(--theme-text-primary)] border border-[var(--theme-border)] focus:outline-none focus:border-[var(--accent)]";
-  const labelClass = "text-[12px] text-[var(--theme-text-muted)] mb-1 block";
+  const segClass = (active: boolean) =>
+    cn(
+      "h-6 rounded-sm px-2.5 text-sm font-medium transition-colors duration-120",
+      active ? "bg-selected text-fg" : "text-fg-secondary hover:bg-raised hover:text-fg",
+    );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div
-        className="w-[480px] max-h-[85vh] overflow-y-auto rounded-xl p-6"
-        style={{ backgroundColor: "var(--theme-bg-surface)", border: "1px solid var(--theme-border)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-[16px] font-semibold text-[var(--theme-text-primary)] mb-4">
-          {isEdit ? "Edit Rule" : "Add Rule"}
-        </h2>
+    <Dialog
+      open
+      onOpenChange={(o) => { if (!o) onClose(); }}
+      title={isEdit ? "Edit Rule" : "Add Rule"}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : isEdit ? "Update" : "Create"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="Name">
+          <Input aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Watch Rule" />
+        </Field>
 
-        <div className="space-y-4">
-          <div>
-            <label className={labelClass}>Name</label>
-            <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="My Watch Rule" />
+        <Field label="Type">
+          <div role="radiogroup" aria-label="Type" className="inline-flex gap-0.5 self-start rounded-md border border-border p-0.5">
+            {(["Keyword", "TvShow"] as const).map((t) => (
+              <button key={t} type="button" role="radio" aria-checked={ruleType === t} onClick={() => setRuleType(t)} className={segClass(ruleType === t)}>
+                {t === "TvShow" ? "TV Show" : "Keyword"}
+              </button>
+            ))}
           </div>
+        </Field>
 
-          <div>
-            <label className={labelClass}>Type</label>
-            <div className="flex gap-2">
-              {(["Keyword", "TvShow"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setRuleType(t)}
-                  className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors"
-                  style={{
-                    backgroundColor: ruleType === t ? "var(--accent-bg-light)" : "var(--theme-bg)",
-                    color: ruleType === t ? "var(--accent)" : "var(--theme-text-muted)",
-                    border: `1px solid ${ruleType === t ? "var(--accent)" : "var(--theme-border)"}`,
-                  }}
-                >
-                  {t === "TvShow" ? "TV Show" : "Keyword"}
-                </button>
-              ))}
-            </div>
+        <Field label="Search Query">
+          <Input aria-label="Search Query" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="e.g., Breaking Bad 2160p" />
+        </Field>
+
+        <Field label="Category">
+          <Select
+            ariaLabel="Category"
+            value={category || ALL}
+            onValueChange={(v) => setCategory(v === ALL ? "" : v)}
+            options={categories.map((c) => ({ value: c.value || ALL, label: c.label }))}
+            className="self-start"
+          />
+        </Field>
+
+        {ruleType === "TvShow" && (
+          <div className="flex gap-3">
+            <Field label="Start from Season (optional)">
+              <Input aria-label="Start from Season" type="number" min="1" value={lastSeason} onChange={(e) => setLastSeason(e.target.value)} placeholder="Auto-detect" />
+            </Field>
+            <Field label="Start from Episode (optional)">
+              <Input aria-label="Start from Episode" type="number" min="0" value={lastEpisode} onChange={(e) => setLastEpisode(e.target.value)} placeholder="Auto-detect" />
+            </Field>
           </div>
+        )}
 
-          <div>
-            <label className={labelClass}>Search Query</label>
-            <input className={inputClass} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="e.g., Breaking Bad 2160p" />
+        <Field label="Action">
+          <div role="radiogroup" aria-label="Action" className="inline-flex gap-0.5 self-start rounded-md border border-border p-0.5">
+            {(["Notify", "AutoAdd"] as const).map((a) => (
+              <button key={a} type="button" role="radio" aria-checked={action === a} onClick={() => setAction(a)} className={segClass(action === a)}>
+                {a === "AutoAdd" ? "Auto-Add" : "Notify"}
+              </button>
+            ))}
           </div>
+        </Field>
 
-          <div>
-            <label className={labelClass}>Category</label>
-            <select className={inputClass} value={category} onChange={(e) => setCategory(e.target.value)}>
-              {categories.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </div>
+        <Field label="Check Interval">
+          <Select
+            ariaLabel="Check Interval"
+            value={String(intervalMinutes)}
+            onValueChange={(v) => setIntervalMinutes(parseInt(v))}
+            options={intervals.map((i) => ({ value: String(i.value), label: i.label }))}
+            className="self-start"
+          />
+        </Field>
 
-          {ruleType === "TvShow" && (
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass}>Start from Season (optional)</label>
-                <input className={inputClass} type="number" min="1" value={lastSeason} onChange={(e) => setLastSeason(e.target.value)} placeholder="Auto-detect" />
-              </div>
-              <div className="flex-1">
-                <label className={labelClass}>Start from Episode (optional)</label>
-                <input className={inputClass} type="number" min="0" value={lastEpisode} onChange={(e) => setLastEpisode(e.target.value)} placeholder="Auto-detect" />
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className={labelClass}>Action</label>
-            <div className="flex gap-2">
-              {(["Notify", "AutoAdd"] as const).map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setAction(a)}
-                  className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors"
-                  style={{
-                    backgroundColor: action === a ? "var(--accent-bg-light)" : "var(--theme-bg)",
-                    color: action === a ? "var(--accent)" : "var(--theme-text-muted)",
-                    border: `1px solid ${action === a ? "var(--accent)" : "var(--theme-border)"}`,
-                  }}
-                >
-                  {a === "AutoAdd" ? "Auto-Add" : "Notify"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Check Interval</label>
-            <select className={inputClass} value={intervalMinutes} onChange={(e) => setIntervalMinutes(parseInt(e.target.value))}>
-              {intervals.map((i) => (
-                <option key={i.value} value={i.value}>{i.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="text-[12px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-          >
+        <div>
+          <Button variant="ghost" size="sm" onClick={() => setShowAdvanced(!showAdvanced)} aria-expanded={showAdvanced}>
             {showAdvanced ? "Hide" : "Show"} Advanced Filters
-          </button>
-
-          {showAdvanced && (
-            <div className="space-y-3 pl-3 border-l-2 border-[var(--theme-border-subtle)]">
-              <div>
-                <label className={labelClass}>Regex Filter (applied to title)</label>
-                <input className={inputClass} value={regexFilter} onChange={(e) => setRegexFilter(e.target.value)} placeholder="e.g., (2160p|4K)" />
-              </div>
-              <div>
-                <label className={labelClass}>Min Seeders</label>
-                <input className={inputClass} type="number" min="0" value={minSeeders} onChange={(e) => setMinSeeders(e.target.value)} />
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass}>Min Size (bytes)</label>
-                  <input className={inputClass} type="number" min="0" value={minSize} onChange={(e) => setMinSize(e.target.value)} />
-                </div>
-                <div className="flex-1">
-                  <label className={labelClass}>Max Size (bytes)</label>
-                  <input className={inputClass} type="number" min="0" value={maxSize} onChange={(e) => setMaxSize(e.target.value)} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {error && <p className="text-[13px] text-[#ef4444]">{error}</p>}
-
-          <div className="flex gap-2 justify-end pt-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-[13px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-              style={{ background: "var(--theme-hover)" }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-4 py-2 rounded-lg text-[13px] font-medium text-white transition-colors disabled:opacity-50"
-              style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
-            >
-              {saving ? "Saving..." : isEdit ? "Update" : "Create"}
-            </button>
-          </div>
+          </Button>
         </div>
+
+        {showAdvanced && (
+          <div className="flex flex-col gap-3 border-l-2 border-border pl-3">
+            <Field label="Regex Filter (applied to title)">
+              <Input aria-label="Regex Filter" value={regexFilter} onChange={(e) => setRegexFilter(e.target.value)} placeholder="e.g., (2160p|4K)" />
+            </Field>
+            <Field label="Min Seeders">
+              <Input aria-label="Min Seeders" type="number" min="0" value={minSeeders} onChange={(e) => setMinSeeders(e.target.value)} />
+            </Field>
+            <div className="flex gap-3">
+              <Field label="Min Size (bytes)">
+                <Input aria-label="Min Size (bytes)" type="number" min="0" value={minSize} onChange={(e) => setMinSize(e.target.value)} />
+              </Field>
+              <Field label="Max Size (bytes)">
+                <Input aria-label="Max Size (bytes)" type="number" min="0" value={maxSize} onChange={(e) => setMaxSize(e.target.value)} />
+              </Field>
+            </div>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-danger" role="alert">{error}</p>}
       </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -345,224 +319,150 @@ export default function WatchListPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-[var(--theme-text-muted)]">Loading...</div>
+      <div className="flex h-full items-center justify-center">
+        <Spinner />
       </div>
     );
   }
 
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--theme-border-subtle)]">
-        <h1 className="text-[20px] font-semibold text-[var(--theme-text-primary)]">Watch List</h1>
-        <button
-          onClick={() => { setEditingRule(null); setShowModal(true); }}
-          className="px-4 py-2 rounded-lg text-[13px] font-medium text-white transition-colors"
-          style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
-        >
-          Add Rule
-        </button>
-      </div>
+  // Newest first, keyed by position like before (the same hash can match twice).
+  const matchRows = [...filteredMatches].reverse().map((m, i) => ({ m, key: `${m.info_hash}-${i}` }));
 
-      {/* Rules Table */}
-      <div className="flex-1 overflow-auto px-6 py-4 min-h-0" style={{ maxHeight: "50%" }}>
-        {rules.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-[var(--theme-text-muted)]">
-            <p className="text-[15px]">No watch rules yet</p>
-            <p className="text-[13px] mt-1">Create a rule to start monitoring your trackers</p>
+  const matchColumns: Column<{ m: WatchMatch; key: string }>[] = [
+    { key: "title", header: "Title", width: "minmax(0, 1fr)", render: ({ m }) => <div className="truncate text-base text-fg" title={m.title}>{m.title}</div> },
+    ...(!selectedRuleId
+      ? [{ key: "rule", header: "Rule", width: 32, render: ({ m }: { m: WatchMatch }) => <span className="block truncate text-sm text-fg-secondary">{ruleNameMap[m.rule_id] ?? "Unknown"}</span> }]
+      : []),
+    { key: "size", header: "Size", width: 20, render: ({ m }) => <span className="text-base text-fg-secondary tabular">{formatBytes(m.size_bytes)}</span> },
+    { key: "matched", header: "Matched", width: 20, render: ({ m }) => <span className="text-sm text-fg-muted tabular">{formatRelativeTime(m.matched_at)}</span> },
+    {
+      key: "status",
+      header: "Status",
+      width: 22,
+      render: ({ m }) => (
+        <>
+          {m.status.type === "Notified" && <StatusDot status="warning">Notified</StatusDot>}
+          {m.status.type === "Added" && <StatusDot status="success">Added</StatusDot>}
+          {m.status.type === "Failed" && <span title={m.status.reason}><StatusDot status="danger">Failed</StatusDot></span>}
+        </>
+      ),
+    },
+    {
+      key: "add",
+      header: "",
+      width: 14,
+      render: ({ m }) =>
+        m.status.type === "Notified" ? (
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              onClick={async () => {
+                try {
+                  const { addMagnet, selectTorrentFiles } = await import("../api/torrents");
+                  const resp = await addMagnet(m.magnet);
+                  await selectTorrentFiles(resp.id, "all").catch(() => {});
+                } catch (e) {
+                  console.error("Failed to add magnet:", e);
+                }
+              }}
+            >
+              Add
+            </Button>
           </div>
+        ) : null,
+    },
+  ];
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <Toolbar
+        title="Watch List"
+        subtitle={`${rules.length} ${rules.length === 1 ? "rule" : "rules"}`}
+        actions={
+          <Button variant="primary" onClick={() => { setEditingRule(null); setShowModal(true); }}>
+            New Rule
+          </Button>
+        }
+      />
+
+      {/* Rules */}
+      <div className="min-h-0 shrink-0 overflow-auto px-4 py-3" style={{ maxHeight: "50%" }}>
+        {rules.length === 0 ? (
+          <EmptyState title="No watch rules yet" hint="Create a rule to start monitoring your trackers" />
         ) : (
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="text-left text-[var(--theme-text-muted)] text-[11px] uppercase tracking-wider">
-                <th className="pb-2 font-medium">Name</th>
-                <th className="pb-2 font-medium">Type</th>
-                <th className="pb-2 font-medium">Query</th>
-                <th className="pb-2 font-medium">Action</th>
-                <th className="pb-2 font-medium">Interval</th>
-                <th className="pb-2 font-medium">Last Checked</th>
-                <th className="pb-2 font-medium text-center">Enabled</th>
-                <th className="pb-2 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rules.map((rule) => (
-                <tr
+          <div className="flex flex-col gap-2">
+            {rules.map((rule) => {
+              const selected = selectedRuleId === rule.id;
+              const typeLabel =
+                rule.rule_type.type === "TvShow"
+                  ? `TV${rule.rule_type.last_season != null ? ` S${String(rule.rule_type.last_season).padStart(2, "0")}E${String(rule.rule_type.last_episode ?? 0).padStart(2, "0")}` : ""}`
+                  : "Keyword";
+              return (
+                <div
                   key={rule.id}
-                  className="border-t border-[var(--theme-border-subtle)] cursor-pointer transition-colors"
-                  style={{
-                    backgroundColor: selectedRuleId === rule.id ? "var(--accent-bg-light)" : "transparent",
-                  }}
-                  onClick={() => setSelectedRuleId(selectedRuleId === rule.id ? null : rule.id)}
-                  onMouseEnter={(e) => {
-                    if (selectedRuleId !== rule.id) e.currentTarget.style.backgroundColor = "var(--theme-hover)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (selectedRuleId !== rule.id) e.currentTarget.style.backgroundColor = "transparent";
-                  }}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg border border-border px-3 py-2",
+                    selected ? "bg-selected" : "bg-surface",
+                  )}
                 >
-                  <td className="py-2.5 text-[var(--theme-text-primary)] font-medium">{rule.name}</td>
-                  <td className="py-2.5">
-                    <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${
-                      rule.rule_type.type === "TvShow"
-                        ? "bg-[rgba(139,92,246,0.12)] text-[#8b5cf6]"
-                        : "bg-[rgba(59,130,246,0.12)] text-[#3b82f6]"
-                    }`}>
-                      {rule.rule_type.type === "TvShow" ? "TV" : "Keyword"}
-                    </span>
-                    {rule.rule_type.type === "TvShow" && rule.rule_type.last_season != null && (
-                      <span className="ml-1.5 text-[11px] text-[var(--theme-text-muted)]">
-                        S{String(rule.rule_type.last_season).padStart(2, "0")}E{String(rule.rule_type.last_episode ?? 0).padStart(2, "0")}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2.5 text-[var(--theme-text-secondary)] max-w-[200px] truncate">{rule.query}</td>
-                  <td className="py-2.5">
-                    <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${
-                      rule.action === "AutoAdd"
-                        ? "bg-[rgba(16,185,129,0.12)] text-[#10b981]"
-                        : "bg-[rgba(234,179,8,0.12)] text-[#eab308]"
-                    }`}>
-                      {rule.action === "AutoAdd" ? "Auto-Add" : "Notify"}
-                    </span>
-                  </td>
-                  <td className="py-2.5 text-[var(--theme-text-muted)]">{intervalLabel(rule.interval_minutes)}</td>
-                  <td className="py-2.5 text-[var(--theme-text-muted)]">
-                    {rule.last_checked ? formatRelativeTime(rule.last_checked) : "Never"}
-                  </td>
-                  <td className="py-2.5 text-center">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleToggle(rule); }}
-                      className={`w-8 h-4.5 rounded-full transition-colors relative ${
-                        rule.enabled ? "bg-[var(--accent)]" : "bg-[var(--theme-border)]"
-                      }`}
-                    >
-                      <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-transform ${
-                        rule.enabled ? "translate-x-3.5" : "translate-x-0.5"
-                      }`} />
-                    </button>
-                  </td>
-                  <td className="py-2.5">
-                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => { setEditingRule(rule); setShowModal(true); }}
-                        className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-                        title="Edit"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleRunNow(rule.id)}
-                        disabled={runningId === rule.id}
-                        className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
-                        title="Run Now"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(rule.id)}
-                        className="p-1 rounded text-[var(--theme-text-muted)] hover:text-[#ef4444] transition-colors"
-                        title="Delete"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
-                      </button>
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setSelectedRuleId(selected ? null : rule.id)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="truncate text-base font-medium text-fg">{rule.name}</span>
+                      <span className="shrink-0 text-sm text-fg-muted">{typeLabel}</span>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <div className="truncate text-sm text-fg-muted tabular">
+                      {rule.query} · {rule.action === "AutoAdd" ? "Auto-Add" : "Notify"} · every {intervalLabel(rule.interval_minutes)} · checked{" "}
+                      {rule.last_checked ? formatRelativeTime(rule.last_checked) : "never"}
+                    </div>
+                  </button>
+                  {runningId === rule.id && <Spinner size="sm" />}
+                  <Toggle checked={rule.enabled} onChange={() => handleToggle(rule)} label={`Enable ${rule.name}`} />
+                  <Menu
+                    trigger={
+                      <IconButton label={`Actions for ${rule.name}`}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                          <circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" />
+                        </svg>
+                      </IconButton>
+                    }
+                    items={[
+                      { label: "Edit", onSelect: () => { setEditingRule(rule); setShowModal(true); } },
+                      { label: "Run now", onSelect: () => handleRunNow(rule.id), disabled: runningId === rule.id },
+                      "separator",
+                      { label: "Delete", danger: true, onSelect: () => handleDelete(rule.id) },
+                    ]}
+                  />
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      {/* Matches Panel */}
-      <div className="border-t border-[var(--theme-border-subtle)] flex-1 overflow-auto px-6 py-4 min-h-0">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[14px] font-medium text-[var(--theme-text-primary)]">
+      {/* Matches */}
+      <div className="flex min-h-0 flex-1 flex-col border-t border-border">
+        <div className="flex h-9 shrink-0 items-center justify-between px-4">
+          <h2 className="text-md font-medium text-fg">
             Recent Matches
-            {selectedRuleId && (
-              <span className="ml-2 text-[var(--theme-text-muted)] font-normal">
-                — {ruleNameMap[selectedRuleId]}
-              </span>
-            )}
+            {selectedRuleId && <span className="ml-2 font-normal text-fg-muted">— {ruleNameMap[selectedRuleId]}</span>}
           </h2>
           {filteredMatches.length > 0 && (
-            <button
-              onClick={handleClearMatches}
-              className="text-[12px] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-            >
+            <Button variant="ghost" size="sm" onClick={handleClearMatches}>
               Clear
-            </button>
+            </Button>
           )}
         </div>
-
-        {filteredMatches.length === 0 ? (
-          <p className="text-[13px] text-[var(--theme-text-muted)] py-4">No matches yet</p>
-        ) : (
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="text-left text-[var(--theme-text-muted)] text-[11px] uppercase tracking-wider">
-                <th className="pb-2 font-medium">Title</th>
-                {!selectedRuleId && <th className="pb-2 font-medium">Rule</th>}
-                <th className="pb-2 font-medium">Size</th>
-                <th className="pb-2 font-medium">Matched</th>
-                <th className="pb-2 font-medium">Status</th>
-                <th className="pb-2 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...filteredMatches].reverse().map((m, i) => (
-                <tr key={`${m.info_hash}-${i}`} className="border-t border-[var(--theme-border-subtle)]">
-                  <td className="py-2 text-[var(--theme-text-primary)] max-w-[400px] truncate">{m.title}</td>
-                  {!selectedRuleId && (
-                    <td className="py-2 text-[var(--theme-text-muted)]">{ruleNameMap[m.rule_id] ?? "Unknown"}</td>
-                  )}
-                  <td className="py-2 text-[var(--theme-text-muted)]">{formatBytes(m.size_bytes)}</td>
-                  <td className="py-2 text-[var(--theme-text-muted)]">{formatRelativeTime(m.matched_at)}</td>
-                  <td className="py-2">
-                    {m.status.type === "Notified" && (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[rgba(234,179,8,0.12)] text-[#eab308]">Notified</span>
-                    )}
-                    {m.status.type === "Added" && (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[rgba(16,185,129,0.12)] text-[#10b981]">Added</span>
-                    )}
-                    {m.status.type === "Failed" && (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[rgba(239,68,68,0.12)] text-[#ef4444]" title={m.status.reason}>Failed</span>
-                    )}
-                  </td>
-                  <td className="py-2">
-                    {m.status.type === "Notified" && (
-                      <button
-                        onClick={async () => {
-                          try {
-                            const { addMagnet, selectTorrentFiles } = await import("../api/torrents");
-                            const resp = await addMagnet(m.magnet);
-                            await selectTorrentFiles(resp.id, "all").catch(() => {});
-                          } catch (e) {
-                            console.error("Failed to add magnet:", e);
-                          }
-                        }}
-                        className="px-2 py-0.5 rounded text-[11px] font-medium transition-colors"
-                        style={{ background: "var(--accent-bg-light)", color: "var(--accent)" }}
-                      >
-                        Add
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          columns={matchColumns}
+          data={matchRows}
+          rowKey={(r) => r.key}
+          emptyMessage="No matches yet"
+        />
       </div>
 
       {/* Add/Edit Rule Modal */}

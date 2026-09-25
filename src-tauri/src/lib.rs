@@ -1,6 +1,7 @@
 mod commands;
 mod providers;
-mod downloader;
+mod engine;
+mod engine_host;
 mod extractor;
 mod media_parser;
 mod media_servers;
@@ -226,9 +227,36 @@ pub fn run() {
                 });
             }
 
+            // Start the download engine (after settings are loaded)
+            {
+                let state: tauri::State<'_, AppState> = app.state();
+                let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+                let config = state.settings.blocking_read().engine_config(state.rar_tool);
+                let handle = app.handle().clone();
+                let engine = tauri::async_runtime::block_on(async move {
+                    engine::Engine::start(engine::EngineDeps::new(
+                        data_dir,
+                        config,
+                        std::sync::Arc::new(engine_host::TauriSink::new(handle.clone())),
+                        std::sync::Arc::new(engine_host::ProviderRefresher::new(handle.clone())),
+                        std::sync::Arc::new(engine_host::TauriRemoteRunner::new(handle)),
+                    ))
+                });
+                let _ = state.engine.set(engine);
+            }
+
             Ok(())
         })
         .manage(AppState::new())
+        // Closing the main window hides it to the tray; downloads keep running. Quit from the tray (or ⌘Q) exits.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             // Auth
             commands::auth::set_api_token,
@@ -260,6 +288,12 @@ pub fn run() {
             commands::downloads::get_download_tasks,
             commands::downloads::clear_completed_downloads,
             commands::downloads::get_download_history,
+            commands::downloads::pause_download,
+            commands::downloads::resume_download,
+            commands::downloads::retry_download,
+            commands::downloads::pause_all_downloads,
+            commands::downloads::resume_all_downloads,
+            commands::downloads::retry_failed_downloads,
             // Settings
             commands::settings::get_settings,
             commands::settings::update_settings,
@@ -295,6 +329,24 @@ pub fn run() {
             commands::backup::export_settings,
             commands::backup::import_settings,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| match event {
+            // Tray "Quit" and OS shutdown both end here: checkpoint downloads so they resume next launch.
+            tauri::RunEvent::Exit => {
+                if let Some(engine) = app.state::<AppState>().engine.get().cloned() {
+                    tauri::async_runtime::block_on(engine.shutdown());
+                }
+            }
+            // macOS: clicking the Dock icon brings a hidden window back.
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { has_visible_windows: false, .. } => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }
+            _ => {}
+        });
 }

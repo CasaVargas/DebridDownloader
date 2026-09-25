@@ -1,7 +1,11 @@
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { useDownloadTasks } from "../hooks/useDownloadTasks";
 import { getActiveProvider } from "../api/providers";
 import { check } from "@tauri-apps/plugin-updater";
+import { providerName } from "../lib/providers";
+import { isActiveStatus } from "../lib/downloadStatus";
+import { cn, CountBadge, Kbd, Menu, StatusDot } from "./ui";
 
 interface SidebarProps {
   activeView: string;
@@ -12,6 +16,14 @@ interface SidebarProps {
   unreadWatchCount?: number;
 }
 
+type NavItem = { id: string; label: string; icon: ReactNode; onClick: () => void; badge?: number; kbd?: string };
+
+const icon = (children: ReactNode) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    {children}
+  </svg>
+);
+
 export default function Sidebar({
   activeView,
   onNavigate,
@@ -21,15 +33,12 @@ export default function Sidebar({
   unreadWatchCount,
 }: SidebarProps) {
   const { user, logout } = useAuth();
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const avatarRef = useRef<HTMLButtonElement>(null);
-  const [providerName, setProviderName] = useState("");
+  const { tasks } = useDownloadTasks();
+  const [providerId, setProviderId] = useState("");
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
 
   useEffect(() => {
-    const names: Record<string, string> = { "real-debrid": "Real-Debrid", "torbox": "TorBox" };
-    getActiveProvider().then((id) => setProviderName(names[id] ?? id)).catch(() => {});
+    getActiveProvider().then(setProviderId).catch(() => {});
   }, []);
 
   // Check for updates on mount
@@ -39,268 +48,125 @@ export default function Sidebar({
     }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!popoverOpen) return;
-    function handleMouseDown(e: MouseEvent) {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(e.target as Node) &&
-        avatarRef.current &&
-        !avatarRef.current.contains(e.target as Node)
-      ) {
-        setPopoverOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleMouseDown);
-    return () => document.removeEventListener("mousedown", handleMouseDown);
-  }, [popoverOpen]);
-
   const premiumDays = user?.expiration
     ? Math.ceil(
         (new Date(user.expiration).getTime() - Date.now()) / 86400000
       )
     : 0;
 
-  const navItems = [
+  // Same definition as the Downloads toolbar's "N active" (includes post-processing).
+  const activeDownloads = tasks.filter((t) => isActiveStatus(t.status)).length;
+
+  const sections: { section: string; items: NavItem[] }[] = [
     {
       section: "Library",
       items: [
         {
           id: "torrents",
           label: "Torrents",
-          icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-          ),
+          kbd: "1",
+          icon: icon(<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></>),
           onClick: () => onNavigate("torrents"),
         },
         {
           id: "downloads",
           label: "Downloads",
-          icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-              <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-            </svg>
-          ),
+          kbd: "2",
+          badge: activeDownloads,
+          icon: icon(<><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></>),
           onClick: () => onNavigate("downloads"),
         },
         {
           id: "completed",
           label: "Completed",
-          icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ),
+          kbd: "3",
+          icon: icon(<polyline points="20 6 9 17 4 12" />),
           onClick: () => onNavigate("completed"),
         },
       ],
     },
     {
-      section: "System",
+      section: "Find",
       items: [
         {
           id: "search",
           label: "Search",
-          icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          ),
+          kbd: "Mod+K",
+          icon: icon(<><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>),
           onClick: onSearchOpen,
         },
         {
           id: "watchlist",
           label: "Watch List",
-          icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          ),
+          kbd: "4",
+          badge: unreadWatchCount ?? 0,
+          icon: icon(<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></>),
           onClick: () => onNavigate("watchlist"),
-        },
-        {
-          id: "settings",
-          label: "Settings",
-          icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-            </svg>
-          ),
-          onClick: onSettingsOpen,
-        },
-        {
-          id: "about",
-          label: "About",
-          icon: (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-          ),
-          onClick: onAboutOpen,
         },
       ],
     },
   ];
 
-  return (
-    <aside
-      className="w-[200px] h-full flex flex-col shrink-0"
-      style={{
-        backgroundColor: "var(--theme-bg-sidebar)",
-        borderRight: "1px solid var(--theme-border)",
-      }}
-    >
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <img src="/app-icon.png" alt="DebridDownloader" className="w-8 h-8 rounded-[8px] shrink-0" />
-        <span className="text-[var(--theme-text-primary)] text-[15px] font-semibold">DebridDownloader</span>
-      </div>
+  const plan = user ? (user.premium ? "Premium" : "Free") : "";
+  const accountLabel = [providerId ? providerName(providerId) : null, plan || null].filter(Boolean).join(" · ");
 
-      {/* Nav sections */}
-      <nav className="flex-1 px-3 overflow-y-auto">
-        {navItems.map((section) => (
-          <div key={section.section} className="mb-6">
-            <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[1px] px-2 mb-2">
-              {section.section}
-            </div>
+  return (
+    <nav aria-label="Main" className="flex w-50 shrink-0 flex-col border-r border-border bg-surface px-2 py-2.5">
+      <div className="flex-1 overflow-y-auto">
+        {sections.map((section) => (
+          <div key={section.section}>
+            <div className="px-2 pb-1 pt-2.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">{section.section}</div>
             {section.items.map((item) => {
-              const isActive = item.id === activeView;
+              const active = item.id === activeView;
               return (
                 <button
                   key={item.id}
+                  type="button"
                   onClick={item.onClick}
-                  className="w-full flex items-center gap-2.5 rounded-lg text-left transition-colors duration-150 mb-1"
-                  style={{
-                    padding: "10px 12px",
-                    fontSize: "14px",
-                    fontWeight: isActive ? 500 : 400,
-                    backgroundColor: isActive
-                      ? "var(--accent-bg-light)"
-                      : "transparent",
-                    color: isActive ? "var(--accent)" : "var(--theme-text-muted)",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor =
-                        "var(--theme-hover)";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor =
-                        "transparent";
-                    }
-                  }}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "group flex h-6.5 w-full items-center gap-2 rounded-md px-2 text-base transition-colors duration-120",
+                    active ? "bg-selected text-fg" : "text-fg-secondary hover:bg-raised hover:text-fg",
+                  )}
                 >
                   <span className="shrink-0">{item.icon}</span>
-                  <span className="flex-1">{item.label}</span>
-                  {item.id === "watchlist" && (unreadWatchCount ?? 0) > 0 && (
-                    <span
-                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
-                      style={{ background: "var(--accent-bg-light)", color: "var(--accent)" }}
-                    >
-                      {unreadWatchCount}
+                  <span className="flex-1 truncate text-left">{item.label}</span>
+                  {item.badge ? (
+                    <CountBadge>{item.badge}</CountBadge>
+                  ) : item.kbd ? (
+                    // Key hints appear on hover/focus only; count badges above are always visible.
+                    <span className="opacity-0 transition-opacity duration-120 group-hover:opacity-100 group-focus-visible:opacity-100">
+                      <Kbd combo={item.kbd} />
                     </span>
-                  )}
-                  {item.id === "about" && updateAvailable && (
-                    <span
-                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
-                      style={{ background: "rgba(59,130,246,0.15)", color: "#3b82f6" }}
-                    >
-                      Update
-                    </span>
-                  )}
+                  ) : null}
                 </button>
               );
             })}
           </div>
         ))}
-      </nav>
-
-      {/* User section */}
-      <div className="relative px-5 py-3.5 border-t border-[var(--theme-border-subtle)]">
-        <button
-          ref={avatarRef}
-          onClick={() => setPopoverOpen((prev) => !prev)}
-          className="flex items-center gap-2.5 w-full text-left"
-        >
-          <div
-              className="w-8 h-8 rounded-full flex items-center justify-center font-semibold"
-              style={{
-                backgroundColor: "rgba(16,185,129,0.15)",
-                color: "#10b981",
-                fontSize: "13px",
-              }}
-            >
-              {user?.username?.charAt(0).toUpperCase() ?? "?"}
-            </div>
-          <div className="min-w-0">
-            <div className="text-[14px] text-[var(--theme-text-primary)] font-medium truncate">
-              {user?.username}
-            </div>
-            <div className="text-[12px] text-[var(--theme-text-muted)]">
-              {premiumDays} days left
-            </div>
-            {providerName && (
-              <div className="text-[11px] text-[var(--theme-text-ghost)]">
-                {providerName}
-              </div>
-            )}
-          </div>
-        </button>
-
-        {popoverOpen && (
-          <div
-            ref={popoverRef}
-            className="absolute rounded-lg p-4 w-48"
-            style={{
-              bottom: "100%",
-              left: "12px",
-              marginBottom: "8px",
-              backgroundColor: "var(--theme-bg-surface)",
-              border: "1px solid var(--theme-border)",
-              zIndex: 50,
-            }}
-          >
-            <p className="text-[15px] text-[var(--theme-text-primary)] font-medium truncate">
-              {user?.username}
-            </p>
-            {user?.expiration && (
-              <p className="text-[13px] text-[var(--theme-text-muted)]">
-                Premium until{" "}
-                {new Date(user.expiration).toLocaleDateString()}
-              </p>
-            )}
-            <button
-              onClick={async () => {
-                setPopoverOpen(false);
-                await logout();
-              }}
-              className="w-full text-left rounded-md px-2 py-2 mt-2 transition-colors duration-150 text-[14px] text-[#ef4444]"
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor =
-                  "rgba(239,68,68,0.08)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor =
-                  "transparent";
-              }}
-            >
-              Logout
-            </button>
-          </div>
-        )}
       </div>
-    </aside>
+
+      <div className="mt-auto border-t border-border px-0 pt-2">
+        <Menu
+          trigger={
+            <button
+              type="button"
+              className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors duration-120 hover:bg-raised"
+              aria-label={`Account: ${accountLabel || user?.username || "account"}`}
+            >
+              <span className="w-full truncate text-base font-medium text-fg">{accountLabel || user?.username}</span>
+              <span className="text-sm text-fg-muted tabular">{premiumDays} days left</span>
+              {updateAvailable && <StatusDot status="info"><span className="text-sm text-fg-secondary">Update {updateAvailable}</span></StatusDot>}
+            </button>
+          }
+          items={[
+            { label: "Settings", shortcut: "Mod+,", onSelect: onSettingsOpen },
+            { label: "About & updates", onSelect: onAboutOpen },
+            "separator",
+            { label: "Sign out", danger: true, onSelect: () => { void logout(); } },
+          ]}
+        />
+      </div>
+    </nav>
   );
 }

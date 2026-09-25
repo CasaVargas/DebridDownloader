@@ -1,8 +1,31 @@
-use crate::downloader::emit_progress;
 use crate::state::{DownloadStatus, DownloadTask};
 use futures::StreamExt;
 use serde::Serialize;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DownloadProgress {
+    pub id: String,
+    pub filename: String,
+    pub downloaded_bytes: i64,
+    pub total_bytes: i64,
+    pub speed: f64,
+    pub status: DownloadStatus,
+    pub remote: Option<String>,
+}
+
+pub fn emit_progress(app: &AppHandle, task: &DownloadTask) {
+    let progress = DownloadProgress {
+        id: task.id.clone(),
+        filename: task.filename.clone(),
+        downloaded_bytes: task.downloaded_bytes,
+        total_bytes: task.total_bytes,
+        speed: task.speed,
+        status: task.status.clone(),
+        remote: task.remote.clone(),
+    };
+    let _ = app.emit("download-progress", &progress);
+}
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 

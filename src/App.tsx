@@ -16,14 +16,14 @@ import { MiniPlayerProvider, useMiniPlayer } from "./contexts/MiniPlayerContext"
 import MiniPlayer from "./components/MiniPlayer";
 import Toast from "./components/Toast";
 import Layout from "./components/Layout";
+import { TooltipProvider } from "./components/ui";
 import AuthPage from "./pages/AuthPage";
 import TorrentsPage from "./pages/TorrentsPage";
 import DownloadsPage from "./pages/DownloadsPage";
 import CompletedPage from "./pages/CompletedPage";
 import SearchPage from "./pages/SearchPage";
-import SettingsPage from "./pages/SettingsPage";
-import AboutPage from "./pages/AboutPage";
 import WatchListPage from "./pages/WatchListPage";
+import { settingsRoutes } from "./pages/settings/SettingsLayout";
 
 const navigateRef: { current: ReturnType<typeof useNavigate> | null } = { current: null };
 
@@ -57,6 +57,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [magnetError, setMagnetError] = useState<string | null>(null);
 
   const clearCurrentUriRef = { current: () => {} };
 
@@ -73,6 +74,7 @@ function App() {
         navigateRef.current?.("/torrents");
       }).catch((e) => {
         console.error("Failed to add magnet:", e);
+        setMagnetError(`Couldn't add magnet link: ${String(e)}`);
       });
     },
     []
@@ -166,13 +168,14 @@ function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--theme-bg)]">
-        <div className="text-zinc-400 text-lg">Loading...</div>
+      <div className="flex items-center justify-center h-screen bg-bg">
+        <div className="text-fg-muted text-base">Loading...</div>
       </div>
     );
   }
 
   return (
+    <TooltipProvider>
     <MiniPlayerProvider>
       <AuthContext.Provider value={authState}>
         <BrowserRouter>
@@ -191,8 +194,7 @@ function App() {
                 <Route path="/completed" element={<CompletedPage />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/watchlist" element={<WatchListPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/about" element={<AboutPage />} />
+                {settingsRoutes}
                 <Route path="*" element={<Navigate to="/torrents" replace />} />
               </Route>
             </>
@@ -201,9 +203,11 @@ function App() {
         </BrowserRouter>
         <MiniPlayer />
         <MiniPlayerToast />
+        {magnetError && <Toast message={magnetError} duration={6000} onDismiss={() => setMagnetError(null)} />}
         <MiniPlayerLogoutCleanup />
       </AuthContext.Provider>
     </MiniPlayerProvider>
+    </TooltipProvider>
   );
 }
 

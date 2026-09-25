@@ -208,7 +208,7 @@ impl RdClient {
         }
         if let Ok(api_err) = resp.json::<ApiError>().await {
             return Err(ProviderError::Api {
-                message: api_err.error,
+                message: super::errors::rd_error_message(api_err.error_code, &api_err.error),
                 code: api_err.error_code,
             });
         }
@@ -225,7 +225,7 @@ impl RdClient {
         }
         if let Ok(api_err) = resp.json::<ApiError>().await {
             return Err(ProviderError::Api {
-                message: api_err.error,
+                message: super::errors::rd_error_message(api_err.error_code, &api_err.error),
                 code: api_err.error_code,
             });
         }
@@ -356,12 +356,13 @@ fn map_torrent_info(info: RdTorrentInfo) -> shared::TorrentInfo {
     }
 }
 
-fn map_download_link(link: RdUnrestrictedLink) -> shared::DownloadLink {
+fn map_download_link(link: RdUnrestrictedLink, hoster_link: &str) -> shared::DownloadLink {
     shared::DownloadLink {
         filename: link.filename,
         filesize: link.filesize,
         download: link.download,
         streamable: link.streamable.map(|s| s == 1),
+        source: shared::LinkSource::RealDebrid { hoster_link: hoster_link.to_string() },
     }
 }
 
@@ -452,7 +453,7 @@ impl DebridProvider for RdClient {
         let mut results = Vec::new();
         for link in &info.links {
             match self.rd_unrestrict_link(link).await {
-                Ok(unrestricted) => results.push(map_download_link(unrestricted)),
+                Ok(unrestricted) => results.push(map_download_link(unrestricted, link)),
                 Err(e) => {
                     log::warn!("Failed to unrestrict link {}: {}", link, e);
                 }
@@ -477,7 +478,17 @@ impl DebridProvider for RdClient {
             .get(link_index)
             .ok_or_else(|| shared::ProviderError::Other("No link available for this file".to_string()))?;
         let unrestricted = self.rd_unrestrict_link(link).await?;
-        Ok(map_download_link(unrestricted))
+        Ok(map_download_link(unrestricted, link))
+    }
+
+    async fn refresh_link(&self, source: &shared::LinkSource) -> Result<shared::DownloadLink, shared::ProviderError> {
+        match source {
+            shared::LinkSource::RealDebrid { hoster_link } => {
+                let unrestricted = self.rd_unrestrict_link(hoster_link).await?;
+                Ok(map_download_link(unrestricted, hoster_link))
+            }
+            _ => Err(shared::ProviderError::Other("Link belongs to a different provider".into())),
+        }
     }
 
     async fn download_history(

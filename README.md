@@ -4,7 +4,7 @@
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-GPL--3.0-green?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-1.6.0-orange?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.7.0-orange?style=for-the-badge)
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
 ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
 ![Tauri](https://img.shields.io/badge/tauri-%2324C8DB.svg?style=for-the-badge&logo=tauri&logoColor=%23FFFFFF)
@@ -23,7 +23,7 @@
 | 🔗 | **Magnet Link Handler** | Set as default magnet handler — links add to torrents instantly |
 | 🔍 | **User-Configured Search** | Add your own tracker sources in Settings — the app ships with none |
 | 📡 | **Torznab Support** | Connect private trackers via Torznab API with API key auth |
-| 📥 | **Download Engine** | Multi-threaded downloads with real-time speed, ETA, and progress |
+| 📥 | **Download Engine** | Segmented, resumable downloads that survive dropped connections, expired links, and restarts — with pause/resume and a global speed limit |
 | 🔄 | **Auto-Updater** | In-app updates — never miss a release |
 | 🎯 | **System Tray** | Runs in the background with menu bar / system tray icon |
 | 🚀 | **Launch at Login** | Optionally start when your computer boots |

@@ -34,6 +34,9 @@ pub trait DebridProvider: Send + Sync {
         file_id: u64,
     ) -> Result<DownloadLink, ProviderError>;
 
+    /// Get a fresh direct URL for a file whose link expired.
+    async fn refresh_link(&self, source: &LinkSource) -> Result<DownloadLink, ProviderError>;
+
     // History
     async fn download_history(
         &self,

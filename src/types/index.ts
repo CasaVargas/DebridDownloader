@@ -80,11 +80,18 @@ export interface AddTorrentResponse {
 
 // ── Downloads ──
 
+export type LinkSource =
+  | { type: "RealDebrid"; hoster_link: string }
+  | { type: "TorBox"; torrent_id: string; file_id: number }
+  | { type: "Premiumize"; transfer_id: string; filename: string }
+  | { type: "Direct" };
+
 export interface DownloadLink {
   filename: string;
   filesize: number;
   download: string;
   streamable?: boolean;
+  source?: LinkSource;
 }
 
 export interface DownloadItem {
@@ -114,6 +121,12 @@ export interface DownloadTask {
   speed: number;
   status: DownloadStatus;
   remote?: string | null;
+  attempt?: number;
+  retry_at?: number | null;
+  segments_active?: number;
+  resumable?: boolean;
+  error?: string | null;
+  waiting_for_network?: boolean;
 }
 
 export interface DownloadProgress {
@@ -124,6 +137,12 @@ export interface DownloadProgress {
   speed: number;
   status: DownloadStatus;
   remote?: string | null;
+  attempt?: number;
+  retry_at?: number | null;
+  segments_active?: number;
+  resumable?: boolean;
+  error?: string | null;
+  waiting_for_network?: boolean;
 }
 
 // ── Settings ──
@@ -151,6 +170,7 @@ export interface AppSettings {
   auto_extract_archives?: boolean;
   delete_archives_after_extract?: boolean;
   torbox_search_enabled?: boolean;
+  segments_per_file?: number;
 }
 
 // ── Search ──

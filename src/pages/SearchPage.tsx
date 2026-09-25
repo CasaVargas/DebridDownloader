@@ -1,8 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { searchTorrents, checkCacheAvailability } from "../api/search";
+import { searchTorrents, checkCacheAvailability, getTrackerConfigs } from "../api/search";
+import { getSettings } from "../api/settings";
 import { listTorrents, addMagnet, selectTorrentFiles } from "../api/torrents";
 import type { SearchResult, Torrent, TrackerStatus } from "../types";
+import { Button, cn, EmptyState, Input, Kbd, Spinner, StatusDot } from "../components/ui";
+import { torrentStatusDot, torrentStatusLabel } from "../utils";
+
+const SEARCH_COLS = "minmax(0, 1fr) calc(var(--spacing) * 24) calc(var(--spacing) * 20) calc(var(--spacing) * 16) calc(var(--spacing) * 18)";
+const LOCAL_COLS = "minmax(0, 1fr) calc(var(--spacing) * 20) calc(var(--spacing) * 28)";
+
+const SearchIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -26,6 +39,9 @@ export default function SearchPage() {
   const [cachedHashes, setCachedHashes] = useState<Set<string>>(new Set());
   const [cacheChecked, setCacheChecked] = useState(false);
   const [error, setError] = useState("");
+  // Whether any search source (enabled tracker or TorBox search) exists, for the "no trackers" empty state.
+  const [sourcesKnown, setSourcesKnown] = useState(false);
+  const [hasSearchSource, setHasSearchSource] = useState(true);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -33,6 +49,15 @@ export default function SearchPage() {
   // Auto-focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    Promise.all([getTrackerConfigs(), getSettings().catch(() => null)])
+      .then(([trackers, settings]) => {
+        setHasSearchSource(trackers.some((t) => t.enabled) || !!settings?.torbox_search_enabled);
+        setSourcesKnown(true);
+      })
+      .catch(() => {});
   }, []);
 
   // Fetch local torrents on mount
@@ -189,213 +214,162 @@ export default function SearchPage() {
   );
 
   const warningTrackers = trackerStatus.filter((t) => !t.ok);
+  const noTrackers = sourcesKnown && !hasSearchSource;
+
+  const tabClass = (active: boolean) =>
+    cn(
+      "h-6 rounded-md px-2.5 text-sm font-medium transition-colors duration-120",
+      active ? "bg-selected text-fg" : "text-fg-secondary hover:bg-raised hover:text-fg",
+    );
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Search input */}
-      <div className="flex items-center gap-4 px-8 py-6 border-b border-[var(--theme-border)] shrink-0" style={{ paddingRight: "80px" }}>
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="var(--theme-text-muted)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="shrink-0"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
+      <div className="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-3">
+        <Input
           ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => handleChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Search torrents or paste magnet link..."
-          className="text-[20px] text-[var(--theme-text-primary)] bg-transparent flex-1 outline-none placeholder:text-[var(--theme-text-ghost)]"
+          aria-label="Search torrents or paste magnet link"
+          icon={<SearchIcon />}
+          kbd="Mod+K"
+          className="h-9 text-md"
         />
-      </div>
-
-      {/* Mode tabs */}
-      <div className="flex gap-2 px-8 py-3 border-b border-[var(--theme-border-subtle)] shrink-0">
-        <button
-          onClick={() => setMode("search")}
-          className={`px-5 py-2.5 rounded-lg text-[15px] font-medium cursor-pointer transition-colors ${
-            mode === "search"
-              ? "bg-[rgba(16,185,129,0.1)] text-[#10b981]"
-              : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)] hover:bg-[var(--theme-hover)]"
-          }`}
-        >
-          Search Trackers
-        </button>
-        <button
-          onClick={() => setMode("local")}
-          className={`px-5 py-2.5 rounded-lg text-[15px] font-medium cursor-pointer transition-colors ${
-            mode === "local"
-              ? "bg-[rgba(16,185,129,0.1)] text-[#10b981]"
-              : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)] hover:bg-[var(--theme-hover)]"
-          }`}
-        >
-          My Torrents
-        </button>
+        {/* Mode tabs */}
+        <div role="tablist" aria-label="Search mode" className="flex gap-1">
+          <button type="button" role="tab" aria-selected={mode === "search"} onClick={() => setMode("search")} className={tabClass(mode === "search")}>
+            Search Trackers
+          </button>
+          <button type="button" role="tab" aria-selected={mode === "local"} onClick={() => setMode("local")} className={tabClass(mode === "local")}>
+            My Torrents
+          </button>
+        </div>
       </div>
 
       {/* Results area */}
-      <div className="flex-1 overflow-y-auto">
-        {error && (
-          <div className="text-[#ef4444] text-[15px] px-8 py-4">{error}</div>
-        )}
+      <div className="flex flex-1 flex-col overflow-y-auto">
+        {error && <div className="border-b border-border px-4 py-2 text-sm text-danger">{error}</div>}
 
         {loading && (
-          <div className="px-8 py-4 space-y-2" style={{ paddingRight: "80px" }}>
-            <div className="flex items-center gap-3 py-2">
-              <svg className="animate-spin h-5 w-5 text-[var(--accent)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <span className="text-[var(--text-secondary)] text-[14px]">Searching, please wait...</span>
-            </div>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="h-16 rounded-lg"
-                style={{
-                  animation: "shimmer 1.5s infinite",
-                  backgroundSize: "200% 100%",
-                  background:
-                    "linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.02) 75%)",
-                }}
-              />
-            ))}
+          <div className="flex items-center justify-center gap-2 py-24 text-sm text-fg-secondary">
+            <Spinner size="sm" />
+            Searching, please wait...
           </div>
         )}
 
         {!loading && !error && query.trim() === "" && mode === "search" && (
-          <div className="flex flex-col items-center justify-center py-32">
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--theme-text-faint)"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mb-5"
+          noTrackers ? (
+            <EmptyState
+              title="No trackers configured"
+              hint="Add a tracker to search from here, or paste a magnet link"
+              action={<Button onClick={() => navigate("/settings/search")}>Add a tracker</Button>}
+            />
+          ) : (
+            <EmptyState title="Search trackers for torrents" hint="or paste a magnet link to add directly" />
+          )
+        )}
+
+        {!loading && !error && query.trim() !== "" && displayResults.length === 0 && <EmptyState title="No results found" />}
+
+        {!loading && displayResults.length > 0 && (
+          <div role="table" aria-label={mode === "search" ? "Search results" : "My torrents"}>
+            <div
+              role="row"
+              className="sticky top-0 z-10 grid h-6.5 select-none items-center gap-3 border-b border-border bg-bg px-4 text-xs font-semibold uppercase tracking-wider text-fg-muted"
+              style={{ gridTemplateColumns: mode === "search" ? SEARCH_COLS : LOCAL_COLS }}
             >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <span className="text-[var(--theme-text-ghost)] text-[18px]">Search trackers for torrents</span>
-            <span className="text-[var(--theme-text-faint)] text-[15px] mt-2">or paste a magnet link to add directly</span>
-          </div>
-        )}
+              <span role="columnheader">Name</span>
+              {mode === "search" ? (
+                <>
+                  <span role="columnheader">Source</span>
+                  <span role="columnheader" className="text-right">Size</span>
+                  <span role="columnheader" className="text-right">Seeders</span>
+                  <span role="columnheader" />
+                </>
+              ) : (
+                <>
+                  <span role="columnheader" className="text-right">Size</span>
+                  <span role="columnheader">Status</span>
+                </>
+              )}
+            </div>
 
-        {!loading && !error && query.trim() !== "" && displayResults.length === 0 && (
-          <div className="flex items-center justify-center py-32">
-            <span className="text-[var(--theme-text-muted)] text-[18px]">No results found</span>
-          </div>
-        )}
+            {displayResults.map((item, index) => {
+              if (mode === "search") {
+                const result = item as SearchResult;
+                const isAdded = addedHashes.has(result.info_hash);
+                const isAdding = addingHash === result.info_hash;
+                const seederColor =
+                  result.seeders >= 10 ? "text-success" : result.seeders >= 1 ? "text-warning" : "text-danger";
+                const isCached = cachedHashes.has(result.info_hash.toLowerCase());
 
-        {!loading &&
-          displayResults.map((item, index) => {
-            if (mode === "search") {
-              const result = item as SearchResult;
-              const isAdded = addedHashes.has(result.info_hash);
-              const isAdding = addingHash === result.info_hash;
-
-              if (isAdded) {
                 return (
                   <div
                     key={result.info_hash}
-                    className="flex items-center gap-4 px-8 py-5 text-[16px] text-[#10b981]"
-                    style={{ paddingRight: "80px" }}
+                    role="row"
+                    aria-selected={index === selectedIndex}
+                    onClick={() => !isAdding && !isAdded && handleAddTorrent(result)}
+                    className={cn(
+                      "grid min-h-7.5 cursor-default items-center gap-3 border-b border-border-subtle px-4 py-1",
+                      index === selectedIndex ? "bg-selected" : "hover:bg-raised",
+                    )}
+                    style={{ gridTemplateColumns: SEARCH_COLS }}
                   >
-                    <svg width="20" height="20" viewBox="0 0 14 14" fill="none" className="shrink-0">
-                      <path d="M2 7.5L5.5 11L12 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    Added!
+                    <span role="cell" className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-base text-fg">{result.title}</span>
+                      {cacheChecked && isCached && (
+                        <span className="shrink-0 text-sm text-fg-secondary" title="Cached — instant download">
+                          <StatusDot status="success">Cached</StatusDot>
+                        </span>
+                      )}
+                      {!cacheChecked && result.info_hash.length > 0 && <Spinner size="sm" />}
+                    </span>
+                    <span role="cell" className="truncate text-sm text-fg-secondary">{result.source}</span>
+                    <span role="cell" className="text-right text-base text-fg-secondary tabular">{result.size_display}</span>
+                    <span role="cell" className={cn("text-right text-base font-medium tabular", seederColor)}>↑{result.seeders}</span>
+                    <span role="cell" className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+                      {isAdded ? (
+                        <StatusDot status="success"><span className="text-sm">Added</span></StatusDot>
+                      ) : (
+                        <Button size="sm" disabled={isAdding} onClick={() => handleAddTorrent(result)}>
+                          {isAdding ? "Adding..." : "Add"}
+                        </Button>
+                      )}
+                    </span>
+                  </div>
+                );
+              } else {
+                const torrent = item as Torrent;
+                return (
+                  <div
+                    key={torrent.id}
+                    role="row"
+                    aria-selected={index === selectedIndex}
+                    onClick={() => handleSelectTorrent(torrent.id)}
+                    className={cn(
+                      "grid min-h-7.5 cursor-default items-center gap-3 border-b border-border-subtle px-4 py-1",
+                      index === selectedIndex ? "bg-selected" : "hover:bg-raised",
+                    )}
+                    style={{ gridTemplateColumns: LOCAL_COLS }}
+                  >
+                    <span role="cell" className="truncate text-base text-fg">{torrent.filename}</span>
+                    <span role="cell" className="text-right text-base text-fg-secondary tabular">{formatBytes(torrent.bytes)}</span>
+                    <span role="cell">
+                      <StatusDot status={torrentStatusDot(torrent.status)}>{torrentStatusLabel(torrent.status)}</StatusDot>
+                    </span>
                   </div>
                 );
               }
-
-              const seederColor =
-                result.seeders >= 10
-                  ? "text-[#10b981]"
-                  : result.seeders >= 1
-                  ? "text-[#eab308]"
-                  : "text-[#ef4444]";
-
-              const isCached = cachedHashes.has(result.info_hash.toLowerCase());
-
-              return (
-                <div
-                  key={result.info_hash}
-                  onClick={() => !isAdding && handleAddTorrent(result)}
-                  className={`flex items-center gap-5 px-8 py-5 cursor-pointer transition-colors ${
-                    index === selectedIndex
-                      ? "bg-[var(--theme-selected)]"
-                      : "hover:bg-[var(--theme-hover)]"
-                  }`}
-                  style={{ paddingRight: "80px" }}
-                >
-                  <span className="text-[16px] text-[var(--theme-text-primary)] truncate flex-1">
-                    {result.title}
-                  </span>
-                  {cacheChecked && isCached && (
-                    <span title="Cached — instant download" className="shrink-0">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-[#10b981]">
-                        <path d="M8.5 1L3 9h4.5l-1 6L13 7H8.5l1-6z" fill="currentColor" />
-                      </svg>
-                    </span>
-                  )}
-                  {!cacheChecked && result.info_hash.length > 0 && (
-                    <span className="shrink-0 w-4 h-4 rounded-full border-2 border-[var(--theme-border)] border-t-[var(--accent)] animate-spin" />
-                  )}
-                  <span className="text-[13px] bg-[rgba(16,185,129,0.08)] text-[#10b981] rounded-md px-3 py-1 shrink-0 font-medium">
-                    {result.source}
-                  </span>
-                  <span className="text-[15px] text-[var(--theme-text-muted)] shrink-0">
-                    {result.size_display}
-                  </span>
-                  <span className={`text-[15px] ${seederColor} shrink-0 font-medium`}>
-                    ↑{result.seeders}
-                  </span>
-                </div>
-              );
-            } else {
-              const torrent = item as Torrent;
-              return (
-                <div
-                  key={torrent.id}
-                  onClick={() => handleSelectTorrent(torrent.id)}
-                  className={`flex items-center gap-5 px-8 py-5 cursor-pointer transition-colors ${
-                    index === selectedIndex
-                      ? "bg-[var(--theme-selected)]"
-                      : "hover:bg-[var(--theme-hover)]"
-                  }`}
-                  style={{ paddingRight: "80px" }}
-                >
-                  <span className="text-[16px] text-[var(--theme-text-primary)] truncate flex-1">
-                    {torrent.filename}
-                  </span>
-                  <span className="text-[15px] text-[var(--theme-text-muted)] shrink-0">
-                    {formatBytes(torrent.bytes)}
-                  </span>
-                  <span className="text-[13px] bg-[rgba(16,185,129,0.08)] text-[#10b981] rounded-md px-3 py-1 shrink-0 font-medium">
-                    {torrent.status}
-                  </span>
-                </div>
-              );
-            }
-          })}
+            })}
+          </div>
+        )}
 
         {/* Tracker warnings */}
         {warningTrackers.length > 0 && (
-          <div className="px-8 py-4 text-[14px] text-[#eab308]" style={{ paddingRight: "80px" }}>
+          <div className="px-4 py-3 text-sm text-warning">
             {warningTrackers.map((t) => (
               <div key={t.name}>
                 ⚠ {t.name}: {t.error ?? "unavailable"}
@@ -406,19 +380,10 @@ export default function SearchPage() {
       </div>
 
       {/* Footer hint */}
-      <div className="px-8 py-3 border-t border-[var(--theme-border-subtle)] flex items-center gap-5 shrink-0">
-        <span className="text-[13px] text-[var(--theme-text-faint)]">
-          <kbd className="bg-[var(--theme-selected)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 mx-0.5">Tab</kbd>
-          {" "}switch mode
-        </span>
-        <span className="text-[13px] text-[var(--theme-text-faint)]">
-          <kbd className="bg-[var(--theme-selected)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 mx-0.5">↑↓</kbd>
-          {" "}navigate
-        </span>
-        <span className="text-[13px] text-[var(--theme-text-faint)]">
-          <kbd className="bg-[var(--theme-selected)] border border-[var(--theme-border)] rounded px-1.5 py-0.5 mx-0.5">Enter</kbd>
-          {" "}select
-        </span>
+      <div className="flex shrink-0 items-center gap-4 border-t border-border px-4 py-2 text-sm text-fg-muted">
+        <span className="flex items-center gap-1.5"><Kbd combo="Tab" /> switch mode</span>
+        <span className="flex items-center gap-1.5"><Kbd combo="↑↓" /> navigate</span>
+        <span className="flex items-center gap-1.5"><Kbd combo="Enter" /> select</span>
       </div>
     </div>
   );

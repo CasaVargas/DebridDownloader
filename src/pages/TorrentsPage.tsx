@@ -1,40 +1,46 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMiniPlayer } from "../contexts/MiniPlayerContext";
 import { open } from "@tauri-apps/plugin-dialog";
 import DataTable, { type Column } from "../components/DataTable";
-import TableToolbar from "../components/TableToolbar";
-import SlideOverPanel from "../components/SlideOverPanel";
 import AddTorrentModal from "../components/AddTorrentModal";
-import VideoPlayer from "../components/VideoPlayer";
 import * as torrentsApi from "../api/torrents";
 import * as downloadsApi from "../api/downloads";
 import { getSettings } from "../api/settings";
-import { getStreamUrl, cleanupStreamSession } from "../api/streaming";
+import { getStreamUrl } from "../api/streaming";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Torrent, TorrentInfo, AppSettings } from "../types";
+import { Button, ContextMenu, IconButton, Inspector, Menu, Spinner, StatusDot, Toolbar, type MenuItem } from "../components/ui";
 import {
   formatBytes,
   formatRelativeTime,
+  torrentStatusDot,
   torrentStatusLabel,
 } from "../utils";
 
-function statusBadgeClass(status: string): string {
-  switch (status) {
-    case "downloaded":
-      return "bg-[rgba(16,185,129,0.12)] text-[#10b981]";
-    case "downloading":
-      return "bg-[rgba(59,130,246,0.12)] text-[#3b82f6]";
-    case "waiting_files_selection":
-    case "queued":
-    case "magnet_conversion":
-      return "bg-[rgba(234,179,8,0.12)] text-[#eab308]";
-    case "error":
-    case "dead":
-    case "magnet_error":
-      return "bg-[rgba(239,68,68,0.12)] text-[#ef4444]";
-    default:
-      return "bg-[rgba(148,163,184,0.12)] text-[#94a3b8]";
-  }
+const DownloadIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const MoreIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" />
+  </svg>
+);
+
+/** Copy via a hidden textarea (the right-click menu's original copy path). */
+function copyText(text: string) {
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.style.position = "fixed";
+  el.style.opacity = "0";
+  document.body.appendChild(el);
+  el.select();
+  document.execCommand("copy");
+  document.body.removeChild(el);
 }
 
 const INLINE_VIDEO_EXTS = [".mp4", ".webm", ".mov", ".m4v", ".mkv"];
@@ -58,11 +64,8 @@ export default function TorrentsPage() {
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<string | null>("added");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    torrentId: string;
-  } | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const filterRef = useRef<HTMLInputElement>(null);
 
   // Slide-over detail state
   const [detailInfo, setDetailInfo] = useState<TorrentInfo | null>(null);
@@ -74,42 +77,8 @@ export default function TorrentsPage() {
 
   const { openPreview, loadingTorrentId: miniPlayerLoadingId } = useMiniPlayer();
 
-  // Streaming state
-  const [streamingFileId, setStreamingFileId] = useState<number | null>(null);
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
-  const [streamSessionId, setStreamSessionId] = useState<string | null>(null);
-  const [streamLoading, setStreamLoading] = useState(false);
+  // Inline playback goes to the floating mini player (resizable, fullscreen) rather than the narrow inspector.
   const [streamError, setStreamError] = useState<string | null>(null);
-
-  const handlePlayInline = async (fileId: number) => {
-    if (!detailInfo) return;
-
-    // Toggle off if clicking the same file
-    if (streamingFileId === fileId) {
-      await handleStopStream();
-      return;
-    }
-
-    // Cleanup previous session
-    if (streamSessionId) {
-      await cleanupStreamSession(streamSessionId).catch(() => {});
-    }
-
-    setStreamLoading(true);
-    setStreamError(null);
-    setStreamingFileId(fileId);
-
-    try {
-      const result = await getStreamUrl(detailInfo.id, fileId);
-      setStreamUrl(result.stream_url);
-      setStreamSessionId(result.session_id);
-    } catch (e) {
-      setStreamError(e instanceof Error ? e.message : String(e));
-      setStreamingFileId(null);
-    } finally {
-      setStreamLoading(false);
-    }
-  };
 
   const handlePlayExternal = async (fileId: number) => {
     if (!detailInfo) return;
@@ -120,16 +89,6 @@ export default function TorrentsPage() {
     } catch (e) {
       setStreamError(e instanceof Error ? e.message : String(e));
     }
-  };
-
-  const handleStopStream = async () => {
-    if (streamSessionId) {
-      await cleanupStreamSession(streamSessionId).catch(() => {});
-    }
-    setStreamingFileId(null);
-    setStreamUrl(null);
-    setStreamSessionId(null);
-    setStreamError(null);
   };
 
   const fetchTorrents = useCallback(async () => {
@@ -181,9 +140,23 @@ export default function TorrentsPage() {
   }, []);
 
   useEffect(() => {
-    const handler = () => setSelectedId(null);
+    const handler = () => { setStreamError(null); setSelectedId(null); };
     window.addEventListener("deselect-item", handler);
     return () => window.removeEventListener("deselect-item", handler);
+  }, []);
+
+  useEffect(() => {
+    const onAdd = () => setShowAdd(true);
+    const onFocus = () => filterRef.current?.focus();
+    const onToggle = () => setInspectorOpen((o) => !o);
+    window.addEventListener("open-add-torrent", onAdd);
+    window.addEventListener("focus-filter", onFocus);
+    window.addEventListener("toggle-inspector", onToggle);
+    return () => {
+      window.removeEventListener("open-add-torrent", onAdd);
+      window.removeEventListener("focus-filter", onFocus);
+      window.removeEventListener("toggle-inspector", onToggle);
+    };
   }, []);
 
   useEffect(() => {
@@ -199,19 +172,6 @@ export default function TorrentsPage() {
     window.addEventListener("action-selected", handler);
     return () => window.removeEventListener("action-selected", handler);
   }, [selectedId, settings]);
-
-  // Close context menu
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = () => setContextMenu(null);
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") setContextMenu(null); };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [contextMenu]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -320,264 +280,190 @@ export default function TorrentsPage() {
 
   const totalBytes = torrents.reduce((s, t) => s + t.bytes, 0);
 
+  const selectRow = (id: string) => { setSelectedId(id); setInspectorOpen(true); };
+  const closeInspector = () => { setStreamError(null); setSelectedId(null); };
+
+  // Right-click menu: same actions and handlers as the old positioned menu.
+  const rowMenuItems = (t: Torrent): MenuItem[] => [
+    { label: "Preview", onSelect: () => openPreview(t.id) },
+    { label: "Download", onSelect: () => handleDownloadTorrent(t.id) },
+    { label: "Delete", danger: true, onSelect: () => { if (window.confirm("Delete this torrent?")) handleDelete(t.id); } },
+    ...(torrents.length > 1
+      ? (["separator", { label: `Delete All (${torrents.length})`, danger: true, onSelect: () => handleDeleteAll() }] as MenuItem[])
+      : []),
+    { label: "Copy Magnet", onSelect: () => copyText("magnet:?xt=urn:btih:" + t.hash) },
+  ];
+
   const columns: Column<Torrent>[] = [
     {
       key: "filename",
       header: "Name",
-      width: "1fr",
+      width: "minmax(0, 1fr)",
       sortable: true,
-      render: (t) => (
-        <div className="text-[15px] font-medium text-[var(--theme-text-primary)] truncate">{t.filename}</div>
-      ),
+      render: (t) => <div className="truncate text-base text-fg">{t.filename}</div>,
     },
     {
       key: "bytes",
       header: "Size",
-      width: "100px",
+      width: 20,
       sortable: true,
-      render: (t) => <span className="text-[14px] text-[var(--theme-text-secondary)]">{formatBytes(t.bytes)}</span>,
+      render: (t) => <span className="text-base text-fg-secondary tabular">{formatBytes(t.bytes)}</span>,
     },
     {
       key: "added",
       header: "Added",
-      width: "110px",
+      width: 24,
       sortable: true,
-      render: (t) => <span className="text-[13px] text-[var(--theme-text-muted)]">{formatRelativeTime(t.added)}</span>,
+      render: (t) => <span className="text-sm text-fg-muted tabular">{formatRelativeTime(t.added)}</span>,
     },
     {
       key: "status",
       header: "Status",
-      width: "100px",
-      render: (t) => (
-        <span className={`text-[12px] px-2.5 py-1 rounded-md font-medium ${statusBadgeClass(t.status)}`}>
-          {torrentStatusLabel(t.status)}
-        </span>
-      ),
+      width: 28,
+      render: (t) => <StatusDot status={torrentStatusDot(t.status)}>{torrentStatusLabel(t.status)}</StatusDot>,
     },
     {
       key: "actions",
       header: "",
-      width: "155px",
+      width: 22,
       render: (t) => (
-        <div className="flex gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => openPreview(t.id)}
-            disabled={miniPlayerLoadingId === t.id}
-            className="w-[30px] h-[30px] rounded-md flex items-center justify-center cursor-pointer transition-colors"
-            style={{ background: "rgba(139,92,246,0.1)", color: "#8b5cf6" }}
-            title="Preview Video"
-          >
-            {miniPlayerLoadingId === t.id ? (
-              <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                <polygon points="5,3 19,12 5,21" />
-              </svg>
-            )}
-          </button>
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          {miniPlayerLoadingId === t.id && <Spinner size="sm" />}
           {t.status === "downloaded" && (
-            <button
-              onClick={() => handleDownloadTorrent(t.id)}
-              className="w-[30px] h-[30px] rounded-md flex items-center justify-center cursor-pointer"
-              style={{ background: "rgba(16,185,129,0.1)", color: "#10b981" }}
-              title="Download"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            </button>
+            <IconButton label="Download" onClick={() => handleDownloadTorrent(t.id)}>
+              <DownloadIcon />
+            </IconButton>
           )}
-          <button
-            onClick={() => {
-              const text = "magnet:?xt=urn:btih:" + t.hash;
-              navigator.clipboard.writeText(text).catch(() => {});
-            }}
-            className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] cursor-pointer"
-            style={{ background: "var(--theme-selected)" }}
-            title="Copy Magnet"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-          </button>
-          <button
-            onClick={() => { if (window.confirm("Delete this torrent?")) handleDelete(t.id); }}
-            className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-[#ef4444] cursor-pointer"
-            style={{ background: "rgba(239,68,68,0.08)" }}
-            title="Delete"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6" />
-              <path d="M14 11v6" />
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-            </svg>
-          </button>
+          <Menu
+            trigger={
+              <IconButton label="More actions">
+                <MoreIcon />
+              </IconButton>
+            }
+            items={[
+              { label: "Preview Video", onSelect: () => openPreview(t.id), disabled: miniPlayerLoadingId === t.id },
+              { label: "Copy Magnet", onSelect: () => { navigator.clipboard.writeText("magnet:?xt=urn:btih:" + t.hash).catch(() => {}); } },
+              "separator",
+              { label: "Delete", danger: true, onSelect: () => { if (window.confirm("Delete this torrent?")) handleDelete(t.id); } },
+            ]}
+          />
         </div>
       ),
     },
   ];
 
+  const inspectorVisible = !!selectedId && inspectorOpen;
+  const canDownload = detailInfo?.status === "downloaded";
+
   return (
     <>
-      <TableToolbar
+      <Toolbar
         title="Torrents"
         subtitle={`${torrents.length} items · ${formatBytes(totalBytes)}`}
-        filterPlaceholder="Filter torrents..."
-        filterValue={filter}
-        onFilterChange={setFilter}
+        filter={{ value: filter, onChange: setFilter, placeholder: "Filter torrents", inputRef: filterRef }}
         actions={
-          <div className="flex gap-2">
-            {torrents.length > 0 && (
-              <button
-                onClick={handleDeleteAll}
-                className="rounded-lg text-[14px] font-medium transition-colors shrink-0 whitespace-nowrap text-[#ef4444] cursor-pointer"
-                style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", padding: "0 20px" }}
-              >
-                Delete All
-              </button>
-            )}
-            <button
-              onClick={() => setShowAdd(true)}
-              className="text-white rounded-lg text-[15px] font-semibold transition-colors shrink-0 whitespace-nowrap cursor-pointer"
-              style={{ background: "var(--accent)", padding: "0 28px" }}
-            >
-              + Add Torrent
-            </button>
-          </div>
-        }
-      />
-
-      {error && (
-        <div className="px-7 py-3 text-[14px] text-[#ef4444] bg-[rgba(239,68,68,0.06)]">
-          {error}
-        </div>
-      )}
-
-      <DataTable
-        columns={columns}
-        data={filtered}
-        rowKey={(t) => t.id}
-        onRowClick={(t) => setSelectedId(t.id)}
-        onRowContextMenu={(t, e) =>
-          setContextMenu({ x: e.clientX, y: e.clientY, torrentId: t.id })
-        }
-        selectedId={selectedId}
-        sortKey={sortKey}
-        sortDirection={sortDirection}
-        onSort={(key, dir) => { setSortKey(key); setSortDirection(dir); }}
-        emptyMessage="No torrents yet"
-        emptySubtext="Add a magnet link or torrent file to get started"
-        loading={loading}
-      />
-
-      {/* Slide-over detail */}
-      <SlideOverPanel
-        open={!!selectedId}
-        onClose={() => { handleStopStream(); setSelectedId(null); }}
-        width={streamingFileId !== null ? 640 : 420}
-      >
-        {detailLoading ? (
-          <div className="flex items-center justify-center flex-1">
-            <div className="w-6 h-6 border-2 border-[rgba(16,185,129,0.3)] border-t-[#10b981] rounded-full animate-spin" />
-          </div>
-        ) : detailInfo ? (
           <>
-            {/* Header */}
-            <div className="px-6 py-5 border-b border-[var(--theme-border)] flex justify-between items-start gap-3">
-              <div className="min-w-0">
-                <span className={`text-[12px] px-2.5 py-1 rounded-full font-medium inline-block mb-2 ${statusBadgeClass(detailInfo.status)}`}>
-                  {torrentStatusLabel(detailInfo.status)}
-                </span>
-                <h3 className="text-[18px] font-bold text-[var(--theme-text-primary)] leading-snug break-words">
-                  {detailInfo.filename}
-                </h3>
-              </div>
-              <button
-                onClick={() => { handleStopStream(); setSelectedId(null); }}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] shrink-0"
-                style={{ background: "var(--theme-selected)" }}
-              >
-                ×
-              </button>
-            </div>
+            {torrents.length > 0 && (
+              <Button variant="danger" onClick={handleDeleteAll}>
+                Delete All
+              </Button>
+            )}
+            <Button variant="primary" kbd="Mod+N" onClick={() => setShowAdd(true)}>
+              Add Torrent
+            </Button>
+          </>
+        }
+      />
 
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
-              {detailError && <p className="text-[#ef4444] text-[14px] mb-4">{detailError}</p>}
+      {error && <div className="border-b border-border px-4 py-2 text-sm text-danger">{error}</div>}
 
-              {/* Info grid */}
-              <div className="grid grid-cols-2 gap-2.5 mb-5">
-                <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
-                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Size</div>
-                  <div className="text-[17px] text-[var(--theme-text-primary)] font-semibold">{formatBytes(detailInfo.bytes)}</div>
-                </div>
-                <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
-                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Added</div>
-                  <div className="text-[15px] text-[var(--theme-text-primary)] font-medium">{new Date(detailInfo.added).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-                </div>
-                <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
-                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Links</div>
-                  <div className="text-[17px] text-[var(--theme-text-primary)] font-semibold">{detailInfo.links.length}</div>
-                </div>
-                <div className="bg-[var(--theme-hover)] rounded-[10px] p-3.5">
-                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-1.5">Hash</div>
-                  <div className="text-[12px] text-[var(--theme-text-secondary)] font-mono truncate">{detailInfo.hash}</div>
-                </div>
-              </div>
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <DataTable
+            columns={columns}
+            data={filtered}
+            rowKey={(t) => t.id}
+            onRowClick={(t) => selectRow(t.id)}
+            onKeyboardSelect={(t) => selectRow(t.id)}
+            rowWrapper={(t, row) => <ContextMenu items={rowMenuItems(t)}>{row}</ContextMenu>}
+            selectedId={selectedId}
+            sortKey={sortKey}
+            sortDirection={sortDirection}
+            onSort={(key, dir) => { setSortKey(key); setSortDirection(dir); }}
+            emptyMessage="No torrents yet"
+            emptySubtext="Add a magnet link or torrent file to get started"
+            loading={loading}
+          />
+        </div>
 
-              {/* Video Player */}
-              {streamingFileId !== null && streamUrl && (
-                <VideoPlayer
-                  streamUrl={streamUrl}
-                  filename={
-                    detailInfo.files.find((f) => f.id === streamingFileId)?.path.split("/").pop() || "Video"
-                  }
-                  onClose={handleStopStream}
-                  onExternalPlayer={() => {
-                    const fid = streamingFileId;
-                    handleStopStream();
-                    if (fid !== null) handlePlayExternal(fid);
-                  }}
-                />
-              )}
+        <Inspector
+          id="torrents"
+          open={inspectorVisible}
+          onClose={closeInspector}
+          title={detailInfo?.filename ?? torrents.find((t) => t.id === selectedId)?.filename ?? "Torrent"}
+          subtitle={detailInfo ? `${formatBytes(detailInfo.bytes)} · ${torrentStatusLabel(detailInfo.status)}` : undefined}
+          footer={
+            detailInfo ? (
+              <>
+                {detailInfo.status === "waiting_files_selection" && (
+                  <Button variant="primary" onClick={handleSelectFiles} disabled={saving || selectedFiles.size === 0}>
+                    {saving ? "Saving..." : "Select Files & Start"}
+                  </Button>
+                )}
+                {canDownload && (
+                  <Button variant="primary" onClick={handleDetailDownload} disabled={downloading}>
+                    {downloading ? "Starting..." : "Download"}
+                  </Button>
+                )}
+                {canDownload && (
+                  <Button onClick={() => openPreview(detailInfo.id)} disabled={miniPlayerLoadingId === detailInfo.id}>
+                    Preview
+                  </Button>
+                )}
+                <Button variant="danger" onClick={handleDetailDelete}>
+                  Delete
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
+          {detailLoading ? (
+            <div className="flex justify-center py-12"><Spinner /></div>
+          ) : detailInfo ? (
+            <div className="flex flex-col gap-4">
+              {detailError && <p className="text-sm text-danger">{detailError}</p>}
 
-              {streamError && !streamUrl && (
-                <div className="mt-5 rounded-[10px] bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.15)] p-4 flex items-center justify-between">
-                  <p className="text-[13px] text-[#ef4444]">{streamError}</p>
-                  <button
-                    onClick={() => streamingFileId !== null && handlePlayInline(streamingFileId)}
-                    className="text-[12px] text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] px-3 py-1.5 rounded-md"
-                    style={{ background: "var(--theme-hover)" }}
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+                <dt className="text-fg-muted">Status</dt>
+                <dd><StatusDot status={torrentStatusDot(detailInfo.status)}><span className="text-sm">{torrentStatusLabel(detailInfo.status)}</span></StatusDot></dd>
+                <dt className="text-fg-muted">Size</dt>
+                <dd className="text-fg tabular">{formatBytes(detailInfo.bytes)}</dd>
+                <dt className="text-fg-muted">Added</dt>
+                <dd className="text-fg tabular">{new Date(detailInfo.added).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</dd>
+                <dt className="text-fg-muted">Links</dt>
+                <dd className="text-fg tabular">{detailInfo.links.length}</dd>
+                <dt className="text-fg-muted">Hash</dt>
+                <dd className="truncate font-mono text-fg-secondary" title={detailInfo.hash}>{detailInfo.hash}</dd>
+              </dl>
+
+              {streamError && <p className="text-sm text-danger" role="alert">{streamError}</p>}
 
               {/* Files */}
               {detailInfo.files.length > 0 && (
                 <div>
-                  <div className="text-[11px] text-[var(--theme-text-muted)] uppercase tracking-[0.5px] mb-2.5">
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">
                     Files ({detailInfo.files.length})
                   </div>
-                  <div className="rounded-[10px] border border-[var(--theme-border-subtle)] overflow-hidden max-h-64 overflow-y-auto">
+                  <div className="max-h-64 overflow-y-auto rounded-md border border-border">
                     {detailInfo.files.map((file) => (
                       <div
                         key={file.id}
-                        className={`flex items-center gap-2.5 px-3.5 py-3 border-b border-[var(--theme-border-subtle)] last:border-b-0 transition-colors ${
-                          streamingFileId === file.id
-                            ? "bg-[rgba(16,185,129,0.06)] border-l-2 border-l-[var(--accent)]"
-                            : "hover:bg-[var(--theme-hover)]"
-                        }`}
+                        className="flex min-h-7.5 items-center gap-2 border-b border-border-subtle px-2 py-1 last:border-b-0 hover:bg-raised"
                       >
                         {detailInfo.status === "waiting_files_selection" && (
                           <input
                             type="checkbox"
+                            aria-label={`Select ${file.path}`}
                             checked={selectedFiles.has(file.id)}
                             onChange={() => {
                               setSelectedFiles((prev) => {
@@ -587,90 +473,42 @@ export default function TorrentsPage() {
                                 return next;
                               });
                             }}
-                            className="accent-[#10b981]"
+                            className="size-4 shrink-0 accent-accent"
                           />
                         )}
 
                         {detailInfo.status === "downloaded" && isInlineVideo(file.path) && (
-                          <button
-                            onClick={() => handlePlayInline(file.id)}
-                            disabled={streamLoading && streamingFileId === file.id}
-                            className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors ${
-                              streamingFileId === file.id
-                                ? "bg-[var(--accent)] text-white"
-                                : "bg-[rgba(16,185,129,0.1)] text-[#10b981] hover:bg-[rgba(16,185,129,0.2)]"
-                            }`}
+                          <IconButton
+                            size="sm"
+                            label="Play in preview"
+                            onClick={() => openPreview(detailInfo.id, file.id, file.path.split("/").pop() || file.path)}
+                            disabled={miniPlayerLoadingId === detailInfo.id}
                           >
-                            {streamLoading && streamingFileId === file.id ? (
-                              <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-                            ) : streamingFileId === file.id ? (
-                              <span className="text-[11px]">■</span>
-                            ) : (
-                              <span className="text-[11px]">▶</span>
-                            )}
-                          </button>
+                            {miniPlayerLoadingId === detailInfo.id ? <Spinner size="sm" /> : <span className="text-xs">▶</span>}
+                          </IconButton>
                         )}
 
                         {detailInfo.status === "downloaded" && isExternalVideo(file.path) && (
-                          <button
-                            onClick={() => handlePlayExternal(file.id)}
-                            className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-[var(--theme-hover)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-                            title="Open in external player"
-                          >
-                            <span className="text-[11px]">▶↗</span>
-                          </button>
+                          <IconButton size="sm" label="Open in external player" onClick={() => handlePlayExternal(file.id)}>
+                            <span className="text-xs">▶↗</span>
+                          </IconButton>
                         )}
 
-                        <span className="flex-1 text-[14px] text-[var(--theme-text-primary)] truncate min-w-0">
+                        <span className="min-w-0 flex-1 truncate text-sm text-fg">
                           {file.path.startsWith("/") ? file.path.slice(1) : file.path}
                         </span>
-                        <span className="text-[12px] text-[var(--theme-text-muted)] shrink-0">
-                          {formatBytes(file.bytes)}
-                        </span>
+                        <span className="shrink-0 text-sm text-fg-muted tabular">{formatBytes(file.bytes)}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-[var(--theme-border)] flex gap-2.5">
-              {detailInfo.status === "waiting_files_selection" && (
-                <button
-                  onClick={handleSelectFiles}
-                  disabled={saving || selectedFiles.size === 0}
-                  className="flex-1 py-3 rounded-[10px] text-white text-[15px] font-semibold disabled:opacity-40 transition-colors"
-                  style={{ background: "linear-gradient(135deg, #3b82f6, #2563eb)" }}
-                >
-                  {saving ? "Saving..." : "Select Files & Start"}
-                </button>
-              )}
-              {detailInfo.status === "downloaded" && (
-                <button
-                  onClick={handleDetailDownload}
-                  disabled={downloading}
-                  className="flex-1 py-3 rounded-[10px] text-white text-[15px] font-semibold disabled:opacity-40 transition-colors"
-                  style={{ background: "linear-gradient(135deg, var(--accent), var(--accent)cc)" }}
-                >
-                  {downloading ? "Starting..." : "Download"}
-                </button>
-              )}
-              <button
-                onClick={handleDetailDelete}
-                className="py-3 px-5 rounded-[10px] text-[#ef4444] text-[14px] transition-colors"
-                style={{ background: "rgba(239,68,68,0.06)" }}
-              >
-                Delete
-              </button>
-            </div>
-          </>
-        ) : detailError ? (
-          <div className="p-6">
-            <p className="text-[#ef4444] text-[15px]">{detailError}</p>
-          </div>
-        ) : null}
-      </SlideOverPanel>
+          ) : detailError ? (
+            <p className="text-sm text-danger">{detailError}</p>
+          ) : null}
+        </Inspector>
+      </div>
 
       {/* Add torrent modal */}
       {showAdd && (
@@ -678,68 +516,6 @@ export default function TorrentsPage() {
           onClose={() => setShowAdd(false)}
           onAdded={fetchTorrents}
         />
-      )}
-
-      {/* Context menu */}
-      {contextMenu && (
-        <div
-          className="fixed bg-[var(--theme-bg-surface)] border border-[var(--theme-border)] rounded-lg py-1.5 w-52 z-[60] shadow-[0_8px_32px_var(--theme-shadow)]"
-          style={{
-            left: Math.min(contextMenu.x, window.innerWidth - 220),
-            top: Math.min(contextMenu.y, window.innerHeight - 200),
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <button
-            className="w-full text-left px-4 py-2.5 text-[15px] text-[var(--theme-text-primary)] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
-            onClick={() => { const id = contextMenu.torrentId; setContextMenu(null); openPreview(id); }}
-          >
-            Preview
-          </button>
-          <button
-            className="w-full text-left px-4 py-2.5 text-[15px] text-[var(--theme-text-primary)] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
-            onClick={() => { const id = contextMenu.torrentId; setContextMenu(null); handleDownloadTorrent(id); }}
-          >
-            Download
-          </button>
-          <button
-            className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
-            onClick={() => { const id = contextMenu.torrentId; setContextMenu(null); if (window.confirm("Delete this torrent?")) handleDelete(id); }}
-          >
-            Delete
-          </button>
-          {torrents.length > 1 && (
-            <>
-              <div className="my-1 border-t border-[var(--theme-border-subtle)]" />
-              <button
-                className="w-full text-left px-4 py-2.5 text-[15px] text-[#ef4444] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
-                onClick={() => { setContextMenu(null); handleDeleteAll(); }}
-              >
-                Delete All ({torrents.length})
-              </button>
-            </>
-          )}
-          <button
-            className="w-full text-left px-4 py-2.5 text-[15px] text-[var(--theme-text-primary)] cursor-pointer hover:bg-[var(--theme-selected)] transition-colors"
-            onClick={() => {
-              const torrent = torrents.find((t) => t.id === contextMenu.torrentId);
-              setContextMenu(null);
-              if (torrent) {
-                const text = "magnet:?xt=urn:btih:" + torrent.hash;
-                const el = document.createElement("textarea");
-                el.value = text;
-                el.style.position = "fixed";
-                el.style.opacity = "0";
-                document.body.appendChild(el);
-                el.select();
-                document.execCommand("copy");
-                document.body.removeChild(el);
-              }
-            }}
-          >
-            Copy Magnet
-          </button>
-        </div>
       )}
     </>
   );

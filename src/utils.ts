@@ -21,28 +21,24 @@ export function formatEta(totalBytes: number, downloadedBytes: number, speed: nu
   return `${hours}h ${mins}m`;
 }
 
-export function torrentStatusColor(status: string): string {
+/** StatusDot tone for a provider torrent status. */
+export function torrentStatusDot(status: string): "success" | "info" | "warning" | "danger" | "idle" {
   switch (status) {
     case "downloaded":
-      return "text-green-400";
+      return "success";
     case "downloading":
-      return "text-blue-400";
-    case "queued":
-      return "text-yellow-400";
-    case "uploading":
-    case "compressing":
-      return "text-purple-400";
+      return "info";
     case "waiting_files_selection":
-      return "text-orange-400";
+    case "queued":
     case "magnet_conversion":
-      return "text-cyan-400";
+      return "warning";
     case "error":
+    case "dead":
     case "magnet_error":
     case "virus":
-    case "dead":
-      return "text-red-400";
+      return "danger";
     default:
-      return "text-zinc-400";
+      return "idle";
   }
 }
 
@@ -91,12 +87,4 @@ export function formatRelativeTime(dateString: string): string {
   }
   if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-export function getDownloadStatusText(
-  status: import("./types").DownloadStatus
-): string {
-  if (typeof status === "string") return status;
-  if ("Failed" in status) return `Failed: ${status.Failed}`;
-  return "Unknown";
 }

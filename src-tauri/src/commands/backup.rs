@@ -84,7 +84,11 @@ pub async fn import_settings(
     // Import app settings (persist + update in-memory)
     if let Ok(settings) = serde_json::from_value::<crate::state::AppSettings>(data.app_settings) {
         crate::commands::settings::save_app_settings(&app, &settings)?;
+        let config = settings.engine_config(state.rar_tool);
         *state.settings.write().await = settings;
+        if let Ok(engine) = state.engine() {
+            engine.set_config(config);
+        }
         imported.push("app_settings".to_string());
     }
 

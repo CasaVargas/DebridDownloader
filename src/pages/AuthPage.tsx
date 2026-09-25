@@ -4,8 +4,13 @@ import { useAuth } from "../hooks/useAuth";
 import * as authApi from "../api/auth";
 import { getAuthMethod, getActiveProvider, getAvailableProviders, switchProvider } from "../api/providers";
 import type { ProviderInfo } from "../types";
+import { useAppearance } from "../hooks/useAppearance";
+import { providerName as providerLabel } from "../lib/providers";
+import { Button, cn, Input, Select, Spinner } from "../components/ui";
 
 export default function AuthPage() {
+  // Theme + accent must apply before sign-in too (Layout isn't mounted here).
+  useAppearance();
   const { login } = useAuth();
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
@@ -22,8 +27,7 @@ export default function AuthPage() {
     Promise.all([getAuthMethod(), getActiveProvider()]).then(([method, id]) => {
       setAuthMethod(method);
       setActiveProviderId(id);
-      const names: Record<string, string> = { "real-debrid": "Real-Debrid", "torbox": "TorBox" };
-      setProviderName(names[id] ?? id);
+      setProviderName(providerLabel(id));
     }).catch(() => {});
     getAvailableProviders().then(setProviders).catch(() => {});
     const prev = localStorage.getItem("previous-provider");
@@ -47,8 +51,7 @@ export default function AuthPage() {
       setActiveProviderId(id);
       const method = await getAuthMethod();
       setAuthMethod(method);
-      const names: Record<string, string> = { "real-debrid": "Real-Debrid", "torbox": "TorBox" };
-      setProviderName(names[id] ?? id);
+      setProviderName(providerLabel(id));
       setMode("token");
     } catch (e) {
       setError(String(e));
@@ -136,164 +139,139 @@ export default function AuthPage() {
     }
   };
 
+  const segClass = (active: boolean) =>
+    cn(
+      "h-6 flex-1 rounded-sm px-2.5 text-sm font-medium transition-colors duration-120",
+      active ? "bg-selected text-fg" : "text-fg-secondary hover:bg-raised hover:text-fg",
+    );
+  const isRd = activeProviderId === "real-debrid";
+
   return (
-    <div className="flex items-center justify-center h-screen bg-[var(--theme-bg)]">
-      <div className="w-full max-w-lg px-12 py-14 bg-[var(--theme-bg-surface)] border border-[var(--theme-border)] rounded-2xl">
-        {/* Logo + Header */}
-        <div className="flex flex-col items-center mb-12 gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, var(--accent, #10b981), var(--accent, #10b981)cc)" }}
-            >
-              <span className="text-white text-[18px] font-bold">D</span>
-            </div>
-            <span className="text-[20px] font-semibold text-[var(--theme-text-primary)]">
-              DebridDownloader
-            </span>
-          </div>
-          <p className="text-[var(--theme-text-secondary)] text-[15px]">
-            Connect your {providerName} account
-          </p>
+    <div className="flex h-screen items-center justify-center bg-bg">
+      <div className="flex w-96 flex-col gap-5 rounded-lg border border-border bg-surface p-6 shadow-panel">
+        {/* Header */}
+        <div className="flex flex-col items-center gap-1 text-center">
+          <img src="/app-icon.png" alt="" className="mb-2 size-10 rounded-lg" />
+          <h1 className="text-xl font-semibold text-fg">DebridDownloader</h1>
+          <p className="text-sm text-fg-secondary">Connect your {providerName} account</p>
         </div>
 
         {/* Provider picker */}
         {providers.length > 1 && (
-          <div className="flex gap-3 mb-10">
-            {providers.map((p) => {
-              const isSelected = activeProviderId === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => handleProviderSelect(p.id)}
-                  disabled={switchingProvider}
-                  className="flex-1 py-3 rounded-lg transition-all text-[14px] font-medium"
-                  style={{
-                    background: isSelected ? "var(--accent-bg-medium, rgba(16,185,129,0.15))" : "var(--theme-bg)",
-                    border: isSelected ? "2px solid var(--accent, #10b981)" : "2px solid var(--theme-border)",
-                    color: isSelected ? "var(--accent, #10b981)" : "var(--theme-text-muted)",
-                    opacity: switchingProvider ? 0.5 : 1,
-                  }}
-                >
-                  {p.name}
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-base text-fg">Provider</span>
+            <div className="flex items-center gap-2">
+              {switchingProvider && <Spinner size="sm" />}
+              <Select
+                ariaLabel="Provider"
+                value={activeProviderId}
+                onValueChange={(id) => handleProviderSelect(id)}
+                options={providers.map((p) => ({ value: p.id, label: providerLabel(p.id) }))}
+              />
+            </div>
           </div>
         )}
 
         {/* Mode toggle */}
-        {authMethod === "oauth_device" && (<div className="flex mb-10 bg-[var(--theme-bg)] rounded-lg p-1.5">
-          <button
-            className={`flex-1 py-2.5 text-[15px] rounded-lg transition-colors ${
-              mode === "token"
-                ? "bg-[rgba(16,185,129,0.12)] text-[#10b981] border border-[rgba(16,185,129,0.2)] font-semibold"
-                : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)]"
-            }`}
-            onClick={() => {
-              setMode("token");
-              setError("");
-              setUserCode("");
-              setOauthStatus("");
-            }}
-          >
-            API Token
-          </button>
-          <button
-            className={`flex-1 py-2.5 text-[15px] rounded-lg transition-colors ${
-              mode === "oauth"
-                ? "bg-[rgba(16,185,129,0.12)] text-[#10b981] border border-[rgba(16,185,129,0.2)] font-semibold"
-                : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)]"
-            }`}
-            onClick={() => {
-              setMode("oauth");
-              setError("");
-            }}
-          >
-            OAuth Login
-          </button>
-        </div>)}
+        {authMethod === "oauth_device" && (
+          <div role="radiogroup" aria-label="Sign-in method" className="flex gap-0.5 rounded-md border border-border p-0.5">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === "token"}
+              className={segClass(mode === "token")}
+              onClick={() => {
+                setMode("token");
+                setError("");
+                setUserCode("");
+                setOauthStatus("");
+              }}
+            >
+              API Token
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === "oauth"}
+              className={segClass(mode === "oauth")}
+              onClick={() => {
+                setMode("oauth");
+                setError("");
+              }}
+            >
+              OAuth Login
+            </button>
+          </div>
+        )}
 
         {(authMethod === "api_key" || mode === "token") ? (
-          <div>
-            <label className="block text-[15px] text-[var(--theme-text-secondary)] mb-3">
-              API Token
-            </label>
-            <input
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(e) => { e.preventDefault(); handleTokenLogin(); }}
+          >
+            <span className="text-sm text-fg-muted">{authMethod === "api_key" ? "API Key" : "API Token"}</span>
+            <Input
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleTokenLogin()}
               placeholder={authMethod === "api_key" ? "Paste your API key" : "Paste your token from real-debrid.com/apitoken"}
-              className="w-full px-4 py-3.5 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-lg text-[var(--theme-text-primary)] placeholder-[var(--theme-text-ghost)] text-[15px] focus:outline-none focus:border-[rgba(16,185,129,0.3)] transition-all duration-150"
+              aria-label={authMethod === "api_key" ? "API key" : "API token"}
+              autoFocus
             />
-            <p className="text-[14px] text-[var(--theme-text-muted)] mt-3">
+            <p className="text-sm text-fg-muted">
               {authMethod === "api_key" ? (
                 "Enter the API key from your account settings"
               ) : (
-                <>Get your token at{" "}<span className="text-[#10b981]">real-debrid.com/apitoken</span></>
+                <>
+                  Get your token at{" "}
+                  <button type="button" className="text-accent-text hover:underline" onClick={() => openUrl("https://real-debrid.com/apitoken").catch(() => {})}>
+                    real-debrid.com/apitoken
+                  </button>
+                </>
               )}
             </p>
-            <button
-              onClick={handleTokenLogin}
-              disabled={loading}
-              className="w-full mt-8 py-3.5 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 text-[15px]"
-              style={{ background: "linear-gradient(135deg, var(--accent, #10b981), var(--accent, #10b981)cc)" }}
-            >
-              {loading ? "Connecting..." : "Connect"}
-            </button>
-          </div>
+            <Button type="submit" variant="primary" disabled={loading} className="mt-2 w-full">
+              {loading ? "Connecting..." : "Sign in"}
+            </Button>
+          </form>
         ) : (
-          <div>
-            <p className="text-[15px] text-[var(--theme-text-secondary)] mb-7">
-              Authenticate via Real-Debrid's device authorization. A browser
-              will open for you to approve access.
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-fg-secondary">
+              Authenticate via Real-Debrid's device authorization. A browser will open for you to approve access.
             </p>
 
             {/* User code display */}
             {userCode && (
-              <div className="mb-7 p-6 bg-[var(--theme-bg)] border border-[var(--theme-border)] rounded-xl text-center">
-                <p className="text-[14px] text-[var(--theme-text-muted)] mb-3">
-                  Enter this code on the Real-Debrid page:
-                </p>
-                <p className="text-[#10b981] text-3xl font-mono tracking-widest">
-                  {userCode}
-                </p>
+              <div className="rounded-md border border-border bg-bg px-4 py-3 text-center">
+                <p className="text-sm text-fg-muted">Enter this code on the Real-Debrid page:</p>
+                <p className="mt-1 font-mono text-xl font-semibold tracking-widest text-fg">{userCode}</p>
               </div>
             )}
 
             {oauthStatus && (
-              <p className="text-[#10b981] text-[15px] mb-7 text-center">
-                {oauthStatus}
-              </p>
+              <p className="text-center text-sm text-fg-secondary" role="status">{oauthStatus}</p>
             )}
 
-            <button
-              onClick={handleOAuthLogin}
-              disabled={loading}
-              className="w-full py-3.5 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 text-[15px]"
-              style={{ background: "linear-gradient(135deg, var(--accent, #10b981), var(--accent, #10b981)cc)" }}
-            >
-              {loading ? "Waiting for authorization..." : "Start OAuth Login"}
-            </button>
+            <Button variant="primary" onClick={handleOAuthLogin} disabled={loading} className="w-full">
+              {loading ? "Waiting for authorization..." : isRd ? "Sign in with Real-Debrid" : "Start OAuth Login"}
+            </Button>
           </div>
         )}
 
-        {error && (
-          <p className="mt-8 text-[#ef4444] text-[15px] text-center">{error}</p>
-        )}
+        {error && <p className="text-center text-sm text-danger" role="alert">{error}</p>}
 
         {previousProvider && (
-          <button
+          <Button
+            variant="ghost"
+            className="w-full"
             onClick={async () => {
               localStorage.removeItem("previous-provider");
               await switchProvider(previousProvider);
               window.location.href = "/settings";
             }}
-            className="w-full mt-6 py-3 text-[var(--theme-text-muted)] hover:text-[var(--theme-text-secondary)] text-[14px] transition-colors"
           >
             Cancel and go back
-          </button>
+          </Button>
         )}
       </div>
     </div>

@@ -1,0 +1,30 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - name: Frontend tests
+        run: npm test
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
