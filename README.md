@@ -1,269 +1,141 @@
-# ⚡ DebridDownloader
+# DebridDownloader
 
-> 🚀 A blazing-fast, native desktop client for managing torrents and downloads through [Real-Debrid](https://real-debrid.com), [TorBox](https://torbox.app), and [Premiumize](https://premiumize.me). Built with Tauri, React, and Rust.
+A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com), [TorBox](https://torbox.app), and [Premiumize](https://premiumize.me). Resumable multi-connection downloads, a native interface in light or dark, and your tokens stay in your OS keychain.
 
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue?style=for-the-badge)
-![License](https://img.shields.io/badge/license-GPL--3.0-green?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-1.7.0-orange?style=for-the-badge)
-![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
-![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
-![Tauri](https://img.shields.io/badge/tauri-%2324C8DB.svg?style=for-the-badge&logo=tauri&logoColor=%23FFFFFF)
-![Real-Debrid](https://img.shields.io/badge/Real--Debrid-77C351?style=for-the-badge)
-![TorBox](https://img.shields.io/badge/TorBox-3b82f6?style=for-the-badge)
-![Premiumize](https://img.shields.io/badge/Premiumize-ff6600?style=for-the-badge)
-[![Discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/SsDDexkhUx)
+[![Latest release](https://img.shields.io/github/v/release/CasaVargas/DebridDownloader?label=release)](https://github.com/CasaVargas/DebridDownloader/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/CasaVargas/DebridDownloader/total)](https://github.com/CasaVargas/DebridDownloader/releases)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+[![Discord](https://img.shields.io/badge/chat-Discord-5865F2)](https://discord.gg/SsDDexkhUx)
 
----
+**[Download](https://casavargas.app/DebridDownloader/#download)** · **[Website](https://casavargas.app/DebridDownloader/)** · **[Release notes](https://github.com/CasaVargas/DebridDownloader/releases)**
 
-## ✨ Features
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/screens/downloads-light.png">
+  <img src="docs/screens/downloads-dark.png" alt="The Downloads view: a file downloading over 4 connections, others retrying, waiting for network, paused, and queued, with a details panel showing per-connection progress." width="100%">
+</picture>
 
-| | Feature | Description |
-|---|---------|-------------|
-| 🧲 | **Torrent Management** | Add magnets or `.torrent` files, select files, monitor progress |
-| 🔗 | **Magnet Link Handler** | Set as default magnet handler — links add to torrents instantly |
-| 🔍 | **User-Configured Search** | Add your own tracker sources in Settings — the app ships with none |
-| 📡 | **Torznab Support** | Connect private trackers via Torznab API with API key auth |
-| 📥 | **Download Engine** | Segmented, resumable downloads that survive dropped connections, expired links, and restarts — with pause/resume and a global speed limit |
-| 🔄 | **Auto-Updater** | In-app updates — never miss a release |
-| 🎯 | **System Tray** | Runs in the background with menu bar / system tray icon |
-| 🚀 | **Launch at Login** | Optionally start when your computer boots |
-| ⌨️ | **Keyboard First** | `⌘K` search, `⌘R` refresh, arrow nav, `Enter` to download |
-| 🌗 | **Dark & Light Mode** | Full theme support with CSS variable-driven theming |
-| 🎨 | **6 Accent Colors** | Emerald, Blue, Violet, Rose, Amber, Cyan |
-| 🔐 | **Signed & Notarized** | macOS builds signed with Developer ID & notarized by Apple |
-| 💾 | **Secure Token Storage** | API tokens stored in OS keychain, not plain text |
+## Features
 
----
+**Downloads that don't start over**
+- Multiple connections per file (4 by default, up to 16)
+- Resumes after dropped connections, app restarts, and crashes
+- Expired debrid links refresh automatically
+- Pause, resume, and retry, for one download or all of them
+- One app-wide speed limit and concurrent-download limit
+- Waits for the network to come back instead of failing
 
-## 🌐 Website
+**A native interface**
+- Light, dark, or follow your system, with six accent colors
+- The same clean layout on macOS, Windows, and Linux
+- Keyboard shortcuts for everything common, with ⌘ on macOS and Ctrl elsewhere
+- Closing the window keeps downloads running in the tray
 
-**[casavargas.app/DebridDownloader](https://casavargas.app/DebridDownloader/)** — screenshots, download links, and feature overview.
+**Everything around the download**
+- Add magnets or `.torrent` files, pick files, and set it as your default magnet handler
+- Search your own trackers: Torznab, Prowlarr, Jackett, TPB-style JSON APIs, and TorBox's built-in search, with a check for what's already cached
+- A watch list that finds new releases and adds or notifies automatically
+- Auto-extract archives and sort movies and shows into library folders (with TMDB lookups)
+- Plex, Jellyfin, and Emby rescans when downloads finish
+- rclone remotes as download destinations
+- Plain-language error messages from your provider
+- Tokens stored in macOS Keychain, Windows Credential Manager, or Secret Service
+- Signed and notarized macOS builds, with in-app updates
 
----
+## Download
 
-## 📦 Download
+| Platform | Build |
+|---|---|
+| macOS (Apple Silicon, macOS 11+) | `.dmg` |
+| Windows 10+ (x64 and ARM64) | `.exe` installer |
+| Linux (x64 and ARM64) | `.deb`, `.AppImage`, `.rpm` |
 
-<table>
-<tr><th>Platform</th><th>Architecture</th><th>Download</th></tr>
-<tr><td>🍎 macOS</td><td>Apple Silicon (M1/M2/M3/M4)</td><td><a href="https://github.com/CasaVargas/DebridDownloader/releases/latest"><code>.dmg</code></a></td></tr>
-<tr><td>🪟 Windows</td><td>x64</td><td><a href="https://github.com/CasaVargas/DebridDownloader/releases/latest"><code>.exe</code> installer</a></td></tr>
-<tr><td>🪟 Windows</td><td>ARM64</td><td><a href="https://github.com/CasaVargas/DebridDownloader/releases/latest"><code>.exe</code> installer</a></td></tr>
-<tr><td>🐧 Linux</td><td>x64</td><td><a href="https://github.com/CasaVargas/DebridDownloader/releases/latest"><code>.deb</code> / <code>.AppImage</code></a></td></tr>
-</table>
+Get them from the [website](https://casavargas.app/DebridDownloader/#download) or the [latest release](https://github.com/CasaVargas/DebridDownloader/releases/latest). You'll need a Real-Debrid, TorBox, or Premiumize account.
 
----
+## Getting started
 
-## 📋 Requirements
+1. Install and open DebridDownloader.
+2. Connect your provider:
+   - **Real-Debrid:** sign in with OAuth, or paste a token from [real-debrid.com/apitoken](https://real-debrid.com/apitoken)
+   - **TorBox:** paste your API key from [torbox.app](https://torbox.app)
+   - **Premiumize:** paste your API key from [premiumize.me/account](https://www.premiumize.me/account)
+3. Add a torrent with <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>N</kbd>, then download it once your provider has it ready.
+4. Optional: add tracker sources in **Settings → Search** to search from inside the app.
 
-- 🔑 A [Real-Debrid](https://real-debrid.com), [TorBox](https://torbox.app), or [Premiumize](https://premiumize.me) premium account
-- 💻 macOS 11+ / Windows 10+ / Modern Linux distro
+### Keyboard shortcuts
 
----
-
-## 🏁 Getting Started
-
-1. 📥 Download and install for your platform
-2. 🚀 Launch DebridDownloader
-3. 🔐 Connect your debrid provider:
-   - **Real-Debrid** — API token from [real-debrid.com/apitoken](https://real-debrid.com/apitoken) or OAuth login
-   - **TorBox** — API token from [torbox.app](https://torbox.app)
-   - **Premiumize** — API key from [premiumize.me/account](https://www.premiumize.me/account)
-4. ⚙️ (Optional) Add tracker sources in **Settings > Trackers** to enable search
-5. 🧲 Start adding torrents and downloading!
-
----
-
-## 🎮 Usage
-
-### 🧲 Adding Torrents
-
-- Click **+ Add Torrent** to paste a magnet link or upload a `.torrent` file
-- Use **Search** (`⌘K`) to find torrents across your configured trackers
-- Paste a magnet link directly into the search bar — it gets added instantly
-
-### 🔍 Configuring Search Trackers
-
-The app **ships with no trackers built in**. You add your own sources in **Settings > Trackers**:
-
-1. Go to **Settings** in the sidebar
-2. Scroll to the **Trackers** section
-3. Enter a name, base URL, select the type, and click **Add**
-4. Supported types:
-   - **PirateBay API** — sites with a TPB-compatible JSON API (`/q.php?q=query`)
-   - **Torznab** — private trackers with Torznab API support (requires API key)
-
-You can add multiple trackers — searches run in parallel across all enabled sources. Each tracker can be toggled on/off individually.
-
-### 📥 Managing Downloads
-
-- 📋 **Torrents** — all your torrents with sortable columns (name, size, date, status)
-- ⬇️ **Downloads** — active downloads with live speed, ETA, and progress bars
-- ✅ **Completed** — finished downloads with "Reveal in Finder" to locate files
-- 🔎 **Search** — integrated tracker search with seeder counts and one-click add
-
-### ⌨️ Keyboard Shortcuts
+<kbd>⌘</kbd> on macOS, <kbd>Ctrl</kbd> on Windows and Linux.
 
 | Shortcut | Action |
-|:--------:|--------|
-| `⌘K` | 🔍 Open search |
-| `⌘R` | 🔄 Refresh current view |
-| `Esc` | ❌ Close panel / deselect |
-| `Enter` | 📥 Download selected torrent |
-| `Delete` | 🗑️ Delete selected item |
-| `Tab` | 🔀 Switch search mode (in search view) |
-| `↑↓` | 🔼🔽 Navigate results |
+|---|---|
+| <kbd>⌘</kbd> <kbd>K</kbd> | Search |
+| <kbd>⌘</kbd> <kbd>N</kbd> | Add a torrent |
+| <kbd>⌘</kbd> <kbd>,</kbd> | Settings |
+| <kbd>⌘</kbd> <kbd>R</kbd> | Refresh |
+| <kbd>⌘</kbd> <kbd>I</kbd> | Show or hide the details panel |
+| <kbd>1</kbd>–<kbd>4</kbd> | Torrents, Downloads, Completed, Watch List |
+| <kbd>/</kbd> | Filter the current list |
+| <kbd>↑</kbd> <kbd>↓</kbd> / <kbd>Enter</kbd> | Select / run the default action |
+| <kbd>Space</kbd> | Pause or resume the selected download |
+| <kbd>Delete</kbd> | Remove or cancel the selection |
+| <kbd>Esc</kbd> | Close the panel or dialog |
 
-### ⚙️ Settings
+## Legal
 
-| Setting | Description |
-|---------|-------------|
-| 📁 Download folder | Set default location or get prompted each time |
-| 🔢 Max concurrent | Control parallel downloads (1-10) |
-| 📂 Subfolders | Organize files into torrent-named folders |
-| ⚡ Auto-start | Automatically download when torrents are ready |
-| 🔍 Trackers | Add/remove/toggle your own torrent search sources |
-| 🚀 Launch at login | Start with your computer |
-| 🔔 Notifications | Get notified when downloads complete |
-| 🌗 Theme | Dark or light mode |
-| 🎨 Accent color | Emerald 💚 Blue 💙 Violet 💜 Rose 🩷 Amber 🧡 Cyan 🩵 |
+DebridDownloader is a download manager for paid debrid services. It:
 
----
+- talks to the official [Real-Debrid](https://api.real-debrid.com/), [TorBox](https://api.torbox.app), and Premiumize APIs;
+- ships with **no tracker sources**, so users add their own;
+- does not host, index, or distribute any content;
+- works like other download managers such as JDownloader or aria2.
 
-## ⚖️ Legal
+It's a neutral tool. Users are responsible for how they use it and which sources they configure. The developers don't endorse or encourage piracy.
 
-DebridDownloader is a **download management tool**. It:
+## Development
 
-- ✅ Provides an interface to the [Real-Debrid API](https://api.real-debrid.com/) and [TorBox API](https://api.torbox.app) — legitimate paid services
-- ✅ Ships with **zero torrent tracker sources** — users bring their own
-- ✅ Does not host, index, or distribute any copyrighted content
-- ✅ Does not include any hardcoded tracker URLs, scraper targets, or search endpoints
-- ✅ Functions similarly to other download managers like JDownloader, Internet Download Manager, or aria2
-
-The app is a neutral tool. Users are responsible for how they use it and what sources they configure. The developers do not endorse or encourage piracy.
-
----
-
-## 🛠️ Development
-
-### Prerequisites
-
-| Tool | Version |
-|------|---------|
-| [Node.js](https://nodejs.org) | 22+ |
-| [Rust](https://rustup.rs) | stable |
-
-**Platform-specific:**
-- 🍎 **macOS**: `xcode-select --install`
-- 🐧 **Linux**: `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
-- 🪟 **Windows**: [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (pre-installed on Win 10/11)
-
-### Setup
+**Prerequisites:** [Node.js](https://nodejs.org) 22+ and [Rust](https://rustup.rs) stable.
+- macOS: `xcode-select --install`
+- Linux: `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
+- Windows: [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (preinstalled on Windows 10/11)
 
 ```bash
 git clone https://github.com/CasaVargas/DebridDownloader.git
 cd DebridDownloader
 npm install
+npm run tauri dev        # app with hot reload
 ```
 
-### 🔥 Dev Server
+| Task | Command |
+|---|---|
+| Frontend tests (Vitest) | `npm test` |
+| Rust tests (download engine) | `cargo test --manifest-path src-tauri/Cargo.toml` |
+| Type check | `npx tsc --noEmit` |
+| Production build | `npm run tauri build` |
 
-```bash
-npm run tauri dev
-```
+Installers land in `src-tauri/target/release/bundle/`. CI runs the tests on every pull request.
 
-> Starts Vite dev server (hot reload) + Tauri window
+### Architecture
 
-### 📦 Build
+A Tauri v2 app: a React 19 + TypeScript + Tailwind v4 frontend in `src/` talks to a Rust backend in `src-tauri/` over Tauri IPC.
 
-```bash
-npm run tauri build
-```
+| Path | What it is |
+|---|---|
+| `src-tauri/src/engine/` | The download engine. One actor owns every job; transfers write `{file}.part` with segmented `Range` requests and crash-safe checkpoints, persisted to `downloads.json`. No Tauri dependencies. |
+| `src-tauri/src/engine_host.rs` | Connects the engine to Tauri: events, provider link refresh, rclone. |
+| `src-tauri/src/providers/` | Real-Debrid, TorBox, and Premiumize clients behind one `DebridProvider` trait. |
+| `src-tauri/src/commands/` | IPC command handlers. |
+| `src-tauri/src/scrapers/` | Tracker search. |
+| `src/styles/tokens.css` | Every color, size, and spacing value in one place. |
+| `src/components/ui/` | Shared, accessible UI components. |
+| `src/pages/` | One file per screen; Settings is split into `src/pages/settings/`. |
 
-> Produces platform-specific installers in `src-tauri/target/release/bundle/`
+Design docs live in [`specs/`](specs/). [`AGENTS.md`](AGENTS.md) has the conventions for contributors.
 
-### ✅ Type Check
+## License
 
-```bash
-npx tsc --noEmit
-```
+GPL-3.0. See [LICENSE](LICENSE).
 
----
+## More from Casa Vargas
 
-## 🏗️ Architecture
-
-### Two-Process Model (Tauri v2)
-
-```
-┌──────────────────────────────────────────────────┐
-│                                                  │
-│   🌐 Frontend (React 19 + TypeScript)            │
-│   Vite + Tailwind CSS v4 + React Router v7       │
-│                                                  │
-│          invoke() ◄──── IPC ────► #[command]      │
-│                                                  │
-│   ⚙️  Backend (Rust)                              │
-│   Real-Debrid API · File Downloads · Keyring     │
-│   Plugins: opener, dialog, fs, store, autostart  │
-│                                                  │
-└──────────────────────────────────────────────────┘
-```
-
-### 🌐 Frontend (`src/`)
-
-| Path | Purpose |
-|------|---------|
-| `pages/` | 📄 Route views: Torrents, Downloads, Completed, Search, Settings, Auth |
-| `components/` | 🧩 Shared UI: Sidebar, DataTable, SlideOverPanel, TableToolbar |
-| `hooks/` | 🪝 Auth context, download polling, theme/accent management |
-| `api/` | 📡 Thin `invoke()` wrappers — one file per domain |
-| `types/` | 📝 TypeScript interfaces mirroring Rust types |
-| `styles/` | 🎨 Tailwind v4 theme + CSS custom properties for theming |
-
-### ⚙️ Backend (`src-tauri/src/`)
-
-| Module | Purpose |
-|--------|---------|
-| `lib.rs` | 🏗️ Tauri builder — plugins, tray icon, commands |
-| `state.rs` | 💾 App state: RD client, settings, downloads, cancel tokens |
-| `providers/` | 🌐 Debrid provider clients (Real-Debrid, TorBox) |
-| `commands/` | 🔌 Tauri `#[command]` bridge functions |
-| `downloader.rs` | 📥 Download engine with progress events + cancellation |
-| `scrapers/` | 🔍 User-configurable tracker search (API-based) |
-
----
-
-## 🧰 Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| 🏗️ Framework | [Tauri v2](https://v2.tauri.app) |
-| 🌐 Frontend | React 19 · TypeScript · Tailwind CSS v4 · React Router v7 |
-| ⚙️ Backend | Rust · Tokio · Reqwest |
-| 🔐 Token Storage | OS Keychain (`keyring` crate) |
-| 📦 Packaging | NSIS (Windows) · DMG (macOS) · DEB/AppImage (Linux) |
-| 🚀 CI/CD | GitHub Actions — build, sign, notarize, release |
-
----
-
-## 📄 License
-
-GPL-3.0 — see [LICENSE](LICENSE) for details.
-
----
-
-## 🏠 More from Casa Vargas
-
-| | Project | Description |
-|---|---------|-------------|
-| 📄 | **[OneScribe](https://getonescribe.app)** | AI-powered document scanner for iOS — 83 document types, fully on-device processing, no cloud required |
-| 🌐 | **[casavargas.app](https://casavargas.app)** | All our projects and apps |
-
----
-
-<p align="center">
-  <b>Made with 🦀 Rust + ⚛️ React + 💚 Real-Debrid + 💙 TorBox</b>
-  <br>
-  <sub>Built by <a href="https://casavargas.app">Casa Vargas</a></sub>
-  <br>
-  <sub>💬 <a href="https://discord.gg/SsDDexkhUx">Join our Discord</a></sub>
-</p>
+- **[Beltr](https://beltr.app):** AI karaoke for Windows, macOS, and Linux
+- **[OneScribe](https://getonescribe.app):** an on-device document scanner for iOS
+- **[casavargas.app](https://casavargas.app):** all projects
