@@ -248,6 +248,15 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::new())
+        // Closing the main window hides it to the tray; downloads keep running. Quit from the tray (or ⌘Q) exits.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             // Auth
             commands::auth::set_api_token,
@@ -322,12 +331,22 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
+        .run(|app, event| match event {
             // Tray "Quit" and OS shutdown both end here: checkpoint downloads so they resume next launch.
-            if let tauri::RunEvent::Exit = event {
+            tauri::RunEvent::Exit => {
                 if let Some(engine) = app.state::<AppState>().engine.get().cloned() {
                     tauri::async_runtime::block_on(engine.shutdown());
                 }
             }
+            // macOS: clicking the Dock icon brings a hidden window back.
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { has_visible_windows: false, .. } => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }
+            _ => {}
         });
 }
