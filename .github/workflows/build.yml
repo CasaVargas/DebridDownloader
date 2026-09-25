@@ -12,6 +12,8 @@ permissions:
 jobs:
   build:
     if: startsWith(github.ref, 'refs/tags/')
+    # A normal build takes ~10 min; fail fast instead of burning the 6h default if something hangs.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -75,6 +77,9 @@ jobs:
         run: |
           echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          # New keychains auto-lock after 5 min; the build takes longer, and a locked keychain makes
+          # codesign wait forever for a password prompt. Keep it unlocked for the job's lifetime.
+          security set-keychain-settings -lut 21600 build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
