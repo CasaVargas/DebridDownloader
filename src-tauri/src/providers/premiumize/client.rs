@@ -262,7 +262,12 @@ impl DebridProvider for PremiumizeClient {
             .await?;
         if resp.status != "success" {
             return Err(shared::ProviderError::Api {
-                message: "Failed to add magnet".to_string(),
+                message: resp
+                    .message
+                    .as_deref()
+                    .map(shared::humanize_api_message)
+                    .filter(|m| !m.is_empty())
+                    .unwrap_or_else(|| "Premiumize couldn't add this magnet".to_string()),
                 code: None,
             });
         }
@@ -289,7 +294,12 @@ impl DebridProvider for PremiumizeClient {
         let api_resp: PmCreateResponse = resp.json().await?;
         if api_resp.status != "success" {
             return Err(shared::ProviderError::Api {
-                message: "Failed to add torrent file".to_string(),
+                message: api_resp
+                    .message
+                    .as_deref()
+                    .map(shared::humanize_api_message)
+                    .filter(|m| !m.is_empty())
+                    .unwrap_or_else(|| "Premiumize couldn't add this torrent file".to_string()),
                 code: None,
             });
         }

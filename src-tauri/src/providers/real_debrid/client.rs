@@ -208,7 +208,7 @@ impl RdClient {
         }
         if let Ok(api_err) = resp.json::<ApiError>().await {
             return Err(ProviderError::Api {
-                message: api_err.error,
+                message: super::errors::rd_error_message(api_err.error_code, &api_err.error),
                 code: api_err.error_code,
             });
         }
@@ -225,7 +225,7 @@ impl RdClient {
         }
         if let Ok(api_err) = resp.json::<ApiError>().await {
             return Err(ProviderError::Api {
-                message: api_err.error,
+                message: super::errors::rd_error_message(api_err.error_code, &api_err.error),
                 code: api_err.error_code,
             });
         }

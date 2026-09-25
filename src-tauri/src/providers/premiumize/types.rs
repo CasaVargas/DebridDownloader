@@ -35,6 +35,9 @@ pub struct PmCreateResponse {
     pub status: String,
     pub id: Option<String>,
     pub name: Option<String>,
+    /// Present when status is "error".
+    #[serde(default)]
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

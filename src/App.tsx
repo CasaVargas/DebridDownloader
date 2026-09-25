@@ -57,6 +57,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [magnetError, setMagnetError] = useState<string | null>(null);
 
   const clearCurrentUriRef = { current: () => {} };
 
@@ -73,6 +74,7 @@ function App() {
         navigateRef.current?.("/torrents");
       }).catch((e) => {
         console.error("Failed to add magnet:", e);
+        setMagnetError(`Couldn't add magnet link: ${String(e)}`);
       });
     },
     []
@@ -201,6 +203,7 @@ function App() {
         </BrowserRouter>
         <MiniPlayer />
         <MiniPlayerToast />
+        {magnetError && <Toast message={magnetError} duration={6000} onDismiss={() => setMagnetError(null)} />}
         <MiniPlayerLogoutCleanup />
       </AuthContext.Provider>
     </MiniPlayerProvider>

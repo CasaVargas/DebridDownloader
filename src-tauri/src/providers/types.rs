@@ -37,12 +37,29 @@ pub enum ProviderError {
     NotAuthenticated,
     #[error("rate limited")]
     RateLimited,
-    #[error("API error: {message}")]
+    /// `message` is user-facing: providers translate or tidy it before building this.
+    #[error("{message}")]
     Api { message: String, code: Option<i64> },
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
     #[error("{0}")]
     Other(String),
+}
+
+/// Turns machine-style provider text ("infringing_file", "DOWNLOAD_NOT_CACHED") into a sentence
+/// ("Infringing file"). Text that already reads like a sentence is only trimmed.
+pub fn humanize_api_message(raw: &str) -> String {
+    let t = raw.trim();
+    let machine = !t.contains(' ') || t.contains('_');
+    if !machine {
+        return t.to_string();
+    }
+    let words = t.replace('_', " ").to_lowercase();
+    let mut chars = words.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
 }
 
 impl serde::Serialize for ProviderError {
@@ -192,6 +209,15 @@ mod tests {
     use crate::providers::real_debrid::client::RdClient;
     use crate::providers::torbox::client::TorBoxClient;
     use crate::providers::DebridProvider;
+
+    #[test]
+    fn humanize_tidies_machine_text() {
+        assert_eq!(humanize_api_message("infringing_file"), "Infringing file");
+        assert_eq!(humanize_api_message("  Download not cached  "), "Download not cached");
+        assert_eq!(humanize_api_message("DOWNLOAD_NOT_CACHED"), "Download not cached");
+        assert_eq!(humanize_api_message("File is too big."), "File is too big.");
+        assert_eq!(humanize_api_message(""), "");
+    }
 
     /// Spec §8: each provider rejects sources that belong to another provider, without network I/O.
     #[tokio::test]

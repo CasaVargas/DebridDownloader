@@ -98,7 +98,7 @@ impl TorBoxClient {
             })
         } else {
             Err(shared::ProviderError::Api {
-                message: resp.error.or(resp.detail).unwrap_or_else(|| "Unknown error".to_string()),
+                message: shared::humanize_api_message(&resp.error.or(resp.detail).unwrap_or_else(|| "TorBox returned an error".to_string())),
                 code: None,
             })
         }
