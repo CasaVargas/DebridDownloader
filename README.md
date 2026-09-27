@@ -39,7 +39,7 @@ A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com
 - rclone remotes as download destinations
 - Plain-language error messages from your provider
 - Tokens stored in macOS Keychain, Windows Credential Manager, or Secret Service
-- Signed and notarized macOS builds, with in-app updates
+- Signed and notarized macOS builds, signed Windows installers, and in-app updates
 
 ## Download
 
