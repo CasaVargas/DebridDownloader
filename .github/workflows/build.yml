@@ -200,10 +200,16 @@ jobs:
         with:
           args: --target ${{ matrix.target }}${{ runner.os == 'Windows' && ' --config src-tauri/windows/tauri.signing.conf.json' || '' }}
 
-      # Every installer, and the app exe and NSIS plugins packed inside the NSIS installer (the
-      # one the updater installs), must carry a valid, timestamped signature. The loose
+      # Both installers, and the app exe packed inside the NSIS installer (the one the updater
+      # installs), must carry a valid, timestamped signature. The loose
       # target\...\release\debriddownloader.exe doesn't count: after each package step the bundler
       # puts the unsigned, unpatched binary back, so only the packaged copies are signed.
+      # Everything else in the NSIS payload is reported, not enforced:
+      # - the stock NSIS plugins (System.dll, nsDialogs.dll, ...) ship unsigned. Tauri signs its own
+      #   copies and adds them with !addplugindir, but makensis has already registered the
+      #   identical unsigned ones from its built-in plugin dir, and those win.
+      # - uninstall.exe is rebuilt by 7-Zip, so its result is no proof either way; the build log
+      #   shows !uninstfinalize signing the real one.
       - name: Verify Windows signatures
         if: runner.os == 'Windows'
         shell: powershell
@@ -239,14 +245,11 @@ jobs:
               $bad++
             }
             foreach ($f in Get-ChildItem $out -Recurse -Include *.exe, *.dll) {
-              if ($f.Name -eq 'uninstall.exe') {
-                # 7-Zip rebuilds the uninstaller from the installer's data, so its result isn't
-                # proof either way; the build log shows !uninstfinalize signing it.
-                $sig = Get-AuthenticodeSignature $f.FullName
-                Write-Host "(info) uninstall.exe as rebuilt by 7-Zip: $($sig.Status)"
-                continue
+              if ($f.Name -eq 'debriddownloader.exe') {
+                if (-not (Test-Signed $f.FullName)) { $bad++ }
+              } else {
+                Write-Host "(info) $($f.Name) inside $($setup.Name): $((Get-AuthenticodeSignature $f.FullName).Status)"
               }
-              if (-not (Test-Signed $f.FullName)) { $bad++ }
             }
           }
           if ($bad) { exit 1 }
