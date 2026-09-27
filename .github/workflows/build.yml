@@ -200,25 +200,53 @@ jobs:
         with:
           args: --target ${{ matrix.target }}${{ runner.os == 'Windows' && ' --config src-tauri/windows/tauri.signing.conf.json' || '' }}
 
-      # Every exe and msi a user can run must carry a valid, timestamped Artifact Signing
-      # signature. (The uninstaller lives inside the installer; the bundler signs it the same way.)
+      # Every installer, and the app exe and NSIS plugins packed inside the NSIS installer (the
+      # one the updater installs), must carry a valid, timestamped signature. The loose
+      # target\...\release\debriddownloader.exe doesn't count: after each package step the bundler
+      # puts the unsigned, unpatched binary back, so only the packaged copies are signed.
       - name: Verify Windows signatures
         if: runner.os == 'Windows'
         shell: powershell
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          $release = "src-tauri\target\$env:TARGET\release"
-          $files = @(Get-Item "$release\debriddownloader.exe") +
-            @(Get-ChildItem "$release\bundle" -Recurse -Include *.exe, *.msi)
+          $bundle = "src-tauri\target\$env:TARGET\release\bundle"
           $bad = 0
-          foreach ($f in $files) {
-            $sig = Get-AuthenticodeSignature $f.FullName
-            if ($sig.Status -ne 'Valid' -or -not $sig.TimeStamperCertificate) {
-              Write-Host "::error::$($f.Name) is not validly signed and timestamped: $($sig.Status) $($sig.StatusMessage)"
+          function Test-Signed([string]$Path) {
+            $sig = Get-AuthenticodeSignature $Path
+            if ($sig.Status -eq 'Valid' -and $sig.TimeStamperCertificate) {
+              Write-Host "OK  $Path : $($sig.SignerCertificate.Subject)"
+              return $true
+            }
+            Write-Host "::error::$Path is not validly signed and timestamped: $($sig.Status) $($sig.StatusMessage)"
+            return $false
+          }
+          foreach ($f in Get-ChildItem $bundle -Recurse -Include *.exe, *.msi) {
+            if (-not (Test-Signed $f.FullName)) { $bad++ }
+          }
+          $7z = (Get-Command 7z -ErrorAction SilentlyContinue).Source
+          if (-not $7z) { $7z = Join-Path $env:ProgramFiles '7-Zip\7z.exe' }
+          foreach ($setup in Get-ChildItem "$bundle\nsis" -Filter *-setup.exe) {
+            $out = Join-Path $env:RUNNER_TEMP "unpacked-$($setup.BaseName)"
+            & $7z x $setup.FullName "-o$out" -y | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::7-Zip could not unpack $($setup.Name)"
               $bad++
-            } else {
-              Write-Host "$($f.Name): $($sig.SignerCertificate.Subject)"
+              continue
+            }
+            if (-not (Test-Path (Join-Path $out 'debriddownloader.exe'))) {
+              Write-Host "::error::debriddownloader.exe not found inside $($setup.Name)"
+              $bad++
+            }
+            foreach ($f in Get-ChildItem $out -Recurse -Include *.exe, *.dll) {
+              if ($f.Name -eq 'uninstall.exe') {
+                # 7-Zip rebuilds the uninstaller from the installer's data, so its result isn't
+                # proof either way; the build log shows !uninstfinalize signing it.
+                $sig = Get-AuthenticodeSignature $f.FullName
+                Write-Host "(info) uninstall.exe as rebuilt by 7-Zip: $($sig.Status)"
+                continue
+              }
+              if (-not (Test-Signed $f.FullName)) { $bad++ }
             }
           }
           if ($bad) { exit 1 }
