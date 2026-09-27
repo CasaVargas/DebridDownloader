@@ -5,7 +5,6 @@ A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com
 [![Latest release](https://img.shields.io/github/v/release/CasaVargas/DebridDownloader?label=release)](https://github.com/CasaVargas/DebridDownloader/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/CasaVargas/DebridDownloader/total)](https://github.com/CasaVargas/DebridDownloader/releases)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
-[![Discord](https://img.shields.io/badge/chat-Discord-5865F2)](https://discord.gg/SsDDexkhUx)
 
 **[Download](https://casavargas.app/DebridDownloader/#download)** · **[Website](https://casavargas.app/DebridDownloader/)** · **[Release notes](https://github.com/CasaVargas/DebridDownloader/releases)**
 
