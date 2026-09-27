@@ -15,6 +15,13 @@ type UpdateStatus =
 
 const CHANGELOG: { version: string; title: string; items: string[] }[] = [
   {
+    version: "1.7.1",
+    title: "Signed Windows Builds",
+    items: [
+      "The Windows installers and the app are now signed by Casa Vargas LLC, so Windows shows a verified publisher instead of an unknown one",
+    ],
+  },
+  {
     version: "1.7.0",
     title: "New Download Engine & Redesign",
     items: [
