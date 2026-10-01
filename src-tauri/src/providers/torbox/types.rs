@@ -68,7 +68,9 @@ pub struct TbTorrentFile {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TbCreateTorrent {
-    pub torrent_id: u64,
-    pub name: String,
-    pub hash: String,
+    #[serde(default)]
+    pub torrent_id: Option<u64>,
+    /// Sent instead of `torrent_id` when TorBox queues the torrent.
+    #[serde(default)]
+    pub queued_id: Option<u64>,
 }
