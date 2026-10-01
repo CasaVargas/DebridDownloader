@@ -221,14 +221,14 @@ impl DebridProvider for TorBoxClient {
         _page: u32,
         _limit: u32,
     ) -> Result<Vec<shared::Torrent>, shared::ProviderError> {
-        let resp: TbApiResponse<Vec<TbTorrent>> = self.get("/torrents/mylist").await?;
+        let resp: TbApiResponse<Vec<TbTorrent>> = self.get("/torrents/mylist?bypass_cache=true").await?;
         let torrents = self.unwrap_response(resp)?;
         Ok(torrents.into_iter().map(map_torrent).collect())
     }
 
     async fn torrent_info(&self, id: &str) -> Result<shared::TorrentInfo, shared::ProviderError> {
         let resp: TbApiResponse<TbTorrent> = self
-            .get(&format!("/torrents/mylist?id={}", id))
+            .get(&format!("/torrents/mylist?bypass_cache=true&id={}", id))
             .await?;
         let torrent = self.unwrap_response(resp)?;
         Ok(map_torrent_detail(torrent))
