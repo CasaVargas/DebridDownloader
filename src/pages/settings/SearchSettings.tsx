@@ -16,6 +16,19 @@ function typeLabel(t: string): string {
   return t === "piratebay_api" ? "API" : t === "torznab" ? "Torznab" : t === "prowlarr" ? "Prowlarr" : t === "jackett" ? "Jackett" : t;
 }
 
+const SCHEME_RE = /^(https?)(:\/*|\/\/)/i;
+
+/** Accepts a bare domain or a full URL, and repairs mistyped schemes like "https//host". */
+function normalizeTrackerUrl(raw: string): string {
+  let rest = raw.trim();
+  let scheme = "";
+  for (let m = rest.match(SCHEME_RE); m; m = rest.match(SCHEME_RE)) {
+    scheme ||= m[1].toLowerCase();
+    rest = rest.slice(m[0].length);
+  }
+  return `${scheme || "https"}://${rest.replace(/\/+$/, "")}`;
+}
+
 export default function SearchSettings() {
   const { settings, applyChange, savedField, markSaved } = useSettings();
   const [trackers, setTrackers] = useState<TrackerConfig[]>([]);
@@ -38,10 +51,7 @@ export default function SearchSettings() {
 
   async function handleAddTracker() {
     if (!newTrackerName.trim() || !newTrackerUrl.trim()) return;
-    let url = newTrackerUrl.trim().replace(/\/+$/, "");
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = "https://" + url;
-    }
+    let url = normalizeTrackerUrl(newTrackerUrl);
     if (newTrackerType === "jackett" && !url.includes("/api/")) {
       url = url.replace(/\/UI.*$/, "");
       url = url.replace(/\/+$/, "");
@@ -102,10 +112,7 @@ export default function SearchSettings() {
     if (!newTrackerUrl.trim()) return;
     setTrackerTesting(true);
     setTrackerTestResult(null);
-    let url = newTrackerUrl.trim().replace(/\/+$/, "");
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = "https://" + url;
-    }
+    const url = normalizeTrackerUrl(newTrackerUrl);
     try {
       const msg = await testTracker(newTrackerType, url, newTrackerApiKey.trim() || undefined);
       setTrackerTestResult({ ok: true, msg });
