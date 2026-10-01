@@ -50,17 +50,7 @@ impl TorBoxClient {
             .send()
             .await?;
 
-        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            return Err(shared::ProviderError::RateLimited);
-        }
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(shared::ProviderError::Other(format!(
-                "HTTP {}: {}", status, text
-            )));
-        }
-        Ok(resp.json().await?)
+        Self::decode(resp).await
     }
 
     async fn post_form<T: DeserializeOwned>(
@@ -78,17 +68,37 @@ impl TorBoxClient {
             .send()
             .await?;
 
-        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        Self::decode(resp).await
+    }
+
+    /// Decodes from text so a shape mismatch reports the body instead of reqwest's opaque
+    /// "error decoding response body".
+    async fn decode<T: DeserializeOwned>(
+        resp: reqwest::Response,
+    ) -> Result<TbApiResponse<T>, shared::ProviderError> {
+        let status = resp.status();
+        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
             return Err(shared::ProviderError::RateLimited);
         }
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
+        let text = resp.text().await?;
+        if !status.is_success() {
             return Err(shared::ProviderError::Other(format!(
                 "HTTP {}: {}", status, text
             )));
         }
-        Ok(resp.json().await?)
+        serde_json::from_str(&text).map_err(|e| {
+            let snippet: String = text.chars().take(200).collect();
+            shared::ProviderError::Other(format!(
+                "Unexpected TorBox response ({}): {}", e, snippet
+            ))
+        })
+    }
+
+    fn created_id(data: TbCreateTorrent) -> Result<shared::AddTorrentResponse, shared::ProviderError> {
+        data.torrent_id
+            .or(data.queued_id)
+            .map(|id| shared::AddTorrentResponse { id: id.to_string() })
+            .ok_or_else(|| shared::ProviderError::Other("TorBox returned no torrent id".to_string()))
     }
 
     fn unwrap_response<T>(&self, resp: TbApiResponse<T>) -> Result<T, shared::ProviderError> {
@@ -211,14 +221,14 @@ impl DebridProvider for TorBoxClient {
         _page: u32,
         _limit: u32,
     ) -> Result<Vec<shared::Torrent>, shared::ProviderError> {
-        let resp: TbApiResponse<Vec<TbTorrent>> = self.get("/torrents/mylist").await?;
+        let resp: TbApiResponse<Vec<TbTorrent>> = self.get("/torrents/mylist?bypass_cache=true").await?;
         let torrents = self.unwrap_response(resp)?;
         Ok(torrents.into_iter().map(map_torrent).collect())
     }
 
     async fn torrent_info(&self, id: &str) -> Result<shared::TorrentInfo, shared::ProviderError> {
         let resp: TbApiResponse<TbTorrent> = self
-            .get(&format!("/torrents/mylist?id={}", id))
+            .get(&format!("/torrents/mylist?bypass_cache=true&id={}", id))
             .await?;
         let torrent = self.unwrap_response(resp)?;
         Ok(map_torrent_detail(torrent))
@@ -228,10 +238,7 @@ impl DebridProvider for TorBoxClient {
         let resp: TbApiResponse<TbCreateTorrent> = self
             .post_form("/torrents/createtorrent", &[("magnet", magnet)])
             .await?;
-        let data = self.unwrap_response(resp)?;
-        Ok(shared::AddTorrentResponse {
-            id: data.torrent_id.to_string(),
-        })
+        Self::created_id(self.unwrap_response(resp)?)
     }
 
     async fn add_torrent_file(
@@ -254,44 +261,30 @@ impl DebridProvider for TorBoxClient {
             .send()
             .await?;
 
-        let api_resp: TbApiResponse<TbCreateTorrent> = resp.json().await?;
-        let data = self.unwrap_response(api_resp)?;
-        Ok(shared::AddTorrentResponse {
-            id: data.torrent_id.to_string(),
-        })
+        let api_resp: TbApiResponse<TbCreateTorrent> = Self::decode(resp).await?;
+        Self::created_id(self.unwrap_response(api_resp)?)
     }
 
     async fn select_files(
         &self,
-        id: &str,
-        file_ids: &[u64],
+        _id: &str,
+        _file_ids: &[u64],
     ) -> Result<(), shared::ProviderError> {
-        let ids_str = if file_ids.is_empty() {
-            "all".to_string()
-        } else {
-            file_ids.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",")
-        };
-        let _: TbApiResponse<serde_json::Value> = self
-            .post_form(
-                "/torrents/controltorrent",
-                &[
-                    ("torrent_id", id),
-                    ("operation", "set_files"),
-                    ("file_ids", &ids_str),
-                ],
-            )
-            .await?;
+        // TorBox downloads all files — controltorrent has no file selection operation
         Ok(())
     }
 
     async fn delete_torrent(&self, id: &str) -> Result<(), shared::ProviderError> {
         let key = self.get_key().await?;
+        let torrent_id: u64 = id
+            .parse()
+            .map_err(|_| shared::ProviderError::Other(format!("Invalid torrent id: {}", id)))?;
         let url = format!("{}/torrents/controltorrent", BASE_URL);
         let resp = self
             .http
             .post(&url)
             .header("Authorization", format!("Bearer {}", key))
-            .form(&[("torrent_id", id), ("operation", "delete")])
+            .json(&serde_json::json!({ "torrent_id": torrent_id, "operation": "delete" }))
             .send()
             .await?;
 
