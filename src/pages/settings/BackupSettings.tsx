@@ -15,6 +15,15 @@ type UpdateStatus =
 
 const CHANGELOG: { version: string; title: string; items: string[] }[] = [
   {
+    version: "1.7.2",
+    title: "TorBox & Tracker Fixes",
+    items: [
+      "Adding a torrent on TorBox no longer fails with 'error decoding response body'",
+      "Torrents you just added on TorBox show up in the list right away",
+      "Tracker URLs accept a bare domain or a mistyped scheme and save as one clean URL",
+    ],
+  },
+  {
     version: "1.7.1",
     title: "Signed Windows Builds",
     items: [
