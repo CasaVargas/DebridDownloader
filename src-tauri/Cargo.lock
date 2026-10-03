@@ -952,7 +952,7 @@ dependencies = [
 
 [[package]]
 name = "debriddownloader"
-version = "1.7.2"
+version = "1.7.3"
 dependencies = [
  "async-trait",
  "axum",
