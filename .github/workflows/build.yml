@@ -197,6 +197,9 @@ jobs:
           AZURE_TENANT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_TENANT_ID || '' }}
           AZURE_CLIENT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_ID || '' }}
           AZURE_CLIENT_SECRET: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_SECRET || '' }}
+          # AppImage: leave libwayland-* out so the host's copy loads. The 22.04 build clashes with
+          # newer host Mesa/EGL and WebKitGTK paints a blank window on Wayland (#38).
+          LINUXDEPLOY_EXCLUDED_LIBRARIES: ${{ runner.os == 'Linux' && 'libwayland-*' || '' }}
         with:
           args: --target ${{ matrix.target }}${{ runner.os == 'Windows' && ' --config src-tauri/windows/tauri.signing.conf.json' || '' }}
 
@@ -253,6 +256,34 @@ jobs:
             }
           }
           if ($bad) { exit 1 }
+
+      # Guard #38: neither the AppImage nor the one inside the updater tarball may bundle libwayland.
+      - name: Verify AppImage excludes libwayland
+        if: runner.os == 'Linux'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          cd "src-tauri/target/$TARGET/release/bundle/appimage"
+          check() {
+            rm -rf squashfs-root
+            "$1" --appimage-extract >/dev/null
+            found=$(find squashfs-root -name 'libwayland-*.so*')
+            rm -rf squashfs-root
+            if [ -n "$found" ]; then
+              echo "::error::$1 bundles libwayland:"; echo "$found"; exit 1
+            fi
+            echo "OK  $1"
+          }
+          shopt -s nullglob
+          images=(*.AppImage)
+          [ ${#images[@]} -gt 0 ] || { echo "::error::no AppImage produced"; exit 1; }
+          for img in "${images[@]}"; do chmod +x "$img"; check "./$img"; done
+          for tgz in *.AppImage.tar.gz; do
+            dir=$(mktemp -d); tar -xzf "$tgz" -C "$dir"
+            for img in "$dir"/*.AppImage; do chmod +x "$img"; check "$img"; done
+            rm -rf "$dir"
+          done
 
       # Upload all build artifacts for the publish job
       - name: Upload build artifacts
