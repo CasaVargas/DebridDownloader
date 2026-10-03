@@ -10,7 +10,37 @@ use tauri::State;
 const KEYRING_SERVICE: &str = "com.jonathan.debriddownloader";
 
 fn get_entry(key: &str) -> Result<Entry, String> {
+    static MIGRATE: std::sync::Once = std::sync::Once::new();
+    MIGRATE.call_once(|| {
+        if let Err(e) = migrate_unprefixed_keys() {
+            log::warn!("Keyring migration failed: {}", e);
+        }
+    });
     Entry::new(KEYRING_SERVICE, key).map_err(|e| format!("Keyring error: {}", e))
+}
+
+/// Rename pre-1.x unprefixed keys to `real-debrid.<key>`. Runs on the first keyring access rather
+/// than in `setup`: setup is on the main thread after the window exists, so a macOS keychain
+/// prompt there froze the webview on a blank white window (#38).
+fn migrate_unprefixed_keys() -> Result<(), keyring::Error> {
+    let migration_key = Entry::new(KEYRING_SERVICE, "migration_v2_done")?;
+    if migration_key.get_password().is_ok() {
+        return Ok(()); // already migrated
+    }
+
+    let keys = ["api_token", "refresh_token", "oauth_client_id", "oauth_client_secret"];
+    for key in &keys {
+        if let Ok(entry) = Entry::new(KEYRING_SERVICE, key) {
+            if let Ok(value) = entry.get_password() {
+                if let Ok(new_entry) = Entry::new(KEYRING_SERVICE, &prefixed_key("real-debrid", key)) {
+                    let _ = new_entry.set_password(&value);
+                }
+                let _ = entry.delete_credential();
+            }
+        }
+    }
+
+    migration_key.set_password("done")
 }
 
 fn map_keyring_save_error(context: &str, err: keyring::Error) -> String {

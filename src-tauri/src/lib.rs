@@ -137,36 +137,9 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Migrate unprefixed keyring keys to prefixed format
-            {
-                use keyring::Entry;
-                let migrate = || -> Result<(), Box<dyn std::error::Error>> {
-                    let service = "com.jonathan.debriddownloader";
-                    let migration_key = Entry::new(service, "migration_v2_done")?;
-                    if migration_key.get_password().is_ok() {
-                        return Ok(()); // already migrated
-                    }
-
-                    let keys = ["api_token", "refresh_token", "oauth_client_id", "oauth_client_secret"];
-                    for key in &keys {
-                        if let Ok(entry) = Entry::new(service, key) {
-                            if let Ok(value) = entry.get_password() {
-                                let new_key = format!("real-debrid.{}", key);
-                                if let Ok(new_entry) = Entry::new(service, &new_key) {
-                                    let _ = new_entry.set_password(&value);
-                                }
-                                let _ = entry.delete_credential();
-                            }
-                        }
-                    }
-
-                    migration_key.set_password("done")?;
-                    Ok(())
-                };
-                if let Err(e) = migrate() {
-                    log::warn!("Keyring migration failed: {}", e);
-                }
-            }
+            // No keyring access here: setup runs on the main thread after the window exists, so a
+            // macOS keychain prompt would freeze the webview white (#38). The legacy-key migration
+            // runs on first keyring use in commands::auth instead.
 
             // Start streaming proxy server
             let state: tauri::State<'_, AppState> = app.state();
