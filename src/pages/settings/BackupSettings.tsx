@@ -15,6 +15,14 @@ type UpdateStatus =
 
 const CHANGELOG: { version: string; title: string; items: string[] }[] = [
   {
+    version: "1.7.3",
+    title: "Blank Window Fixes",
+    items: [
+      "macOS: the window no longer stays white while a Keychain access prompt is waiting",
+      "Linux: the AppImage opens normally on Wayland desktops like Arch instead of showing a blank grey window",
+    ],
+  },
+  {
     version: "1.7.2",
     title: "TorBox & Tracker Fixes",
     items: [
