@@ -15,6 +15,13 @@ type UpdateStatus =
 
 const CHANGELOG: { version: string; title: string; items: string[] }[] = [
   {
+    version: "1.7.4",
+    title: "TorBox Torrents Tab Fix",
+    items: [
+      "The Torrents tab on TorBox loads again instead of failing with 'invalid type: null, expected a sequence'",
+    ],
+  },
+  {
     version: "1.7.3",
     title: "Blank Window Fixes",
     items: [
