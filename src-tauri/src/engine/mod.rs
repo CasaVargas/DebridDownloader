@@ -2,6 +2,7 @@
 
 pub mod actor;
 pub mod events;
+pub mod fsync;
 pub mod limiter;
 pub mod pipeline;
 pub mod refresh;

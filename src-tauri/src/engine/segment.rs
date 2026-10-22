@@ -1,4 +1,5 @@
 //! One Range worker: stream → limiter → sequential writes at an offset → durable checkpoints.
+use super::fsync;
 use super::limiter::Limiter;
 use futures::StreamExt;
 use reqwest::header::{HeaderMap, CONTENT_RANGE, CONTENT_TYPE, RANGE, RETRY_AFTER};
@@ -125,7 +126,7 @@ async fn checkpoint(
     tx: &mpsc::UnboundedSender<SegmentMsg>,
 ) -> Result<(), SegmentError> {
     file.flush().await.map_err(disk)?;
-    file.sync_data().await.map_err(disk)?;
+    fsync::sync_data(file).await.map_err(disk)?;
     let _ = tx.send(SegmentMsg::Checkpoint { index, done: pos - start });
     Ok(())
 }
