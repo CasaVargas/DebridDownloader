@@ -8,6 +8,7 @@ import * as downloadsApi from "../api/downloads";
 import { getSettings } from "../api/settings";
 import { getStreamUrl } from "../api/streaming";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { confirmAction } from "../lib/confirm";
 import type { Torrent, TorrentInfo, AppSettings } from "../types";
 import { Button, ContextMenu, IconButton, Inspector, Menu, Spinner, StatusDot, Toolbar, type MenuItem } from "../components/ui";
 import {
@@ -160,9 +161,7 @@ export default function TorrentsPage() {
   }, []);
 
   useEffect(() => {
-    const handler = () => {
-      if (selectedId && window.confirm("Delete this torrent?")) handleDelete(selectedId);
-    };
+    const handler = () => { if (selectedId) confirmDelete(selectedId); };
     window.addEventListener("delete-selected", handler);
     return () => window.removeEventListener("delete-selected", handler);
   }, [selectedId]);
@@ -181,8 +180,13 @@ export default function TorrentsPage() {
     } catch (e) { setError(String(e)); }
   };
 
+  /** Delete only after the user answers Yes; the dialog is async in Tauri (#47). */
+  const confirmDelete = async (id: string) => {
+    if (await confirmAction("Delete this torrent?")) await handleDelete(id);
+  };
+
   const handleDeleteAll = async () => {
-    if (!window.confirm(`Delete all ${torrents.length} torrents?`)) return;
+    if (!(await confirmAction(`Delete all ${torrents.length} torrents?`))) return;
     try {
       for (const t of torrents) {
         await torrentsApi.deleteTorrent(t.id).catch(() => {});
@@ -251,7 +255,7 @@ export default function TorrentsPage() {
   };
 
   const handleDetailDelete = async () => {
-    if (!detailInfo || !window.confirm("Delete this torrent?")) return;
+    if (!detailInfo || !(await confirmAction("Delete this torrent?"))) return;
     try {
       await torrentsApi.deleteTorrent(detailInfo.id);
       setSelectedId(null);
@@ -287,7 +291,7 @@ export default function TorrentsPage() {
   const rowMenuItems = (t: Torrent): MenuItem[] => [
     { label: "Preview", onSelect: () => openPreview(t.id) },
     { label: "Download", onSelect: () => handleDownloadTorrent(t.id) },
-    { label: "Delete", danger: true, onSelect: () => { if (window.confirm("Delete this torrent?")) handleDelete(t.id); } },
+    { label: "Delete", danger: true, onSelect: () => { confirmDelete(t.id); } },
     ...(torrents.length > 1
       ? (["separator", { label: `Delete All (${torrents.length})`, danger: true, onSelect: () => handleDeleteAll() }] as MenuItem[])
       : []),
@@ -344,7 +348,7 @@ export default function TorrentsPage() {
               { label: "Preview Video", onSelect: () => openPreview(t.id), disabled: miniPlayerLoadingId === t.id },
               { label: "Copy Magnet", onSelect: () => { navigator.clipboard.writeText("magnet:?xt=urn:btih:" + t.hash).catch(() => {}); } },
               "separator",
-              { label: "Delete", danger: true, onSelect: () => { if (window.confirm("Delete this torrent?")) handleDelete(t.id); } },
+              { label: "Delete", danger: true, onSelect: () => { confirmDelete(t.id); } },
             ]}
           />
         </div>
