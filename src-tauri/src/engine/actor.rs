@@ -333,6 +333,8 @@ impl Actor {
             resumable: j.resumable,
             error: j.error.clone(),
             waiting_for_network: self.offline.contains(&j.id),
+            batch_id: j.batch_id.clone(),
+            updated_at: j.updated_at,
         }
     }
 
