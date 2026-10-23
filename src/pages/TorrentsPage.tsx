@@ -10,7 +10,7 @@ import { getStreamUrl } from "../api/streaming";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { confirmAction } from "../lib/confirm";
 import type { Torrent, TorrentInfo, AppSettings } from "../types";
-import { Button, ContextMenu, IconButton, Inspector, Menu, Spinner, StatusDot, Toolbar, type MenuItem } from "../components/ui";
+import { Button, cn, ContextMenu, IconButton, Inspector, Menu, Spinner, StatusDot, Toolbar, type MenuItem } from "../components/ui";
 import {
   formatBytes,
   formatRelativeTime,
@@ -229,6 +229,25 @@ export default function TorrentsPage() {
     finally { setSaving(false); }
   };
 
+  // Files the user can tick: any file while Real-Debrid waits for a selection, otherwise only the
+  // files the provider has links for (RD drops the ones left out at selection time).
+  const waitingSelection = detailInfo?.status === "waiting_files_selection";
+  const canDownload = detailInfo?.status === "downloaded";
+  const pickable = !detailInfo ? [] : waitingSelection ? detailInfo.files : canDownload ? detailInfo.files.filter((f) => f.selected) : [];
+  const picked = pickable.filter((f) => selectedFiles.has(f.id));
+  const allPicked = picked.length === pickable.length;
+  const showPicker = waitingSelection || pickable.length > 1;
+
+  const toggleFile = (id: number) => {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAllFiles = () => setSelectedFiles(allPicked ? new Set() : new Set(pickable.map((f) => f.id)));
+
   const handleDetailDownload = async () => {
     if (!detailInfo) return;
     setDownloading(true);
@@ -243,12 +262,18 @@ export default function TorrentsPage() {
         }
         folder = s.symlink_library_path;
       } else if (!folder) {
-        const picked = await open({ directory: true, title: "Select download folder" });
-        if (!picked) { setDownloading(false); return; }
-        folder = picked as string;
+        const chosen = await open({ directory: true, title: "Select download folder" });
+        if (!chosen) { setDownloading(false); return; }
+        folder = chosen as string;
       }
-      const links = await downloadsApi.unrestrictTorrentLinks(detailInfo.id);
-      if (links.length > 0) await downloadsApi.startDownloads(links, folder, detailInfo.filename);
+      // All ticked fetches every link in one go, which also works when RD packed the files into one archive.
+      const fileIds = allPicked ? undefined : picked.map((f) => f.id);
+      const links = await downloadsApi.unrestrictTorrentLinks(detailInfo.id, fileIds);
+      if (links.length === 0) {
+        setDetailError("No download links are available for this torrent yet.");
+        return;
+      }
+      await downloadsApi.startDownloads(links, folder, detailInfo.filename);
       fetchTorrents();
     } catch (e) { setDetailError(String(e)); }
     finally { setDownloading(false); }
@@ -357,7 +382,6 @@ export default function TorrentsPage() {
   ];
 
   const inspectorVisible = !!selectedId && inspectorOpen;
-  const canDownload = detailInfo?.status === "downloaded";
 
   return (
     <>
@@ -415,8 +439,12 @@ export default function TorrentsPage() {
                   </Button>
                 )}
                 {canDownload && (
-                  <Button variant="primary" onClick={handleDetailDownload} disabled={downloading}>
-                    {downloading ? "Starting..." : "Download"}
+                  <Button variant="primary" onClick={handleDetailDownload} disabled={downloading || (pickable.length > 0 && picked.length === 0)}>
+                    {downloading
+                      ? "Starting..."
+                      : allPicked || picked.length === 0
+                        ? "Download"
+                        : `Download ${picked.length} ${picked.length === 1 ? "file" : "files"}`}
                   </Button>
                 )}
                 {canDownload && (
@@ -455,56 +483,79 @@ export default function TorrentsPage() {
               {/* Files */}
               {detailInfo.files.length > 0 && (
                 <div>
-                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">
-                    Files ({detailInfo.files.length})
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-fg-muted">
+                      Files ({detailInfo.files.length})
+                    </div>
+                    {showPicker && (
+                      <Button variant="ghost" size="sm" className="-my-1" onClick={toggleAllFiles}>
+                        {allPicked ? "Select none" : "Select all"}
+                      </Button>
+                    )}
                   </div>
-                  <div className="max-h-64 overflow-y-auto rounded-md border border-border">
-                    {detailInfo.files.map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex min-h-7.5 items-center gap-2 border-b border-border-subtle px-2 py-1 last:border-b-0 hover:bg-raised"
-                      >
-                        {detailInfo.status === "waiting_files_selection" && (
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${file.path}`}
-                            checked={selectedFiles.has(file.id)}
-                            onChange={() => {
-                              setSelectedFiles((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(file.id)) next.delete(file.id);
-                                else next.add(file.id);
-                                return next;
-                              });
-                            }}
-                            className="size-4 shrink-0 accent-accent"
-                          />
-                        )}
+                  {/* No inner scroll: names wrap in full, so the inspector body scrolls instead. */}
+                  <div className="rounded-md border border-border">
+                    {detailInfo.files.map((file) => {
+                      const path = file.path.startsWith("/") ? file.path.slice(1) : file.path;
+                      const slash = path.lastIndexOf("/");
+                      const name = path.slice(slash + 1);
+                      const folder = slash >= 0 ? path.slice(0, slash) : "";
+                      const unavailable = canDownload && !file.selected;
+                      const isPickable = showPicker && !unavailable;
+                      const checkboxId = `torrent-file-${file.id}`;
+                      return (
+                        <div
+                          key={file.id}
+                          className="flex items-start gap-2 border-b border-border-subtle px-2 py-1.5 last:border-b-0 hover:bg-raised"
+                        >
+                          {showPicker && (
+                            <input
+                              id={checkboxId}
+                              type="checkbox"
+                              aria-label={`Select ${path}`}
+                              checked={isPickable && selectedFiles.has(file.id)}
+                              disabled={!isPickable}
+                              title={isPickable ? undefined : "Not on the server: this file was left out when the torrent was added"}
+                              onChange={() => toggleFile(file.id)}
+                              className="size-4 shrink-0 accent-accent disabled:opacity-40"
+                            />
+                          )}
 
-                        {detailInfo.status === "downloaded" && isInlineVideo(file.path) && (
-                          <IconButton
-                            size="sm"
-                            label="Play in preview"
-                            onClick={() => openPreview(detailInfo.id, file.id, file.path.split("/").pop() || file.path)}
-                            disabled={miniPlayerLoadingId === detailInfo.id}
+                          {canDownload && isInlineVideo(file.path) && (
+                            <IconButton
+                              size="sm"
+                              label="Play in preview"
+                              className="-my-1"
+                              onClick={() => openPreview(detailInfo.id, file.id, name || file.path)}
+                              disabled={miniPlayerLoadingId === detailInfo.id}
+                            >
+                              {miniPlayerLoadingId === detailInfo.id ? <Spinner size="sm" /> : <span className="text-xs">▶</span>}
+                            </IconButton>
+                          )}
+
+                          {canDownload && isExternalVideo(file.path) && (
+                            <IconButton size="sm" label="Open in external player" className="-my-1" onClick={() => handlePlayExternal(file.id)}>
+                              <span className="text-xs">▶↗</span>
+                            </IconButton>
+                          )}
+
+                          <label
+                            htmlFor={isPickable ? checkboxId : undefined}
+                            className={cn("min-w-0 flex-1", isPickable && "cursor-pointer")}
                           >
-                            {miniPlayerLoadingId === detailInfo.id ? <Spinner size="sm" /> : <span className="text-xs">▶</span>}
-                          </IconButton>
-                        )}
-
-                        {detailInfo.status === "downloaded" && isExternalVideo(file.path) && (
-                          <IconButton size="sm" label="Open in external player" onClick={() => handlePlayExternal(file.id)}>
-                            <span className="text-xs">▶↗</span>
-                          </IconButton>
-                        )}
-
-                        <span className="min-w-0 flex-1 truncate text-sm text-fg">
-                          {file.path.startsWith("/") ? file.path.slice(1) : file.path}
-                        </span>
-                        <span className="shrink-0 text-sm text-fg-muted tabular">{formatBytes(file.bytes)}</span>
-                      </div>
-                    ))}
+                            <span className={cn("block break-words text-sm", unavailable ? "text-fg-muted" : "text-fg")}>{name}</span>
+                            {folder && <span className="block break-words text-xs text-fg-muted">{folder}</span>}
+                          </label>
+                          <span className="shrink-0 text-sm text-fg-muted tabular">{formatBytes(file.bytes)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
+                  {showPicker && (
+                    <p className="mt-1.5 text-sm text-fg-muted tabular">
+                      {picked.length} of {pickable.length} selected, {formatBytes(picked.reduce((s, f) => s + f.bytes, 0))}
+                    </p>
+                  )}
                 </div>
               )}
             </div>

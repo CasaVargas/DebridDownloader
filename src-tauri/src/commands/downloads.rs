@@ -5,11 +5,19 @@ use crate::state::{AppSettings, AppState};
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
-/// Get download links for a torrent
+/// Get download links for a torrent: every file, or only `file_ids` when given.
 #[tauri::command]
-pub async fn unrestrict_torrent_links(state: State<'_, AppState>, torrent_id: String) -> Result<Vec<DownloadLink>, String> {
+pub async fn unrestrict_torrent_links(
+    state: State<'_, AppState>,
+    torrent_id: String,
+    file_ids: Option<Vec<u64>>,
+) -> Result<Vec<DownloadLink>, String> {
     let provider = state.get_provider().await;
-    provider.get_download_links(&torrent_id).await.map_err(|e| format!("{}", e))
+    match file_ids {
+        Some(ids) => provider.get_download_links_for_files(&torrent_id, &ids).await,
+        None => provider.get_download_links(&torrent_id).await,
+    }
+    .map_err(|e| format!("{}", e))
 }
 
 /// Queue files for download
