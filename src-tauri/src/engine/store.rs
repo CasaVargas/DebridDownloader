@@ -1,4 +1,5 @@
 //! `downloads.json` persistence. Atomic writes: unique temp file → fsync → rename.
+use super::fsync;
 use super::types::{now_ms, Job, JobKind, JobState, PostStage};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -90,7 +91,7 @@ impl Store {
         {
             let mut f = std::fs::File::create(&tmp)?;
             f.write_all(&data)?;
-            f.sync_all()?;
+            fsync::sync_all_blocking(&f)?;
         }
         std::fs::rename(&tmp, &self.path)
     }

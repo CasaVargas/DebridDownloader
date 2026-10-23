@@ -965,6 +965,7 @@ dependencies = [
  "fs4",
  "futures",
  "keyring",
+ "libc",
  "log",
  "quick-xml 0.37.5",
  "regex",

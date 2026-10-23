@@ -1,3 +1,4 @@
+use super::fsync;
 use super::limiter::Limiter;
 use super::refresh::{LinkRefresher, RefreshError};
 use super::segment::{
@@ -191,7 +192,7 @@ async fn finalize(job: &Job) -> Result<(), TransferError> {
     if len != job.total_bytes.max(0) as u64 {
         return Err(TransferError::Transient(format!("size mismatch: {} of {} bytes", len, job.total_bytes)));
     }
-    f.sync_all().await.map_err(fatal)?;
+    fsync::sync_all(&f).await.map_err(fatal)?;
     drop(f);
     #[cfg(windows)]
     if dest.exists() {
