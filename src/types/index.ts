@@ -127,6 +127,10 @@ export interface DownloadTask {
   resumable?: boolean;
   error?: string | null;
   waiting_for_network?: boolean;
+  /** Files queued together (one torrent) share this; empty for symlinked files. */
+  batch_id?: string;
+  /** Unix ms of the last state change; for a completed download, when it finished. */
+  updated_at?: number;
 }
 
 export interface DownloadProgress {
