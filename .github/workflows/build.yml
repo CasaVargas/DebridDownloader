@@ -292,6 +292,10 @@ jobs:
           name: artifacts-${{ matrix.name }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
           if-no-files-found: error
+          # A tag build only hands these to the publish job, which runs right after; the
+          # release keeps the files. A manual bundle run keeps them a week to download.
+          # (90 days of ~1.5 GB per run filled the org's Actions storage, 2026-11-02.)
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 7 }}
 
   # Single job creates release and uploads everything — no race conditions
   publish:
