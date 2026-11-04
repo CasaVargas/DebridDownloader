@@ -82,12 +82,15 @@ export default function DataTable<T>({
     };
   }, [windowed, loading, data.length === 0]);
 
+  // Measure once, from the tallest of the first rows, then lock every row to that height while
+  // windowed. Re-measuring on every render made rows of different heights (progress bar vs.
+  // status line) flip the height back and forth until React gave up ("Maximum update depth").
   useLayoutEffect(() => {
-    if (!windowed) return;
-    const first = rowRefs.current.values().next().value as HTMLDivElement | undefined;
-    const h = first?.offsetHeight ?? 0;
-    if (h > 0 && h !== rowHeight) setRowHeight(h);
-  });
+    if (!windowed || rowHeight > 0) return;
+    let h = 0;
+    for (const el of rowRefs.current.values()) h = Math.max(h, el.offsetHeight);
+    if (h > 0) setRowHeight(h);
+  }, [windowed, rowHeight, data.length]);
 
   // Keep the latest values for the window listeners without re-subscribing every render.
   const latest = useRef({ data, rowKey, selectedId, onKeyboardSelect, onRowClick, rowHeight });
@@ -212,7 +215,7 @@ export default function DataTable<T>({
               "grid min-h-7.5 cursor-default items-center gap-3 border-b border-border-subtle px-4 py-1",
               selected ? "bg-selected" : "hover:bg-raised",
             )}
-            style={{ gridTemplateColumns }}
+            style={windowed && rowHeight > 0 ? { gridTemplateColumns, height: rowHeight, overflow: "hidden" } : { gridTemplateColumns }}
           >
             {columns.map((col) => (
               <div key={col.key} role="cell" className="min-w-0">
