@@ -60,6 +60,10 @@ pub struct ZipEntrySpec {
     /// General-purpose bit flags (LZMA needs them).
     #[serde(default)]
     pub flags: u16,
+    /// Where the member's data starts, when the listing already knows it (RAR). ZIP members
+    /// leave it unset and read their local header instead.
+    #[serde(default)]
+    pub data_offset: Option<u64>,
     /// Size of the whole archive; a different size on the server means the archive changed.
     pub archive_size: u64,
 }
@@ -84,6 +88,8 @@ pub struct ZipEntry {
     pub crc32: u32,
     #[serde(default)]
     pub flags: u16,
+    #[serde(default)]
+    pub data_offset: Option<u64>,
     pub encrypted: bool,
     /// None when the member can be downloaded; otherwise why not.
     pub unsupported: Option<String>,
@@ -98,6 +104,7 @@ impl ZipEntry {
             method: self.method,
             crc32: self.crc32,
             flags: self.flags,
+            data_offset: self.data_offset,
             archive_size,
         }
     }
@@ -115,13 +122,13 @@ pub enum ZipError {
     Http(String),
     #[error("The download server didn't return the requested part of the archive ({0}), so its contents can't be read remotely. Try again in a moment.")]
     NoRanges(String),
-    #[error("Not a ZIP archive (or it is damaged): {0}")]
+    #[error("Not a valid archive (or it is damaged): {0}")]
     Format(String),
     #[error("{0}")]
     Unsupported(String),
 }
 
-fn http_err(e: SegmentError) -> ZipError {
+pub(crate) fn http_err(e: SegmentError) -> ZipError {
     ZipError::Http(match e {
         SegmentError::DeadLink(m) => format!("The download link is no longer valid ({m})"),
         SegmentError::ConnLimit { .. } => "The server is rate limiting; try again in a moment".into(),
@@ -196,7 +203,7 @@ async fn fetch_range_detailed(
     Ok((body, total))
 }
 
-async fn get(client: &reqwest::Client, url: &str, start: u64, end: u64, timeout: Duration) -> Result<(Vec<u8>, u64), ZipError> {
+pub(crate) async fn get(client: &reqwest::Client, url: &str, start: u64, end: u64, timeout: Duration) -> Result<(Vec<u8>, u64), ZipError> {
     match fetch_range_detailed(client, url, start, end, timeout).await {
         Ok(v) => Ok(v),
         Err((SegmentError::RangeIgnored, d)) => {
@@ -261,6 +268,11 @@ pub async fn data_offset(
     spec: &ZipEntrySpec,
     timeout: Duration,
 ) -> Result<(u64, u64), SegmentError> {
+    if let Some(off) = spec.data_offset {
+        // Offset known from the listing: one byte confirms the archive is unchanged.
+        let (_, total) = fetch_range(client, url, off, off, timeout).await?;
+        return Ok((off, total));
+    }
     let (h, total) = fetch_range(client, url, spec.header_offset, spec.header_offset + LOCAL_HEADER_LEN - 1, timeout).await?;
     if total != spec.archive_size {
         return Ok((0, total));
@@ -482,6 +494,7 @@ pub fn parse_central_directory(cd: &[u8], expected: u64, shift: u64, archive_siz
             method,
             crc32,
             flags,
+            data_offset: None,
             encrypted,
             unsupported,
         });
@@ -509,7 +522,7 @@ pub fn method_name(m: u16) -> &'static str {
 }
 
 /// IBM code page 437, the ZIP default when the UTF-8 flag is clear.
-fn cp437(b: &[u8]) -> String {
+pub(crate) fn cp437(b: &[u8]) -> String {
     const HI: &str = "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u{a0}";
     let hi: Vec<char> = HI.chars().collect();
     b.iter().map(|&c| if c < 0x80 { c as char } else { hi[(c - 0x80) as usize] }).collect()

@@ -7,7 +7,7 @@ import { formatBytes } from "../utils";
 import { Button, Dialog, Input, Spinner } from "./ui";
 
 /**
- * "Download contents" for a ZIP inside a torrent: lists the archive remotely and downloads each
+ * "Download contents" for a ZIP or RAR inside a torrent: lists the archive remotely and downloads each
  * selected file straight into place, so a large archive never has to be unzipped afterwards.
  */
 export default function ZipContentsDialog({
@@ -34,7 +34,7 @@ export default function ZipContentsDialog({
   useEffect(() => {
     let alive = true;
     archiveApi
-      .inspectTorrentZip(torrentId, fileId)
+      .inspectTorrentArchive(torrentId, fileId)
       .then((data) => {
         if (!alive) return;
         setInfo(data);
@@ -92,7 +92,7 @@ export default function ZipContentsDialog({
       }
       // Empty folders only come along when the whole archive is selected.
       const dirs = allSelected ? (info.entries ?? []).filter((e) => e.is_dir) : [];
-      const result = await archiveApi.startZipContentsDownload(
+      const result = await archiveApi.startArchiveContentsDownload(
         info.link,
         info.archive_size,
         [...dirs, ...chosen] as ZipEntry[],
@@ -137,15 +137,15 @@ export default function ZipContentsDialog({
       {info && (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-fg-secondary">
-            Each file is downloaded straight out of the archive into its folder. The ZIP itself is never
-            saved, so there is nothing to unzip afterwards.
+            Each file is downloaded straight out of the archive into its folder. The archive itself is
+            never saved, so there is nothing to extract afterwards.
             {compressedCount > 0 &&
               ` ${compressedCount} compressed ${compressedCount === 1 ? "file is" : "files are"} unpacked as soon as each one finishes.`}
           </p>
           {unsupported > 0 && (
             <p className="text-sm text-warning">
               {unsupported} {unsupported === 1 ? "file" : "files"} can't be taken out of the archive remotely (see below). Download
-              the whole ZIP to get {unsupported === 1 ? "it" : "them"}.
+              the whole archive to get {unsupported === 1 ? "it" : "them"}.
             </p>
           )}
           <div className="flex items-center gap-2">

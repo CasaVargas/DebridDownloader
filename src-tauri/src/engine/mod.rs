@@ -5,6 +5,7 @@ pub mod events;
 pub mod fsync;
 pub mod limiter;
 pub mod pipeline;
+pub mod rar_remote;
 pub mod refresh;
 pub mod remote;
 pub mod segment;

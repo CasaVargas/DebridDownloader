@@ -55,7 +55,7 @@ const getFileExt = (path: string) => {
 
 const isInlineVideo = (path: string) => INLINE_VIDEO_EXTS.includes(getFileExt(path));
 const isExternalVideo = (path: string) => EXTERNAL_VIDEO_EXTS.includes(getFileExt(path));
-const isZip = (path: string) => getFileExt(path) === ".zip";
+const isArchive = (path: string) => [".zip", ".rar"].includes(getFileExt(path));
 const baseName = (path: string) => path.split("/").pop() || path;
 
 export default function TorrentsPage() {
@@ -363,7 +363,7 @@ export default function TorrentsPage() {
 
   const inspectorVisible = !!selectedId && inspectorOpen;
   const canDownload = detailInfo?.status === "downloaded";
-  const zipFiles = canDownload ? detailInfo.files.filter((f) => f.selected && isZip(f.path)) : [];
+  const zipFiles = canDownload ? detailInfo.files.filter((f) => f.selected && isArchive(f.path)) : [];
   const openZip = (fileId: number, path: string) => {
     if (!detailInfo) return;
     setZipTarget({ torrentId: detailInfo.id, fileId, name: baseName(path), torrentName: detailInfo.filename });
@@ -522,7 +522,7 @@ export default function TorrentsPage() {
                         <span className="min-w-0 flex-1 truncate text-sm text-fg">
                           {file.path.startsWith("/") ? file.path.slice(1) : file.path}
                         </span>
-                        {canDownload && file.selected && isZip(file.path) && (
+                        {canDownload && file.selected && isArchive(file.path) && (
                           <Button size="sm" onClick={() => openZip(file.id, file.path)}>
                             Contents
                           </Button>

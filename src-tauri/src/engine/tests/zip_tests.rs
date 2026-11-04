@@ -248,6 +248,7 @@ fn lzma_member_decodes() {
         method: METHOD_LZMA,
         crc32: crc.sum(),
         flags: 0x0002,
+        data_offset: None,
         archive_size: 0,
     };
     assert!(matches!(decode_member(&part, &dest, &spec, &CancellationToken::new()), Ok(DecodeOutcome::Done)));

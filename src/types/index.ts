@@ -94,7 +94,7 @@ export interface DownloadLink {
   source?: LinkSource;
 }
 
-/** One member of a ZIP read remotely (mirrors `engine::zip_remote::ZipEntry`). */
+/** One member of a ZIP or RAR read remotely (mirrors `engine::zip_remote::ZipEntry`). */
 export interface ZipEntry {
   path: string;
   is_dir: boolean;
@@ -104,6 +104,8 @@ export interface ZipEntry {
   method: number;
   crc32: number;
   flags: number;
+  /** Where the member's data starts (RAR); null for ZIP members. */
+  data_offset: number | null;
   encrypted: boolean;
   /** Why this member can't be downloaded on its own; null when it can. */
   unsupported: string | null;

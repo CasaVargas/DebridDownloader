@@ -1,5 +1,6 @@
-//! "Download contents" for ZIP files on the debrid service: list the archive remotely and queue
-//! each member as its own download, so nothing has to be unzipped afterwards.
+//! "Download contents" for ZIP and RAR files on the debrid service: list the archive remotely and
+//! queue each member as its own download, so nothing has to be extracted afterwards.
+use crate::engine::rar_remote;
 use crate::engine::zip_remote::{self, safe_relative_path, ZipEntry};
 use crate::engine::{JobKind, NewJob};
 use crate::providers::types::DownloadLink;
@@ -12,7 +13,7 @@ use tauri::State;
 
 #[derive(Debug, Serialize)]
 pub struct ZipInspection {
-    /// The unrestricted link the listing was read from; pass it back to `start_zip_contents_download`.
+    /// The unrestricted link the listing was read from; pass it back to `start_archive_contents_download`.
     pub link: DownloadLink,
     pub archive_size: u64,
     pub entries: Vec<ZipEntry>,
@@ -29,27 +30,36 @@ fn client() -> reqwest::Client {
     reqwest::Client::builder().connect_timeout(Duration::from_secs(15)).build().expect("reqwest client")
 }
 
-pub(crate) fn is_zip_name(name: &str) -> bool {
-    name.to_ascii_lowercase().ends_with(".zip")
+/// `.zip` or `.rar` (by name; the readers check the signature).
+pub(crate) fn archive_ext(name: &str) -> Option<&'static str> {
+    let n = name.to_ascii_lowercase();
+    if n.ends_with(".zip") {
+        Some("zip")
+    } else if n.ends_with(".rar") {
+        Some("rar")
+    } else {
+        None
+    }
 }
 
-/// Read the file list of a ZIP inside a torrent without downloading it.
+/// Read the file list of a ZIP or RAR inside a torrent without downloading it.
 #[tauri::command]
-pub async fn inspect_torrent_zip(state: State<'_, AppState>, torrent_id: String, file_id: u64) -> Result<ZipInspection, String> {
+pub async fn inspect_torrent_archive(state: State<'_, AppState>, torrent_id: String, file_id: u64) -> Result<ZipInspection, String> {
     let provider = state.get_provider().await;
     let link = provider.get_download_link_for_file(&torrent_id, file_id).await.map_err(|e| e.to_string())?;
-    if !is_zip_name(&link.filename) {
-        return Err(format!("{} is not a .zip file", link.filename));
+    let timeout = Duration::from_secs(30);
+    let listing = match archive_ext(&link.filename) {
+        Some("zip") => zip_remote::read_listing(&client(), &link.download, timeout).await,
+        Some(_) => rar_remote::read_listing(&client(), &link.download, timeout).await,
+        None => return Err(format!("{} is not a .zip or .rar file", link.filename)),
     }
-    let listing = zip_remote::read_listing(&client(), &link.download, Duration::from_secs(30))
-        .await
-        .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())?;
     Ok(ZipInspection { link, archive_size: listing.archive_size, entries: listing.entries })
 }
 
 fn archive_stem(filename: &str) -> String {
     let name = Path::new(filename).file_name().and_then(|n| n.to_str()).unwrap_or(filename);
-    let stem = if is_zip_name(name) { &name[..name.len() - 4] } else { name };
+    let stem = if archive_ext(name).is_some() { &name[..name.len() - 4] } else { name };
     safe_relative_path(stem).map(|p| p.join("_")).unwrap_or_else(|| "archive".into())
 }
 
@@ -79,9 +89,9 @@ pub(crate) fn contents_root(
     if single_top { root } else { root.join(stem) }
 }
 
-/// Queue the selected members of a ZIP (from `inspect_torrent_zip`) as individual downloads.
+/// Queue the selected members of an archive (from `inspect_torrent_archive`) as individual downloads.
 #[tauri::command]
-pub async fn start_zip_contents_download(
+pub async fn start_archive_contents_download(
     state: State<'_, AppState>,
     link: DownloadLink,
     archive_size: u64,
@@ -91,10 +101,10 @@ pub async fn start_zip_contents_download(
 ) -> Result<ZipDownloadStarted, String> {
     let settings = state.settings.read().await.clone();
     if settings.symlink_mode {
-        return Err("Downloading a ZIP's contents isn't available in symlink mode".into());
+        return Err("Downloading an archive's contents isn't available in symlink mode".into());
     }
     if rclone::is_rclone_path(&destination_folder) {
-        return Err("Downloading a ZIP's contents needs a local folder, not an rclone remote".into());
+        return Err("Downloading an archive's contents needs a local folder, not an rclone remote".into());
     }
     if let Some(bad) = entries.iter().find(|e| !e.is_dir && e.unsupported.is_some()) {
         return Err(format!("{} can't be downloaded: {}", bad.path, bad.unsupported.as_deref().unwrap_or("")));
