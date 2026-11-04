@@ -103,6 +103,7 @@ export interface ZipEntry {
   size: number;
   method: number;
   crc32: number;
+  flags: number;
   encrypted: boolean;
   /** Why this member can't be downloaded on its own; null when it can. */
   unsupported: string | null;

@@ -43,6 +43,8 @@ fn sample() -> Vec<Member> {
         Member { name: "Show/Ελληνικά.srt", data: text(5_000), method: CompressionMethod::Bzip2 },
         Member { name: "Show/empty.txt", data: Vec::new(), method: CompressionMethod::Deflated },
         Member { name: "Show/empty-stored.bin", data: Vec::new(), method: CompressionMethod::Stored },
+        Member { name: "Show/S01/e2.zst.mkv", data: text(700_000), method: CompressionMethod::Zstd },
+        Member { name: "Show/S01/xz.txt", data: text(300_000), method: CompressionMethod::Xz },
     ]
 }
 
@@ -181,7 +183,7 @@ async fn server_without_ranges_is_reported() {
     let bytes = build_zip(&sample(), &[], false);
     let s = MockServer::start(MockOpts { size: bytes.len(), ranges: false, data: Some(bytes), ..Default::default() }).await;
     let r = read_listing(&build_client(&fast_transfer_cfg()), &s.url(), T).await;
-    assert_eq!(r, Err(ZipError::NoRanges));
+    assert!(matches!(r, Err(ZipError::NoRanges(ref d)) if d.contains("HTTP 200")), "{r:?}");
 }
 
 #[tokio::test]
@@ -196,16 +198,19 @@ async fn encrypted_and_unknown_methods_are_flagged() {
     let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     w.start_file("secret.txt", SimpleFileOptions::default()).unwrap();
     w.write_all(b"hidden").unwrap();
-    w.start_file("x.zst", SimpleFileOptions::default().compression_method(CompressionMethod::Zstd)).unwrap();
+    w.start_file("x.ppmd", SimpleFileOptions::default()).unwrap();
     w.write_all(&text(1000)).unwrap();
     let mut bytes = w.finish().unwrap().into_inner();
-    // Mark the first member as encrypted in the central directory (general-purpose flag bit 0).
-    let cd = bytes.windows(4).position(|w| w == [0x50, 0x4b, 0x01, 0x02]).unwrap();
-    bytes[cd + 8] |= 1;
+    // In the central directory: mark the first member encrypted (flag bit 0) and give the second
+    // a method we can't decode (98 = PPMd).
+    let mut cds = bytes.windows(4).enumerate().filter(|(_, w)| *w == [0x50, 0x4b, 0x01, 0x02]).map(|(i, _)| i);
+    let (a, b) = (cds.next().unwrap(), cds.next().unwrap());
+    bytes[a + 8] |= 1;
+    bytes[b + 10] = 98;
     let s = serve(bytes).await;
     let l = read_listing(&build_client(&fast_transfer_cfg()), &s.url(), T).await.unwrap();
     assert_eq!(l.entries[0].unsupported.as_deref(), Some("encrypted"));
-    assert!(l.entries[1].unsupported.as_deref().unwrap().contains("Zstandard"));
+    assert!(l.entries[1].unsupported.as_deref().unwrap().contains("PPMd"));
 }
 
 #[test]
@@ -218,4 +223,33 @@ fn unsafe_paths_are_rejected_or_cleaned() {
     assert_eq!(safe_relative_path("CON.txt"), Some(vec!["_CON.txt".into()]));
     assert_eq!(safe_relative_path("dots..."), Some(vec!["dots..._".into()]));
     assert_eq!(safe_relative_path("/"), None);
+}
+
+/// Decode a hand-built ZIP LZMA member (header + end-of-payload marker), as 7-Zip writes them.
+#[test]
+fn lzma_member_decodes() {
+    let data = text(200_000);
+    let mut lz = Vec::new();
+    lzma_rs::lzma_compress(&mut std::io::Cursor::new(&data), &mut lz).unwrap();
+    // .lzma = props(5) + size(8) + stream; ZIP = version(2) + props len(2) + props(5) + stream.
+    let mut member = vec![9, 20, 5, 0];
+    member.extend_from_slice(&lz[..5]);
+    member.extend_from_slice(&lz[13..]);
+    let dir = tempfile::tempdir().unwrap();
+    let part = dir.path().join("x.part");
+    let dest = dir.path().join("x.txt");
+    std::fs::write(&part, &member).unwrap();
+    let mut crc = flate2::Crc::new();
+    crc.update(&data);
+    let spec = ZipEntrySpec {
+        header_offset: 0,
+        compressed_size: member.len() as u64,
+        size: data.len() as u64,
+        method: METHOD_LZMA,
+        crc32: crc.sum(),
+        flags: 0x0002,
+        archive_size: 0,
+    };
+    assert!(matches!(decode_member(&part, &dest, &spec, &CancellationToken::new()), Ok(DecodeOutcome::Done)));
+    assert_eq!(read(&dest), data);
 }

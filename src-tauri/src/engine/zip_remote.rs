@@ -16,14 +16,22 @@ use super::segment::{classify_reqwest, content_range_start, content_range_total,
 use futures::StreamExt;
 use reqwest::header::RANGE;
 use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 pub const METHOD_STORED: u16 = 0;
 pub const METHOD_DEFLATE: u16 = 8;
+pub const METHOD_DEFLATE64: u16 = 9;
 pub const METHOD_BZIP2: u16 = 12;
+pub const METHOD_LZMA: u16 = 14;
+pub const METHOD_ZSTD: u16 = 93;
+pub const METHOD_XZ: u16 = 95;
+/// Methods `decode_member` can unpack.
+pub const SUPPORTED_METHODS: &[u16] = &[METHOD_STORED, METHOD_DEFLATE, METHOD_DEFLATE64, METHOD_BZIP2, METHOD_LZMA, METHOD_ZSTD, METHOD_XZ];
+/// General-purpose flag bit 1 for LZMA: the stream ends with an end-of-payload marker.
+const FLAG_LZMA_EOS: u16 = 0x0002;
 
 const SIG_EOCD: u32 = 0x0605_4b50;
 const SIG_ZIP64_LOCATOR: u32 = 0x0706_4b50;
@@ -49,6 +57,9 @@ pub struct ZipEntrySpec {
     pub size: u64,
     pub method: u16,
     pub crc32: u32,
+    /// General-purpose bit flags (LZMA needs them).
+    #[serde(default)]
+    pub flags: u16,
     /// Size of the whole archive; a different size on the server means the archive changed.
     pub archive_size: u64,
 }
@@ -71,6 +82,8 @@ pub struct ZipEntry {
     pub size: u64,
     pub method: u16,
     pub crc32: u32,
+    #[serde(default)]
+    pub flags: u16,
     pub encrypted: bool,
     /// None when the member can be downloaded; otherwise why not.
     pub unsupported: Option<String>,
@@ -84,6 +97,7 @@ impl ZipEntry {
             size: self.size,
             method: self.method,
             crc32: self.crc32,
+            flags: self.flags,
             archive_size,
         }
     }
@@ -99,8 +113,8 @@ pub struct ZipListing {
 pub enum ZipError {
     #[error("{0}")]
     Http(String),
-    #[error("The download server doesn't support byte ranges, so the archive's contents can't be read remotely")]
-    NoRanges,
+    #[error("The download server didn't return the requested part of the archive ({0}), so its contents can't be read remotely. Try again in a moment.")]
+    NoRanges(String),
     #[error("Not a ZIP archive (or it is damaged): {0}")]
     Format(String),
     #[error("{0}")]
@@ -125,30 +139,53 @@ pub async fn fetch_range(
     end: u64,
     timeout: Duration,
 ) -> Result<(Vec<u8>, u64), SegmentError> {
+    fetch_range_detailed(client, url, start, end, timeout).await.map_err(|(e, detail)| {
+        if let Some(d) = detail {
+            log::warn!("Range request bytes={start}-{end} not honoured: {d}");
+        }
+        e
+    })
+}
+
+/// Like `fetch_range`, plus a description of the reply when the server didn't honour the range.
+async fn fetch_range_detailed(
+    client: &reqwest::Client,
+    url: &str,
+    start: u64,
+    end: u64,
+    timeout: Duration,
+) -> Result<(Vec<u8>, u64), (SegmentError, Option<String>)> {
+    let plain = |e: SegmentError| (e, None);
     let resp = tokio::time::timeout(timeout, client.get(url).header(RANGE, format!("bytes={start}-{end}")).send())
         .await
-        .map_err(|_| SegmentError::Transient("request timed out".into()))?
-        .map_err(classify_reqwest)?;
+        .map_err(|_| plain(SegmentError::Transient("request timed out".into())))?
+        .map_err(|e| plain(classify_reqwest(e)))?;
     let status = resp.status().as_u16();
     if let Some(e) = status_error(status, resp.headers()) {
-        return Err(e);
+        return Err(plain(e));
     }
     if is_html(resp.headers()) {
-        return Err(SegmentError::DeadLink("server returned a web page instead of the file".into()));
+        return Err(plain(SegmentError::DeadLink("server returned a web page instead of the file".into())));
     }
+    let content_range = resp.headers().get(reqwest::header::CONTENT_RANGE).and_then(|v| v.to_str().ok()).map(str::to_string);
+    let total = content_range_total(resp.headers());
     // A 200 here would be the whole (possibly huge) archive: drop it unread.
-    if status != 206 || content_range_start(resp.headers()) != Some(start) {
-        return Err(SegmentError::RangeIgnored);
+    if status != 206 || content_range_start(resp.headers()) != Some(start) || total.is_none() {
+        let detail = format!(
+            "asked for bytes {start}-{end}, got HTTP {status} with Content-Range {}",
+            content_range.as_deref().unwrap_or("missing")
+        );
+        return Err((SegmentError::RangeIgnored, Some(detail)));
     }
-    let total = content_range_total(resp.headers()).ok_or(SegmentError::RangeIgnored)?;
+    let total = total.unwrap_or_default();
     let want = (end - start + 1) as usize;
     let mut body = Vec::with_capacity(want.min(64 * 1024 * 1024));
     let mut stream = resp.bytes_stream();
     loop {
         match tokio::time::timeout(timeout, stream.next()).await {
-            Err(_) => return Err(SegmentError::Transient("connection stalled".into())),
+            Err(_) => return Err(plain(SegmentError::Transient("connection stalled".into()))),
             Ok(None) => break,
-            Ok(Some(Err(e))) => return Err(classify_reqwest(e)),
+            Ok(Some(Err(e))) => return Err(plain(classify_reqwest(e))),
             Ok(Some(Ok(b))) => body.extend_from_slice(&b),
         }
         if body.len() >= want {
@@ -160,15 +197,34 @@ pub async fn fetch_range(
 }
 
 async fn get(client: &reqwest::Client, url: &str, start: u64, end: u64, timeout: Duration) -> Result<(Vec<u8>, u64), ZipError> {
-    match fetch_range(client, url, start, end, timeout).await {
+    match fetch_range_detailed(client, url, start, end, timeout).await {
         Ok(v) => Ok(v),
-        Err(SegmentError::RangeIgnored) => Err(ZipError::NoRanges),
-        Err(e) => Err(http_err(e)),
+        Err((SegmentError::RangeIgnored, d)) => {
+            let d = d.unwrap_or_else(|| "the range was ignored".into());
+            log::warn!("Reading ZIP listing: {d}");
+            Err(ZipError::NoRanges(d))
+        }
+        Err((e, _)) => Err(http_err(e)),
     }
 }
 
-/// Read the archive listing with a handful of small `Range` requests.
+/// Read the archive listing with a handful of small `Range` requests. Network hiccups and a
+/// server that briefly answers without honouring the range are retried twice.
 pub async fn read_listing(client: &reqwest::Client, url: &str, timeout: Duration) -> Result<ZipListing, ZipError> {
+    let mut attempt = 0;
+    loop {
+        match read_listing_once(client, url, timeout).await {
+            Err(e @ (ZipError::NoRanges(_) | ZipError::Http(_))) if attempt < 2 => {
+                attempt += 1;
+                log::warn!("Reading ZIP listing failed (attempt {attempt}): {e}; retrying");
+                tokio::time::sleep(Duration::from_secs(2 * attempt)).await;
+            }
+            r => return r,
+        }
+    }
+}
+
+async fn read_listing_once(client: &reqwest::Client, url: &str, timeout: Duration) -> Result<ZipListing, ZipError> {
     let (_, size) = get(client, url, 0, 0, timeout).await?;
     if size < EOCD_LEN {
         return Err(ZipError::Format("file is too small".into()));
@@ -406,7 +462,7 @@ pub fn parse_central_directory(cd: &[u8], expected: u64, shift: u64, archive_siz
             Some("stored on another disk of a split archive".to_string())
         } else if encrypted || method == 99 {
             Some("encrypted".to_string())
-        } else if !matches!(method, METHOD_STORED | METHOD_DEFLATE | METHOD_BZIP2) {
+        } else if !SUPPORTED_METHODS.contains(&method) {
             Some(format!("compression method {} ({}) isn't supported", method, method_name(method)))
         } else if method == METHOD_STORED && csize != usize_ {
             Some("stored size doesn't match".to_string())
@@ -425,6 +481,7 @@ pub fn parse_central_directory(cd: &[u8], expected: u64, shift: u64, archive_siz
             size: usize_,
             method,
             crc32,
+            flags,
             encrypted,
             unsupported,
         });
@@ -506,6 +563,79 @@ pub enum DecodeOutcome {
     Cancelled,
 }
 
+/// Write side of a decode: counts, CRC-32, size limit and cancellation, in front of the file.
+struct Sink<W: Write> {
+    inner: W,
+    crc: flate2::Crc,
+    written: u64,
+    limit: u64,
+    cancel: CancellationToken,
+    /// Why the sink refused a write (so the caller can tell it apart from corrupt input).
+    stop: Option<SinkStop>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum SinkStop {
+    Cancelled,
+    TooLarge,
+    Disk(String),
+}
+
+impl<W: Write> Write for Sink<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.cancel.is_cancelled() {
+            self.stop = Some(SinkStop::Cancelled);
+            return Err(std::io::Error::other("cancelled"));
+        }
+        if self.written + buf.len() as u64 > self.limit {
+            self.stop = Some(SinkStop::TooLarge);
+            return Err(std::io::Error::other("too large"));
+        }
+        if let Err(e) = self.inner.write_all(buf) {
+            self.stop = Some(SinkStop::Disk(e.to_string()));
+            return Err(e);
+        }
+        self.crc.update(buf);
+        self.written += buf.len() as u64;
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+fn run_decoder<R: std::io::BufRead, W: Write>(method: u16, flags: u16, size: u64, mut src: R, sink: &mut Sink<W>) -> Result<(), String> {
+    let corrupt = |e: std::io::Error| format!("corrupt data: {e}");
+    match method {
+        METHOD_STORED => std::io::copy(&mut src, sink).map(drop).map_err(corrupt),
+        METHOD_DEFLATE => std::io::copy(&mut flate2::bufread::DeflateDecoder::new(src), sink).map(drop).map_err(corrupt),
+        METHOD_DEFLATE64 => std::io::copy(&mut deflate64::Deflate64Decoder::with_buffer(src), sink).map(drop).map_err(corrupt),
+        METHOD_BZIP2 => std::io::copy(&mut bzip2::bufread::BzDecoder::new(src), sink).map(drop).map_err(corrupt),
+        METHOD_XZ => std::io::copy(&mut xz2::bufread::XzDecoder::new_multi_decoder(src), sink).map(drop).map_err(corrupt),
+        METHOD_ZSTD => {
+            let mut d = zstd::stream::read::Decoder::with_buffer(src).map_err(corrupt)?;
+            // 7-Zip's higher levels use windows beyond zstd's 128 MiB default limit.
+            d.window_log_max(31).map_err(corrupt)?;
+            std::io::copy(&mut d, sink).map(drop).map_err(corrupt)
+        }
+        METHOD_LZMA => {
+            // ZIP's LZMA header: version (2 bytes), properties size (2), then the properties.
+            let mut head = [0u8; 4];
+            src.read_exact(&mut head).map_err(corrupt)?;
+            if u16le(&head, 2) != 5 {
+                return Err("unexpected LZMA header".into());
+            }
+            let known = if flags & FLAG_LZMA_EOS != 0 { None } else { Some(size) };
+            let opts = lzma_rs::decompress::Options {
+                unpacked_size: lzma_rs::decompress::UnpackedSize::UseProvided(known),
+                ..Default::default()
+            };
+            lzma_rs::lzma_decompress_with_options(&mut src, sink, &opts).map_err(|e| format!("corrupt data: {e}"))
+        }
+        m => Err(format!("compression method {m} isn't supported")),
+    }
+}
+
 /// Decode `{part}` (the raw compressed member) into `dest`, verifying size and CRC-32.
 /// Blocking; run on a blocking thread. Writes `{dest}.unzipping` then renames, so a crash never
 /// leaves a half-written file under the final name.
@@ -513,39 +643,32 @@ pub fn decode_member(part: &Path, dest: &Path, spec: &ZipEntrySpec, cancel: &Can
     let tmp = std::path::PathBuf::from(format!("{}.unzipping", dest.display()));
     let result = (|| -> Result<DecodeOutcome, String> {
         let src = std::io::BufReader::with_capacity(1 << 20, std::fs::File::open(part).map_err(|e| format!("Disk error: {e}"))?);
-        let mut reader: Box<dyn Read> = match spec.method {
-            METHOD_DEFLATE => Box::new(flate2::read::DeflateDecoder::new(src)),
-            METHOD_BZIP2 => Box::new(bzip2::read::BzDecoder::new(src)),
-            METHOD_STORED => Box::new(src),
-            m => return Err(format!("compression method {m} isn't supported")),
-        };
         let out = std::fs::File::create(&tmp).map_err(|e| format!("Disk error: {e}"))?;
-        let mut w = std::io::BufWriter::with_capacity(1 << 20, out);
-        let mut crc = flate2::Crc::new();
-        let mut buf = vec![0u8; 1 << 20];
-        let mut written: u64 = 0;
-        loop {
-            if cancel.is_cancelled() {
-                return Ok(DecodeOutcome::Cancelled);
-            }
-            let n = reader.read(&mut buf).map_err(|e| format!("corrupt data: {e}"))?;
-            if n == 0 {
-                break;
-            }
-            written += n as u64;
-            if written > spec.size {
-                return Err("decoded data is larger than expected".into());
-            }
-            crc.update(&buf[..n]);
-            w.write_all(&buf[..n]).map_err(|e| format!("Disk error: {e}"))?;
+        let mut sink = Sink {
+            inner: std::io::BufWriter::with_capacity(1 << 20, out),
+            crc: flate2::Crc::new(),
+            written: 0,
+            limit: spec.size,
+            cancel: cancel.clone(),
+            stop: None,
+        };
+        let decoded = run_decoder(spec.method, spec.flags, spec.size, src, &mut sink);
+        match sink.stop.clone() {
+            Some(SinkStop::Cancelled) => return Ok(DecodeOutcome::Cancelled),
+            Some(SinkStop::TooLarge) => return Err("decoded data is larger than expected".into()),
+            Some(SinkStop::Disk(e)) => return Err(format!("Disk error: {e}")),
+            None => decoded?,
         }
-        if written != spec.size {
-            return Err(format!("decoded {} of {} bytes", written, spec.size));
+        if cancel.is_cancelled() {
+            return Ok(DecodeOutcome::Cancelled);
         }
-        if crc.sum() != spec.crc32 {
+        if sink.written != spec.size {
+            return Err(format!("decoded {} of {} bytes", sink.written, spec.size));
+        }
+        if sink.crc.sum() != spec.crc32 {
             return Err("CRC check failed".into());
         }
-        let f = w.into_inner().map_err(|e| format!("Disk error: {e}"))?;
+        let f = sink.inner.into_inner().map_err(|e| format!("Disk error: {e}"))?;
         super::fsync::sync_all_blocking(&f).map_err(|e| format!("Disk error: {e}"))?;
         drop(f);
         #[cfg(windows)]
