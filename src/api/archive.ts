@@ -1,8 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { DownloadLink, ZipDownloadStarted, ZipEntry, ZipInspection } from "../types";
 
-/** Read a torrent ZIP/RAR's file list remotely (HTTP Range), without downloading the archive. */
-export async function inspectTorrentArchive(torrentId: string, fileId: number): Promise<ZipInspection> {
+/**
+ * Read a torrent ZIP/RAR's file list remotely (HTTP Range), without downloading the archive.
+ * `fileId` null: the torrent's single download link (Real-Debrid's packed RAR).
+ */
+export async function inspectTorrentArchive(torrentId: string, fileId: number | null): Promise<ZipInspection> {
   return invoke("inspect_torrent_archive", { torrentId, fileId });
 }
 

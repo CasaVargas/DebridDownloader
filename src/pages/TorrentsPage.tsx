@@ -78,7 +78,7 @@ export default function TorrentsPage() {
   const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [zipTarget, setZipTarget] = useState<{ torrentId: string; fileId: number; name: string; torrentName: string } | null>(null);
+  const [zipTarget, setZipTarget] = useState<{ torrentId: string; fileId: number | null; name: string; torrentName: string } | null>(null);
   const [notice, setNotice] = useState("");
 
   const { openPreview, loadingTorrentId: miniPlayerLoadingId } = useMiniPlayer();
@@ -364,6 +364,12 @@ export default function TorrentsPage() {
   const inspectorVisible = !!selectedId && inspectorOpen;
   const canDownload = detailInfo?.status === "downloaded";
   const zipFiles = canDownload ? detailInfo.files.filter((f) => f.selected && isArchive(f.path)) : [];
+  // Real-Debrid serves a torrent with many files as one RAR it packs itself: one link, many files.
+  const packed = canDownload && detailInfo.links.length === 1 && detailInfo.files.filter((f) => f.selected).length > 1;
+  const openPacked = () => {
+    if (!detailInfo) return;
+    setZipTarget({ torrentId: detailInfo.id, fileId: null, name: detailInfo.filename, torrentName: detailInfo.filename });
+  };
   const openZip = (fileId: number, path: string) => {
     if (!detailInfo) return;
     setZipTarget({ torrentId: detailInfo.id, fileId, name: baseName(path), torrentName: detailInfo.filename });
@@ -430,12 +436,17 @@ export default function TorrentsPage() {
                     {saving ? "Saving..." : "Select Files & Start"}
                   </Button>
                 )}
-                {canDownload && (
-                  <Button variant="primary" onClick={handleDetailDownload} disabled={downloading}>
-                    {downloading ? "Starting..." : "Download"}
+                {packed && (
+                  <Button variant="primary" onClick={openPacked}>
+                    Download Contents
                   </Button>
                 )}
-                {zipFiles.length === 1 && (
+                {canDownload && (
+                  <Button variant={packed ? "secondary" : "primary"} onClick={handleDetailDownload} disabled={downloading}>
+                    {downloading ? "Starting..." : packed ? "Download Archive" : "Download"}
+                  </Button>
+                )}
+                {!packed && zipFiles.length === 1 && (
                   <Button onClick={() => openZip(zipFiles[0].id, zipFiles[0].path)}>
                     Download Contents
                   </Button>

@@ -43,10 +43,27 @@ pub(crate) fn archive_ext(name: &str) -> Option<&'static str> {
 }
 
 /// Read the file list of a ZIP or RAR inside a torrent without downloading it.
+///
+/// With `file_id`, that file of the torrent is the archive. Without it, the torrent's single
+/// download link is: Real-Debrid packs torrents with many files into one RAR, while still listing
+/// the original files.
 #[tauri::command]
-pub async fn inspect_torrent_archive(state: State<'_, AppState>, torrent_id: String, file_id: u64) -> Result<ZipInspection, String> {
+pub async fn inspect_torrent_archive(
+    state: State<'_, AppState>,
+    torrent_id: String,
+    file_id: Option<u64>,
+) -> Result<ZipInspection, String> {
     let provider = state.get_provider().await;
-    let link = provider.get_download_link_for_file(&torrent_id, file_id).await.map_err(|e| e.to_string())?;
+    let link = match file_id {
+        Some(id) => provider.get_download_link_for_file(&torrent_id, id).await.map_err(|e| e.to_string())?,
+        None => {
+            let mut links = provider.get_download_links(&torrent_id).await.map_err(|e| e.to_string())?;
+            if links.len() != 1 {
+                return Err(format!("Expected the torrent to have one packed download, found {}", links.len()));
+            }
+            links.remove(0)
+        }
+    };
     let timeout = Duration::from_secs(30);
     let listing = match archive_ext(&link.filename) {
         Some("zip") => zip_remote::read_listing(&client(), &link.download, timeout).await,

@@ -19,7 +19,8 @@ export default function ZipContentsDialog({
   onStarted,
 }: {
   torrentId: string;
-  fileId: number;
+  /** null: the torrent's single packed download (Real-Debrid RAR). */
+  fileId: number | null;
   fileName: string;
   torrentName?: string;
   onClose(): void;
@@ -115,7 +116,7 @@ export default function ZipContentsDialog({
       title="Download contents"
       description={
         info
-          ? `${fileName} · ${files.length} files · ${formatBytes(files.reduce((s, e) => s + e.size, 0))} unpacked`
+          ? `${info.link.filename || fileName} · ${files.length} files · ${formatBytes(files.reduce((s, e) => s + e.size, 0))} unpacked`
           : fileName
       }
       footer={
