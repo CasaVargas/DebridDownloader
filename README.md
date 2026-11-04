@@ -33,6 +33,7 @@ A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com
 - Add magnets or `.torrent` files, pick files, and set it as your default magnet handler
 - Search your own trackers: Torznab, Prowlarr, Jackett, TPB-style JSON APIs, and TorBox's built-in search, with a check for what's already cached
 - A watch list that finds new releases and adds or notifies automatically
+- Download a ZIP's contents straight into folders, with no unzip step afterwards: the archive is read remotely with byte-range requests and each file is pulled out on its own (choose which files, too)
 - Auto-extract archives and sort movies and shows into library folders (with TMDB lookups)
 - Plex, Jellyfin, and Emby rescans when downloads finish
 - rclone remotes as download destinations

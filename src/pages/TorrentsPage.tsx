@@ -3,6 +3,7 @@ import { useMiniPlayer } from "../contexts/MiniPlayerContext";
 import { open } from "@tauri-apps/plugin-dialog";
 import DataTable, { type Column } from "../components/DataTable";
 import AddTorrentModal from "../components/AddTorrentModal";
+import ZipContentsDialog from "../components/ZipContentsDialog";
 import * as torrentsApi from "../api/torrents";
 import * as downloadsApi from "../api/downloads";
 import { getSettings } from "../api/settings";
@@ -54,6 +55,8 @@ const getFileExt = (path: string) => {
 
 const isInlineVideo = (path: string) => INLINE_VIDEO_EXTS.includes(getFileExt(path));
 const isExternalVideo = (path: string) => EXTERNAL_VIDEO_EXTS.includes(getFileExt(path));
+const isZip = (path: string) => getFileExt(path) === ".zip";
+const baseName = (path: string) => path.split("/").pop() || path;
 
 export default function TorrentsPage() {
   const [torrents, setTorrents] = useState<Torrent[]>([]);
@@ -75,6 +78,8 @@ export default function TorrentsPage() {
   const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [zipTarget, setZipTarget] = useState<{ torrentId: string; fileId: number; name: string; torrentName: string } | null>(null);
+  const [notice, setNotice] = useState("");
 
   const { openPreview, loadingTorrentId: miniPlayerLoadingId } = useMiniPlayer();
 
@@ -358,6 +363,11 @@ export default function TorrentsPage() {
 
   const inspectorVisible = !!selectedId && inspectorOpen;
   const canDownload = detailInfo?.status === "downloaded";
+  const zipFiles = canDownload ? detailInfo.files.filter((f) => f.selected && isZip(f.path)) : [];
+  const openZip = (fileId: number, path: string) => {
+    if (!detailInfo) return;
+    setZipTarget({ torrentId: detailInfo.id, fileId, name: baseName(path), torrentName: detailInfo.filename });
+  };
 
   return (
     <>
@@ -380,6 +390,12 @@ export default function TorrentsPage() {
       />
 
       {error && <div className="border-b border-border px-4 py-2 text-sm text-danger">{error}</div>}
+      {notice && (
+        <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm text-fg-secondary">
+          <span className="min-w-0 flex-1 truncate">{notice}</span>
+          <Button size="sm" variant="ghost" onClick={() => setNotice("")}>Dismiss</Button>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
@@ -417,6 +433,11 @@ export default function TorrentsPage() {
                 {canDownload && (
                   <Button variant="primary" onClick={handleDetailDownload} disabled={downloading}>
                     {downloading ? "Starting..." : "Download"}
+                  </Button>
+                )}
+                {zipFiles.length === 1 && (
+                  <Button onClick={() => openZip(zipFiles[0].id, zipFiles[0].path)}>
+                    Download Contents
                   </Button>
                 )}
                 {canDownload && (
@@ -501,6 +522,11 @@ export default function TorrentsPage() {
                         <span className="min-w-0 flex-1 truncate text-sm text-fg">
                           {file.path.startsWith("/") ? file.path.slice(1) : file.path}
                         </span>
+                        {canDownload && file.selected && isZip(file.path) && (
+                          <Button size="sm" onClick={() => openZip(file.id, file.path)}>
+                            Contents
+                          </Button>
+                        )}
                         <span className="shrink-0 text-sm text-fg-muted tabular">{formatBytes(file.bytes)}</span>
                       </div>
                     ))}
@@ -513,6 +539,17 @@ export default function TorrentsPage() {
           ) : null}
         </Inspector>
       </div>
+
+      {zipTarget && (
+        <ZipContentsDialog
+          torrentId={zipTarget.torrentId}
+          fileId={zipTarget.fileId}
+          fileName={zipTarget.name}
+          torrentName={zipTarget.torrentName}
+          onClose={() => setZipTarget(null)}
+          onStarted={(root, count) => setNotice(`Downloading ${count} ${count === 1 ? "file" : "files"} from ${zipTarget.name} into ${root}`)}
+        />
+      )}
 
       {/* Add torrent modal */}
       {showAdd && (

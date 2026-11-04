@@ -27,6 +27,8 @@ pub enum JobKind {
     Http,
     Remote { rclone_dest: String },
     Symlink,
+    /// One member of a remote ZIP; segments are offsets inside the member's compressed data.
+    ZipEntry { entry: super::zip_remote::ZipEntrySpec },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -139,6 +141,13 @@ impl Job {
     /// Durable bytes on disk (sum of segment progress).
     pub fn downloaded(&self) -> u64 {
         self.segments.iter().map(|s| s.done.min(s.len())).sum()
+    }
+
+    pub fn zip_entry(&self) -> Option<&super::zip_remote::ZipEntrySpec> {
+        match &self.kind {
+            JobKind::ZipEntry { entry } => Some(entry),
+            _ => None,
+        }
     }
 
     pub fn remote_dest(&self) -> Option<&str> {

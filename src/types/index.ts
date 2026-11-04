@@ -94,6 +94,33 @@ export interface DownloadLink {
   source?: LinkSource;
 }
 
+/** One member of a ZIP read remotely (mirrors `engine::zip_remote::ZipEntry`). */
+export interface ZipEntry {
+  path: string;
+  is_dir: boolean;
+  header_offset: number;
+  compressed_size: number;
+  size: number;
+  method: number;
+  crc32: number;
+  encrypted: boolean;
+  /** Why this member can't be downloaded on its own; null when it can. */
+  unsupported: string | null;
+}
+
+/** Mirrors `commands::archive::ZipInspection`. */
+export interface ZipInspection {
+  link: DownloadLink;
+  archive_size: number;
+  entries: ZipEntry[];
+}
+
+/** Mirrors `commands::archive::ZipDownloadStarted`. */
+export interface ZipDownloadStarted {
+  ids: string[];
+  root: string;
+}
+
 export interface DownloadItem {
   id: string;
   filename: string;

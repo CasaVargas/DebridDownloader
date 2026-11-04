@@ -11,6 +11,7 @@ pub mod segment;
 pub mod store;
 pub mod transfer;
 pub mod types;
+pub mod zip_remote;
 
 #[cfg(test)]
 mod tests;

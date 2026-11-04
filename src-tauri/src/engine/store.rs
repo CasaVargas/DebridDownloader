@@ -123,7 +123,7 @@ pub fn recover(jobs: &mut [Job]) -> Vec<String> {
             job.retry_at = None;
         }
         if matches!(job.state, JobState::Pending | JobState::Paused)
-            && job.kind == JobKind::Http
+            && matches!(job.kind, JobKind::Http | JobKind::ZipEntry { .. })
             && !job.segments.is_empty()
         {
             let part_len = std::fs::metadata(job.part_path()).map(|m| m.len()).ok();
