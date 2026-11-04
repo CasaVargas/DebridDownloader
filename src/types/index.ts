@@ -118,6 +118,14 @@ export interface ZipInspection {
   entries: ZipEntry[];
 }
 
+/** `archive-listing-progress` event (mirrors `commands::archive::ListingProgress`). */
+export interface ArchiveListingProgress {
+  torrent_id: string;
+  entries: number;
+  walked: number;
+  total: number;
+}
+
 /** Mirrors `commands::archive::ZipDownloadStarted`. */
 export interface ZipDownloadStarted {
   ids: string[];

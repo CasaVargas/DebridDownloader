@@ -13,8 +13,15 @@ const SIG_RAR4: &[u8] = b"Rar!\x1a\x07\x00";
 const SIG_RAR5: &[u8] = b"Rar!\x1a\x07\x01\x00";
 /// How far into the file to look for the signature (self-extracting stubs come first).
 const SIG_SEARCH: u64 = 1024 * 1024;
-/// Bytes fetched per request while walking headers.
+/// Bytes fetched per request while walking headers through small files.
 const WINDOW: u64 = 512 * 1024;
+/// Bytes fetched after jumping over a large file: the next header is all we need.
+const SMALL_READ: u64 = 16 * 1024;
+/// Minimum time between progress reports.
+const PROGRESS_EVERY: Duration = Duration::from_millis(150);
+
+/// Called while listing with (entries found, bytes of the archive walked, archive size).
+pub type Progress<'a> = &'a (dyn Fn(usize, u64, u64) + Send + Sync);
 const MAX_HEADER: u64 = 2 * 1024 * 1024;
 const MAX_ENTRIES: usize = 5_000_000;
 /// Method codes we report for compressed RAR members; never decodable here.
@@ -31,6 +38,10 @@ struct Remote<'a> {
     window: u64,
     start: u64,
     buf: Vec<u8>,
+    /// The last jump skipped more than a window of data, so read just enough for a header.
+    jumped_far: bool,
+    progress: Option<Progress<'a>>,
+    last_report: Option<std::time::Instant>,
 }
 
 impl<'a> Remote<'a> {
@@ -41,7 +52,8 @@ impl<'a> Remote<'a> {
         }
         let have = pos >= self.start && pos + len <= self.start + self.buf.len() as u64;
         if !have {
-            let end = (pos + len.max(self.window)).min(self.size) - 1;
+            let ahead = if self.jumped_far { SMALL_READ.min(self.window) } else { self.window };
+            let end = (pos + len.max(ahead)).min(self.size) - 1;
             let (b, _) = get(self.client, self.url, pos, end, self.timeout).await?;
             if (b.len() as u64) < len {
                 return Err(ZipError::Http("connection closed while reading the archive".into()));
@@ -51,6 +63,16 @@ impl<'a> Remote<'a> {
         }
         let from = (pos - self.start) as usize;
         Ok(&self.buf[from..from + len as usize])
+    }
+
+    /// Record a jump over `skip` bytes of member data, then report progress (throttled).
+    fn advance(&mut self, skip: u64, entries: usize, pos: u64) {
+        self.jumped_far = skip > self.window;
+        let Some(p) = self.progress else { return };
+        if self.last_report.is_none_or(|t| t.elapsed() >= PROGRESS_EVERY) {
+            self.last_report = Some(std::time::Instant::now());
+            p(entries, pos.min(self.size), self.size);
+        }
     }
 }
 
@@ -207,15 +229,21 @@ fn entry(
 }
 
 /// Read the file list of the RAR at `url`.
-pub async fn read_listing(client: &reqwest::Client, url: &str, timeout: Duration) -> Result<ZipListing, ZipError> {
-    read_listing_with_window(client, url, timeout, WINDOW).await
+pub async fn read_listing(client: &reqwest::Client, url: &str, timeout: Duration, progress: Option<Progress<'_>>) -> Result<ZipListing, ZipError> {
+    read_listing_with_window(client, url, timeout, WINDOW, progress).await
 }
 
 /// `read_listing` with a chosen read-ahead window (tests use a small one).
-pub async fn read_listing_with_window(client: &reqwest::Client, url: &str, timeout: Duration, window: u64) -> Result<ZipListing, ZipError> {
+pub async fn read_listing_with_window(
+    client: &reqwest::Client,
+    url: &str,
+    timeout: Duration,
+    window: u64,
+    progress: Option<Progress<'_>>,
+) -> Result<ZipListing, ZipError> {
     let mut attempt = 0;
     loop {
-        match read_listing_once(client, url, timeout, window).await {
+        match read_listing_once(client, url, timeout, window, progress).await {
             Err(e @ (ZipError::NoRanges(_) | ZipError::Http(_))) if attempt < 2 => {
                 attempt += 1;
                 log::warn!("Reading RAR listing failed (attempt {attempt}): {e}; retrying");
@@ -226,9 +254,15 @@ pub async fn read_listing_with_window(client: &reqwest::Client, url: &str, timeo
     }
 }
 
-async fn read_listing_once(client: &reqwest::Client, url: &str, timeout: Duration, window: u64) -> Result<ZipListing, ZipError> {
+async fn read_listing_once(
+    client: &reqwest::Client,
+    url: &str,
+    timeout: Duration,
+    window: u64,
+    progress: Option<Progress<'_>>,
+) -> Result<ZipListing, ZipError> {
     let (_, size) = get(client, url, 0, 0, timeout).await?;
-    let mut r = Remote { client, url, size, timeout, window, start: 0, buf: Vec::new() };
+    let mut r = Remote { client, url, size, timeout, window, start: 0, buf: Vec::new(), jumped_far: false, progress, last_report: None };
     let head = r.bytes(0, size.min(SIG_SEARCH.min(window.max(64))).max(1)).await?.to_vec();
     let find = |sig: &[u8]| head.windows(sig.len()).position(|w| w == sig);
     let entries = match (find(SIG_RAR5), find(SIG_RAR4)) {
@@ -310,6 +344,7 @@ async fn walk_rar4(r: &mut Remote<'_>, mut pos: u64) -> Result<Vec<ZipEntry>, Zi
             _ => {}
         }
         pos = pos + head_size + add;
+        r.advance(add, out.len(), pos);
     }
     Ok(out)
 }
@@ -381,6 +416,7 @@ async fn walk_rar5(r: &mut Remote<'_>, mut pos: u64) -> Result<Vec<ZipEntry>, Zi
             _ => {}
         }
         pos = data_start + data_size;
+        r.advance(data_size, out.len(), pos);
     }
     Ok(out)
 }

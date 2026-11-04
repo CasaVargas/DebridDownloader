@@ -9,7 +9,7 @@ use crate::state::AppState;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 #[derive(Debug, Serialize)]
 pub struct ZipInspection {
@@ -17,6 +17,18 @@ pub struct ZipInspection {
     pub link: DownloadLink,
     pub archive_size: u64,
     pub entries: Vec<ZipEntry>,
+}
+
+/// `archive-listing-progress` event payload.
+#[derive(Debug, Clone, Serialize)]
+pub struct ListingProgress {
+    pub torrent_id: String,
+    /// Files found so far.
+    pub entries: usize,
+    /// Bytes of the archive walked so far.
+    pub walked: u64,
+    /// Size of the archive.
+    pub total: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -49,6 +61,7 @@ pub(crate) fn archive_ext(name: &str) -> Option<&'static str> {
 /// the original files.
 #[tauri::command]
 pub async fn inspect_torrent_archive(
+    app: AppHandle,
     state: State<'_, AppState>,
     torrent_id: String,
     file_id: Option<u64>,
@@ -67,7 +80,13 @@ pub async fn inspect_torrent_archive(
     let timeout = Duration::from_secs(30);
     let listing = match archive_ext(&link.filename) {
         Some("zip") => zip_remote::read_listing(&client(), &link.download, timeout).await,
-        Some(_) => rar_remote::read_listing(&client(), &link.download, timeout).await,
+        Some(_) => {
+            // RAR listings walk the archive header by header; tell the dialog how far it got.
+            let report = |entries: usize, walked: u64, total: u64| {
+                let _ = app.emit("archive-listing-progress", ListingProgress { torrent_id: torrent_id.clone(), entries, walked, total });
+            };
+            rar_remote::read_listing(&client(), &link.download, timeout, Some(&report)).await
+        }
         None => return Err(format!("{} is not a .zip or .rar file", link.filename)),
     }
     .map_err(|e| e.to_string())?;

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { listen } from "@tauri-apps/api/event";
 import * as archiveApi from "../api/archive";
 import { getSettings } from "../api/settings";
-import type { ZipEntry, ZipInspection } from "../types";
+import type { ArchiveListingProgress, ZipEntry, ZipInspection } from "../types";
 import { formatBytes } from "../utils";
 import { Button, Dialog, Input, Spinner } from "./ui";
 
@@ -31,6 +32,16 @@ export default function ZipContentsDialog({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
   const [starting, setStarting] = useState(false);
+  const [progress, setProgress] = useState<ArchiveListingProgress | null>(null);
+
+  useEffect(() => {
+    const unlisten = listen<ArchiveListingProgress>("archive-listing-progress", (e) => {
+      if (e.payload.torrent_id === torrentId) setProgress(e.payload);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [torrentId]);
 
   useEffect(() => {
     let alive = true;
@@ -132,6 +143,12 @@ export default function ZipContentsDialog({
         <div className="flex flex-col items-center gap-2 py-10 text-sm text-fg-muted">
           <Spinner />
           Reading the archive's file list…
+          {progress && (
+            <span className="tabular">
+              {progress.entries} {progress.entries === 1 ? "file" : "files"} found ·{" "}
+              {progress.total > 0 ? Math.floor((progress.walked / progress.total) * 100) : 0}%
+            </span>
+          )}
         </div>
       )}
       {error && <p className="mb-3 text-sm text-danger" role="alert">{error}</p>}

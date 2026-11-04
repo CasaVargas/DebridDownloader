@@ -37,7 +37,7 @@ async fn serve(bytes: Vec<u8>) -> MockServer {
 }
 
 async fn list(s: &MockServer, window: u64) -> Result<ZipListing, ZipError> {
-    read_listing_with_window(&build_client(&fast_transfer_cfg()), &s.url(), T, window).await
+    read_listing_with_window(&build_client(&fast_transfer_cfg()), &s.url(), T, window, None).await
 }
 
 async fn download(s: &MockServer, e: &ZipEntry, archive_size: u64, dir: &tempfile::TempDir) -> (Result<TransferOutcome, TransferError>, Vec<u8>) {
@@ -206,4 +206,20 @@ fn rar4_unicode_names_decode() {
     assert_eq!(decode_rar4_unicode(&enc[..z], &enc[z + 1..]), "Ελληνικά/ταινία.mkv");
     // Mode 3 (copy from the ASCII name) as WinRAR writes for mostly-ASCII names.
     assert_eq!(decode_rar4_unicode(b"abcdef", &[0, 0xC0, 4]), "abcdef");
+}
+
+#[tokio::test]
+async fn large_files_cost_one_small_read_each() {
+    // Ten 300 KB files with a 64 KB window: after each jump only a header-sized read is needed.
+    let data: Vec<Vec<u8>> = (0..10).map(|i| pattern(300_000 + i)).collect();
+    let names: Vec<String> = (0..10).map(|i| format!("big{i}.bin")).collect();
+    let refs: Vec<(&str, &[u8])> = names.iter().zip(&data).map(|(n, d)| (n.as_str(), d.as_slice())).collect();
+    let s = serve(rar4(&refs, &[])).await;
+    let seen = std::sync::Mutex::new(Vec::new());
+    let report = |n: usize, pos: u64, _total: u64| seen.lock().unwrap().push((n, pos));
+    let l = read_listing_with_window(&build_client(&fast_transfer_cfg()), &s.url(), T, 64 * 1024, Some(&report)).await.unwrap();
+    assert_eq!(l.entries.len(), 10);
+    let fetched: u64 = s.ranges().iter().map(|(a, b)| b - a + 1).sum();
+    assert!(fetched < 64 * 1024 + 10 * 17 * 1024, "fetched {fetched} bytes");
+    assert!(!seen.lock().unwrap().is_empty());
 }
