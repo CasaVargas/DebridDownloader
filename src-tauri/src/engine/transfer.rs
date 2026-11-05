@@ -197,6 +197,26 @@ async fn finalize(job: &Job, cancel: &CancellationToken, tx: &UpdateTx) -> Resul
     }
     fsync::sync_all(&f).await.map_err(fatal)?;
     drop(f);
+    if let Some(spec) = job.zip_entry().filter(|s| s.is_stored() && s.has_crc && s.size > 0).cloned() {
+        // Stored member: `.part` is the file itself. Check it against the archive's CRC before
+        // it gets its final name, so a bad range never passes as a finished file.
+        let _ = tx.send(TransferUpdate::Unpacking);
+        let c = cancel.clone();
+        let p = part.clone();
+        let res = tokio::task::spawn_blocking(move || zip_remote::crc_file(&p, &c))
+            .await
+            .map_err(|e| TransferError::Fatal(format!("verifier crashed: {e}")))?;
+        match res {
+            Ok(None) => return Ok(TransferOutcome::Stopped),
+            Ok(Some(crc)) if crc == spec.crc32 => {}
+            Ok(Some(_)) => {
+                log::warn!("CRC check failed for {}; it will be downloaded again", job.filename);
+                let _ = tokio::fs::remove_file(&part).await;
+                return Err(TransferError::Transient("CRC check failed; downloading again".into()));
+            }
+            Err(m) => return Err(TransferError::Fatal(m)),
+        }
+    }
     if let Some(spec) = job.zip_entry().filter(|s| !s.is_stored()).cloned() {
         // Compressed ZIP member: `.part` holds the raw compressed bytes; decode them into place.
         let _ = tx.send(TransferUpdate::Unpacking);
