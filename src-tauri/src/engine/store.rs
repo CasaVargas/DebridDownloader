@@ -98,10 +98,17 @@ impl Store {
 }
 
 /// Keep every unfinished job plus the newest `HISTORY_CAP` finished ones. Preserves order.
+/// Finished jobs of a batch that is still running are kept too, so the batch's totals
+/// (e.g. "5,200 of 8,000 files") stay right while it downloads.
 pub fn prune_history(jobs: &mut Vec<Job>) {
+    let running: std::collections::HashSet<String> = jobs
+        .iter()
+        .filter(|j| !j.state.is_terminal() && !j.batch_id.is_empty())
+        .map(|j| j.batch_id.clone())
+        .collect();
     let mut terminal: Vec<(i64, String)> = jobs
         .iter()
-        .filter(|j| j.state.is_terminal())
+        .filter(|j| j.state.is_terminal() && !running.contains(&j.batch_id))
         .map(|j| (j.updated_at, j.id.clone()))
         .collect();
     if terminal.len() <= HISTORY_CAP {
@@ -109,7 +116,7 @@ pub fn prune_history(jobs: &mut Vec<Job>) {
     }
     terminal.sort_by_key(|t| std::cmp::Reverse(t.0));
     let keep: std::collections::HashSet<String> = terminal.into_iter().take(HISTORY_CAP).map(|(_, id)| id).collect();
-    jobs.retain(|j| !j.state.is_terminal() || keep.contains(&j.id));
+    jobs.retain(|j| !j.state.is_terminal() || running.contains(&j.batch_id) || keep.contains(&j.id));
 }
 
 /// Startup recovery (spec §4.4). Returns ids whose post-processing must re-run.
@@ -123,7 +130,7 @@ pub fn recover(jobs: &mut [Job]) -> Vec<String> {
             job.retry_at = None;
         }
         if matches!(job.state, JobState::Pending | JobState::Paused)
-            && job.kind == JobKind::Http
+            && matches!(job.kind, JobKind::Http | JobKind::ZipEntry { .. })
             && !job.segments.is_empty()
         {
             let part_len = std::fs::metadata(job.part_path()).map(|m| m.len()).ok();

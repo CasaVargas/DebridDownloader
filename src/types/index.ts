@@ -95,6 +95,44 @@ export interface DownloadLink {
   source?: LinkSource;
 }
 
+/** One member of a ZIP or RAR read remotely (mirrors `engine::zip_remote::ZipEntry`). */
+export interface ZipEntry {
+  path: string;
+  is_dir: boolean;
+  header_offset: number;
+  compressed_size: number;
+  size: number;
+  method: number;
+  crc32: number;
+  flags: number;
+  /** Where the member's data starts (RAR); null for ZIP members. */
+  data_offset: number | null;
+  encrypted: boolean;
+  /** Why this member can't be downloaded on its own; null when it can. */
+  unsupported: string | null;
+}
+
+/** Mirrors `commands::archive::ZipInspection`. */
+export interface ZipInspection {
+  link: DownloadLink;
+  archive_size: number;
+  entries: ZipEntry[];
+}
+
+/** `archive-listing-progress` event (mirrors `commands::archive::ListingProgress`). */
+export interface ArchiveListingProgress {
+  torrent_id: string;
+  entries: number;
+  walked: number;
+  total: number;
+}
+
+/** Mirrors `commands::archive::ZipDownloadStarted`. */
+export interface ZipDownloadStarted {
+  ids: string[];
+  root: string;
+}
+
 export interface DownloadItem {
   id: string;
   filename: string;
@@ -128,8 +166,10 @@ export interface DownloadTask {
   resumable?: boolean;
   error?: string | null;
   waiting_for_network?: boolean;
-  /** Files queued together (one torrent) share this; empty for symlinked files. */
+  /** Jobs started together (one torrent, or one archive's contents) share a batch; empty for symlinked files. */
   batch_id?: string;
+  /** The torrent or archive name of the batch. */
+  batch_name?: string;
   /** Unix ms of the last state change; for a completed download, when it finished. */
   updated_at?: number;
 }

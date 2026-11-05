@@ -5,6 +5,7 @@ use super::segment::{
     classify_reqwest, content_range_total, is_html, run_segment, status_error, SegmentCtx, SegmentError, SegmentMsg,
 };
 use super::types::{Job, SegmentState};
+use super::zip_remote::{self, DecodeOutcome};
 use reqwest::header::RANGE;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -62,6 +63,8 @@ pub enum TransferUpdate {
     Probed { total_bytes: i64, resumable: bool, segments: Vec<SegmentState>, size_resets: u32 },
     Url(String),
     MaxSegments(u32),
+    /// A compressed ZIP member finished downloading and is being decoded.
+    Unpacking,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -183,7 +186,7 @@ async fn prepare_part(part: &Path, total: Option<u64>) -> Result<(), TransferErr
     Ok(())
 }
 
-async fn finalize(job: &Job) -> Result<(), TransferError> {
+async fn finalize(job: &Job, cancel: &CancellationToken, tx: &UpdateTx) -> Result<TransferOutcome, TransferError> {
     let fatal = |e: std::io::Error| TransferError::Fatal(format!("Disk error: {e}"));
     let part = job.part_path();
     let dest = PathBuf::from(&job.destination);
@@ -194,11 +197,35 @@ async fn finalize(job: &Job) -> Result<(), TransferError> {
     }
     fsync::sync_all(&f).await.map_err(fatal)?;
     drop(f);
+    if let Some(spec) = job.zip_entry().filter(|s| !s.is_stored()).cloned() {
+        // Compressed ZIP member: `.part` holds the raw compressed bytes; decode them into place.
+        let _ = tx.send(TransferUpdate::Unpacking);
+        let c = cancel.clone();
+        let p = part.clone();
+        let res = tokio::task::spawn_blocking(move || zip_remote::decode_member(&p, &dest, &spec, &c))
+            .await
+            .map_err(|e| TransferError::Fatal(format!("decoder crashed: {e}")))?;
+        return match res {
+            Ok(DecodeOutcome::Done) => {
+                let _ = tokio::fs::remove_file(&part).await;
+                Ok(TransferOutcome::Finished)
+            }
+            Ok(DecodeOutcome::Cancelled) => Ok(TransferOutcome::Stopped),
+            Err(m) if m.starts_with("Disk error") => Err(TransferError::Fatal(m)),
+            Err(m) => {
+                // Bad data: throw the download away so the retry fetches it again.
+                log::warn!("Decoding {} failed: {}; it will be downloaded again", job.filename, m);
+                let _ = tokio::fs::remove_file(&part).await;
+                Err(TransferError::Transient(format!("Unzipping failed ({m}); downloading again")))
+            }
+        };
+    }
     #[cfg(windows)]
     if dest.exists() {
         let _ = tokio::fs::remove_file(&dest).await;
     }
-    tokio::fs::rename(&part, &dest).await.map_err(fatal)
+    tokio::fs::rename(&part, &dest).await.map_err(fatal)?;
+    Ok(TransferOutcome::Finished)
 }
 
 async fn refresh_or_fail(job: &mut Job, deps: &TransferDeps, tx: &UpdateTx, refreshed: &mut bool, why: &str) -> Result<(), TransferError> {
@@ -222,25 +249,54 @@ pub async fn run_transfer(mut job: Job, deps: TransferDeps, cancel: Cancellation
     let part = job.part_path();
     let mut refreshed = false;
     let mut range_fallback = false;
+    let zip = job.zip_entry().cloned();
     loop {
         // Crash between the last write and the rename: just finalize.
         if !job.segments.is_empty()
             && job.segments.iter().all(|s| s.is_done())
             && part_len(&part).await == Some(job.total_bytes.max(0) as u64)
         {
-            finalize(&job).await?;
-            return Ok(TransferOutcome::Finished);
+            return finalize(&job, &cancel, &tx).await;
         }
 
-        let p = match probe(&deps.client, &job.url, deps.cfg.idle_timeout).await {
-            Ok(p) => p,
-            Err(SegmentError::DeadLink(why)) => {
-                refresh_or_fail(&mut job, &deps, &tx, &mut refreshed, &why).await?;
-                continue;
+        let mut base = 0u64;
+        let p = if let Some(spec) = &zip {
+            if spec.compressed_size == 0 {
+                prepare_part(&part, Some(0)).await?;
+                job.total_bytes = 0;
+                return finalize(&job, &cancel, &tx).await;
             }
-            Err(e) => {
-                log::warn!("Probe failed for {} ({}): {:?}", job.filename, job.id, e);
-                return Err(map_probe_err(e));
+            match zip_remote::data_offset(&deps.client, &job.url, spec, deps.cfg.idle_timeout).await {
+                Ok((_, total)) if total != spec.archive_size => {
+                    return Err(TransferError::Fatal("The archive changed on the server; open its contents again".into()));
+                }
+                Ok((off, _)) => {
+                    base = off;
+                    Probe { total: Some(spec.compressed_size), ranges: true }
+                }
+                Err(SegmentError::DeadLink(why)) => {
+                    refresh_or_fail(&mut job, &deps, &tx, &mut refreshed, &why).await?;
+                    continue;
+                }
+                Err(SegmentError::RangeIgnored) => {
+                    return Err(TransferError::Transient("the server ignored the byte range".into()));
+                }
+                Err(e) => {
+                    log::warn!("Reading the ZIP header failed for {} ({}): {:?}", job.filename, job.id, e);
+                    return Err(map_probe_err(e));
+                }
+            }
+        } else {
+            match probe(&deps.client, &job.url, deps.cfg.idle_timeout).await {
+                Ok(p) => p,
+                Err(SegmentError::DeadLink(why)) => {
+                    refresh_or_fail(&mut job, &deps, &tx, &mut refreshed, &why).await?;
+                    continue;
+                }
+                Err(e) => {
+                    log::warn!("Probe failed for {} ({}): {:?}", job.filename, job.id, e);
+                    return Err(map_probe_err(e));
+                }
             }
         };
         if cancel.is_cancelled() {
@@ -271,8 +327,7 @@ pub async fn run_transfer(mut job: Job, deps: TransferDeps, cancel: Cancellation
             if p.total == Some(0) {
                 prepare_part(&part, Some(0)).await?;
                 job.total_bytes = 0;
-                finalize(&job).await?;
-                return Ok(TransferOutcome::Finished);
+                return finalize(&job, &cancel, &tx).await;
             }
             job.segments = match p.total {
                 Some(t) if ranges => plan_segments(t, job.max_segments.min(deps.cfg.segments_per_file), deps.cfg.min_segment),
@@ -280,7 +335,9 @@ pub async fn run_transfer(mut job: Job, deps: TransferDeps, cancel: Cancellation
                 None => vec![SegmentState { start: 0, end: u64::MAX - 1, done: 0 }],
             };
             if let Some(t) = p.total {
-                ensure_space(&job.destination, t)?;
+                // A compressed member needs room for its download and the decoded file.
+                let extra = zip.as_ref().filter(|s| !s.is_stored()).map_or(0, |s| s.size);
+                ensure_space(&job.destination, t.saturating_add(extra))?;
             }
             prepare_part(&part, p.total).await?;
         }
@@ -291,17 +348,19 @@ pub async fn run_transfer(mut job: Job, deps: TransferDeps, cancel: Cancellation
             size_resets: job.size_resets,
         });
 
-        match run_segments(&mut job, &deps, &cancel, &tx, ranges, p.total.is_none()).await {
+        match run_segments(&mut job, &deps, &cancel, &tx, ranges, p.total.is_none(), base).await {
             Ok(()) => {
                 if p.total.is_none() {
                     job.total_bytes = job.downloaded() as i64;
                 }
-                finalize(&job).await?;
-                return Ok(TransferOutcome::Finished);
+                return finalize(&job, &cancel, &tx).await;
             }
             Err(RunError::Stopped) => return Ok(TransferOutcome::Stopped),
             Err(RunError::DeadLink(why)) => {
                 refresh_or_fail(&mut job, &deps, &tx, &mut refreshed, &why).await?;
+            }
+            Err(RunError::RangeIgnored) if zip.is_some() => {
+                return Err(TransferError::Transient("the server ignored the byte range".into()));
             }
             Err(RunError::RangeIgnored) => {
                 if range_fallback {
@@ -408,6 +467,7 @@ async fn run_segments(
     tx: &UpdateTx,
     use_range: bool,
     until_eof: bool,
+    base_offset: u64,
 ) -> Result<(), RunError> {
     let cfg = &deps.cfg;
     let run_cancel = cancel.child_token();
@@ -418,6 +478,7 @@ async fn run_segments(
         limiter: deps.limiter.clone(),
         cancel: run_cancel.clone(),
         use_range,
+        base_offset,
         until_eof,
         idle_timeout: cfg.idle_timeout,
         checkpoint_bytes: cfg.checkpoint_bytes,

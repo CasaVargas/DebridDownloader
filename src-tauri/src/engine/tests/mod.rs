@@ -10,3 +10,5 @@ pub mod transfer_tests;
 mod transfer_resilience_tests;
 pub mod pipeline_tests;
 mod engine_tests;
+mod zip_tests;
+mod rar_tests;

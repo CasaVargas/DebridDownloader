@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import DataTable, { type Column } from "../components/DataTable";
 import { Button, IconButton, Inspector, Menu, StatusDot, Toolbar } from "../components/ui";
@@ -35,6 +35,38 @@ function pctOf(t: DownloadTask): number {
   return t.total_bytes > 0 ? (t.downloaded_bytes / t.total_bytes) * 100 : 0;
 }
 
+const ChevronIcon = ({ open }: { open: boolean }) => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={open ? "rotate-90 transition-transform" : "transition-transform"}>
+    <polyline points="9 6 15 12 9 18" />
+  </svg>
+);
+const FolderIcon = () => (
+  <svg className="size-3.5 shrink-0 text-fg-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+/** Every job of one torrent / archive's contents, summarised as one row. */
+interface Group {
+  id: string;
+  name: string;
+  /** Unfinished jobs (the ones listed under the group). */
+  active: DownloadTask[];
+  files: number;
+  done: number;
+  failed: number;
+  running: number;
+  queued: number;
+  paused: number;
+  totalBytes: number;
+  doneBytes: number;
+  speed: number;
+}
+
+type Row = { kind: "group"; group: Group } | { kind: "task"; task: DownloadTask; child: boolean };
+
+const groupKey = (id: string) => `batch:${id}`;
+
 function ProgressBar({ pct }: { pct: number }) {
   return (
     <div className="h-0.75 rounded-full bg-border" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
@@ -51,6 +83,14 @@ export default function DownloadsPage() {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleGroup = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const filterRef = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -62,24 +102,95 @@ export default function DownloadsPage() {
   // Only show non-completed tasks
   const activeTasks = useMemo(() => tasks.filter((t) => t.status !== "Completed"), [tasks]);
 
-  const filtered = useMemo(() => {
-    let result = activeTasks;
-    if (filter) {
-      const q = filter.toLowerCase();
-      result = result.filter((t) => t.filename.toLowerCase().includes(q));
+  // Jobs of one batch (a torrent or an archive's contents) are shown under one folder row.
+  // Completed jobs count towards the group's progress but aren't listed.
+  const groups = useMemo(() => {
+    const all = new Map<string, DownloadTask[]>();
+    for (const t of tasks) {
+      if (!t.batch_id) continue;
+      const list = all.get(t.batch_id);
+      if (list) list.push(t);
+      else all.set(t.batch_id, [t]);
     }
-    if (sortKey) {
-      result = [...result].sort((a, b) => {
+    const out = new Map<string, Group>();
+    for (const [id, jobs] of all) {
+      if (jobs.length < 2) continue;
+      const active = jobs.filter((t) => t.status !== "Completed");
+      if (active.length === 0) continue;
+      let done = 0, failed = 0, running = 0, queued = 0, paused = 0, totalBytes = 0, doneBytes = 0, speed = 0;
+      for (const t of jobs) {
+        totalBytes += Math.max(0, t.total_bytes);
+        if (t.status === "Completed") {
+          done++;
+          doneBytes += Math.max(0, t.total_bytes);
+          continue;
+        }
+        doneBytes += Math.max(0, t.downloaded_bytes);
+        if (isFailedStatus(t.status)) failed++;
+        else if (t.status === "Paused") paused++;
+        else if (t.status === "Pending") queued++;
+        else if (isActive(t.status)) running++;
+        if (t.status === "Downloading") speed += t.speed;
+      }
+      const name = jobs.find((t) => t.batch_name)?.batch_name || "Batch";
+      out.set(id, { id, name, active, files: jobs.length, done, failed, running, queued, paused, totalBytes, doneBytes, speed });
+    }
+    return out;
+  }, [tasks]);
+
+  const rows = useMemo(() => {
+    const q = filter.toLowerCase();
+    const matches = (t: DownloadTask) => !q || t.filename.toLowerCase().includes(q);
+    const sortTasks = (list: DownloadTask[]) => {
+      if (!sortKey) return list;
+      return [...list].sort((a, b) => {
         let cmp = 0;
         if (sortKey === "filename") cmp = a.filename.localeCompare(b.filename);
         else if (sortKey === "total_bytes") cmp = a.total_bytes - b.total_bytes;
         return sortDirection === "asc" ? cmp : -cmp;
       });
+    };
+    // Top level: groups and loose jobs, in queue order unless sorted.
+    type Top = { kind: "group"; group: Group } | { kind: "task"; task: DownloadTask };
+    const top: Top[] = [];
+    const seen = new Set<string>();
+    for (const t of activeTasks) {
+      const g = t.batch_id ? groups.get(t.batch_id) : undefined;
+      if (g) {
+        if (!seen.has(g.id)) {
+          seen.add(g.id);
+          if (!q || g.name.toLowerCase().includes(q) || g.active.some(matches)) top.push({ kind: "group", group: g });
+        }
+      } else if (matches(t)) {
+        top.push({ kind: "task", task: t });
+      }
     }
-    return result;
-  }, [activeTasks, filter, sortKey, sortDirection]);
+    if (sortKey) {
+      const name = (r: Top) => (r.kind === "group" ? r.group.name : r.task.filename);
+      const size = (r: Top) => (r.kind === "group" ? r.group.totalBytes : r.task.total_bytes);
+      top.sort((a, b) => {
+        const cmp = sortKey === "filename" ? name(a).localeCompare(name(b)) : sortKey === "total_bytes" ? size(a) - size(b) : 0;
+        return sortDirection === "asc" ? cmp : -cmp;
+      });
+    }
+    const out: Row[] = [];
+    for (const r of top) {
+      if (r.kind === "task") {
+        out.push({ kind: "task", task: r.task, child: false });
+        continue;
+      }
+      out.push(r);
+      // A filter shows the matching files of every group without expanding by hand.
+      const nameHit = q && r.group.name.toLowerCase().includes(q);
+      if (expanded.has(r.group.id) || (q && !nameHit)) {
+        const kids = q && !nameHit ? r.group.active.filter(matches) : r.group.active;
+        for (const t of sortTasks(kids)) out.push({ kind: "task", task: t, child: true });
+      }
+    }
+    return out;
+  }, [activeTasks, groups, expanded, filter, sortKey, sortDirection]);
 
-  const selectedTask = filtered.find((t) => t.id === selectedId) ?? null;
+  const selectedTask = activeTasks.find((t) => t.id === selectedId) ?? null;
 
   const handleCancel = async (id: string) => {
     try { await downloadsApi.cancelDownload(id); } catch { /* ignore */ }
@@ -146,6 +257,53 @@ export default function DownloadsPage() {
   }, [selectedId, activeTasks]);
 
   const selectRow = (t: DownloadTask) => { setSelectedId(t.id); setInspectorOpen(true); };
+  const clickRow = (r: Row) => {
+    if (r.kind === "group") {
+      setSelectedId(groupKey(r.group.id));
+      toggleGroup(r.group.id);
+    } else selectRow(r.task);
+  };
+  const keyboardRow = (r: Row) => {
+    if (r.kind === "group") setSelectedId(groupKey(r.group.id));
+    else selectRow(r.task);
+  };
+
+  const groupActions = (g: Group) => (
+    <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+      {g.running + g.queued > 0 && <IconButton label="Pause all in this folder" onClick={() => downloadsApi.pauseBatch(g.id).catch(() => {})}><PauseIcon /></IconButton>}
+      {g.paused > 0 && <IconButton label="Resume all in this folder" onClick={() => downloadsApi.resumeBatch(g.id).catch(() => {})}><PlayIcon /></IconButton>}
+      {g.failed > 0 && <IconButton label="Retry failed in this folder" onClick={() => downloadsApi.retryBatch(g.id).catch(() => {})}><RetryIcon /></IconButton>}
+      {g.running + g.queued + g.paused > 0 && <IconButton label="Cancel all in this folder" variant="danger" onClick={() => downloadsApi.cancelBatch(g.id).catch(() => {})}><CancelIcon /></IconButton>}
+    </div>
+  );
+
+  const groupSummary = (g: Group) => {
+    const parts = [`${g.done.toLocaleString()} of ${g.files.toLocaleString()} files`];
+    if (g.running) parts.push(`${g.running} downloading`);
+    if (g.queued) parts.push(`${g.queued.toLocaleString()} queued`);
+    if (g.paused) parts.push(`${g.paused} paused`);
+    if (g.failed) parts.push(`${g.failed} failed`);
+    return parts.join(" · ");
+  };
+
+  const renderGroupName = (g: Group) => {
+    const pct = g.totalBytes > 0 ? (g.doneBytes / g.totalBytes) * 100 : 0;
+    const open = expanded.has(g.id) || !!filter;
+    return (
+      <div className="min-w-0 py-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className="shrink-0 text-fg-muted"><ChevronIcon open={open} /></span>
+          <FolderIcon />
+          <span className="min-w-0 flex-1 truncate text-base font-medium text-fg" title={g.name}>{g.name}</span>
+          <span className="shrink-0 text-sm text-fg-muted tabular">{groupSummary(g)}</span>
+        </div>
+        <div className="mt-1.5 flex items-center gap-2">
+          <div className="flex-1"><ProgressBar pct={pct} /></div>
+          <span className="shrink-0 text-sm text-fg-muted tabular">{Math.floor(pct)}%</span>
+        </div>
+      </div>
+    );
+  };
 
   const rowActions = (t: DownloadTask) => {
     const can = downloadActions(t);
@@ -160,7 +318,7 @@ export default function DownloadsPage() {
     );
   };
 
-  const columns: Column<DownloadTask>[] = [
+  const taskColumns: Column<DownloadTask>[] = [
     {
       key: "filename",
       header: "Name",
@@ -218,6 +376,21 @@ export default function DownloadsPage() {
     },
     { key: "actions", header: "", width: 18, render: rowActions },
   ];
+
+  const groupCell: Record<string, (g: Group) => ReactNode> = {
+    filename: renderGroupName,
+    total_bytes: (g) => <span className="text-base text-fg-secondary tabular">{formatBytes(g.totalBytes)}</span>,
+    speed: (g) => <span className="text-base text-fg-secondary tabular">{g.speed > 0 ? formatSpeed(g.speed) : "--"}</span>,
+    actions: groupActions,
+  };
+  const columns: Column<Row>[] = taskColumns.map((c) => ({
+    ...c,
+    render: (r: Row) => {
+      if (r.kind === "group") return groupCell[c.key]?.(r.group) ?? null;
+      const cell = c.render(r.task);
+      return r.child && c.key === "filename" ? <div className="pl-7">{cell}</div> : cell;
+    },
+  }));
 
   const runningCount = activeTasks.filter((t) => isActive(t.status)).length;
   const totalSpeed = activeTasks.reduce((s, t) => s + (t.status === "Downloading" ? t.speed : 0), 0);
@@ -335,10 +508,10 @@ export default function DownloadsPage() {
         <div className="flex min-w-0 flex-1 flex-col">
           <DataTable
             columns={columns}
-            data={filtered}
-            rowKey={(t) => t.id}
-            onRowClick={selectRow}
-            onKeyboardSelect={selectRow}
+            data={rows}
+            rowKey={(r) => (r.kind === "group" ? groupKey(r.group.id) : r.task.id)}
+            onRowClick={clickRow}
+            onKeyboardSelect={keyboardRow}
             selectedId={selectedId}
             sortKey={sortKey}
             sortDirection={sortDirection}

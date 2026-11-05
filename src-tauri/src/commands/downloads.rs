@@ -52,6 +52,7 @@ pub async fn start_downloads(
             url: link.download.clone(),
             total_bytes: link.filesize,
             batch_id: batch_id.clone(),
+            batch_name: torrent_name.clone().unwrap_or_default(),
         })
         .collect();
     Ok(engine.enqueue(jobs).await)
@@ -170,6 +171,7 @@ async fn symlink_downloads(
                 url: link.download.clone(),
                 total_bytes: link.filesize,
                 batch_id: String::new(),
+                batch_name: String::new(),
             })
             .await;
         task_ids.push(id);
@@ -238,6 +240,31 @@ pub async fn resume_download(state: State<'_, AppState>, id: String) -> Result<(
 #[tauri::command]
 pub async fn retry_download(state: State<'_, AppState>, id: String) -> Result<(), String> {
     state.engine()?.retry(&id);
+    Ok(())
+}
+
+/// Pause every unfinished download of one batch (a torrent or an archive's contents).
+#[tauri::command]
+pub async fn pause_batch(state: State<'_, AppState>, batch_id: String) -> Result<(), String> {
+    state.engine()?.pause_batch(&batch_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn resume_batch(state: State<'_, AppState>, batch_id: String) -> Result<(), String> {
+    state.engine()?.resume_batch(&batch_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn retry_batch(state: State<'_, AppState>, batch_id: String) -> Result<(), String> {
+    state.engine()?.retry_batch(&batch_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_batch(state: State<'_, AppState>, batch_id: String) -> Result<(), String> {
+    state.engine()?.cancel_batch(&batch_id);
     Ok(())
 }
 

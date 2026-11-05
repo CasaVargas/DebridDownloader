@@ -53,6 +53,7 @@ impl Harness {
             url,
             total_bytes: size,
             batch_id: batch.into(),
+            batch_name: String::new(),
         }
     }
 

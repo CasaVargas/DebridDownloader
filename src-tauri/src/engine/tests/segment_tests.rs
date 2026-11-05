@@ -14,6 +14,7 @@ fn ctx(url: String, path: std::path::PathBuf) -> SegmentCtx {
         path,
         limiter: Arc::new(Limiter::new(None)),
         cancel: CancellationToken::new(),
+        base_offset: 0,
         use_range: true,
         until_eof: false,
         idle_timeout: Duration::from_millis(300),

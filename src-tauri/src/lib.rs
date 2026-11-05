@@ -253,6 +253,8 @@ pub fn run() {
             commands::torrents::select_torrent_files,
             commands::torrents::delete_torrent,
             // Downloads
+            commands::archive::inspect_torrent_archive,
+            commands::archive::start_archive_contents_download,
             commands::downloads::unrestrict_torrent_links,
             commands::downloads::start_downloads,
             commands::downloads::cancel_download,
@@ -265,6 +267,10 @@ pub fn run() {
             commands::downloads::resume_download,
             commands::downloads::retry_download,
             commands::downloads::pause_all_downloads,
+            commands::downloads::pause_batch,
+            commands::downloads::resume_batch,
+            commands::downloads::retry_batch,
+            commands::downloads::cancel_batch,
             commands::downloads::resume_all_downloads,
             commands::downloads::retry_failed_downloads,
             // Settings

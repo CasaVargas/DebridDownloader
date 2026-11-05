@@ -5,12 +5,14 @@ pub mod events;
 pub mod fsync;
 pub mod limiter;
 pub mod pipeline;
+pub mod rar_remote;
 pub mod refresh;
 pub mod remote;
 pub mod segment;
 pub mod store;
 pub mod transfer;
 pub mod types;
+pub mod zip_remote;
 
 #[cfg(test)]
 mod tests;
@@ -118,6 +120,10 @@ impl Engine {
     pub fn retry(&self, id: &str) { self.control(actor::Control::Retry(id.to_string())) }
     pub fn remove(&self, id: &str) { self.control(actor::Control::Remove(id.to_string())) }
     pub fn pause_all(&self) { self.control(actor::Control::PauseAll) }
+    pub fn pause_batch(&self, batch: &str) { self.control(actor::Control::PauseBatch(batch.to_string())) }
+    pub fn resume_batch(&self, batch: &str) { self.control(actor::Control::ResumeBatch(batch.to_string())) }
+    pub fn retry_batch(&self, batch: &str) { self.control(actor::Control::RetryBatch(batch.to_string())) }
+    pub fn cancel_batch(&self, batch: &str) { self.control(actor::Control::CancelBatch(batch.to_string())) }
     pub fn resume_all(&self) { self.control(actor::Control::ResumeAll) }
     pub fn retry_failed(&self) { self.control(actor::Control::RetryFailed) }
     pub fn cancel_all(&self) { self.control(actor::Control::CancelAll) }

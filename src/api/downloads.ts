@@ -78,3 +78,20 @@ export async function resumeAllDownloads(): Promise<void> {
 export async function retryFailedDownloads(): Promise<void> {
   return invoke("retry_failed_downloads");
 }
+
+/** Batch controls: every download of one torrent / archive's contents. */
+export async function pauseBatch(batchId: string): Promise<void> {
+  return invoke("pause_batch", { batchId });
+}
+
+export async function resumeBatch(batchId: string): Promise<void> {
+  return invoke("resume_batch", { batchId });
+}
+
+export async function retryBatch(batchId: string): Promise<void> {
+  return invoke("retry_batch", { batchId });
+}
+
+export async function cancelBatch(batchId: string): Promise<void> {
+  return invoke("cancel_batch", { batchId });
+}

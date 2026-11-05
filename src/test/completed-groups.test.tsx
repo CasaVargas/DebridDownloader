@@ -94,3 +94,16 @@ describe("Completed page", () => {
     expect(removeDownload.mock.calls.map((c) => c[0]).sort()).toEqual(["e1", "e2", "e3", "e4"]);
   });
 });
+
+describe("groupCompleted with a recorded batch name", () => {
+  it("names an archive's contents after the archive, not one of its files", () => {
+    const file = (id: string, filename: string, dest: string) =>
+      ({ id, filename, url: "", destination: dest, total_bytes: 10, downloaded_bytes: 10, speed: 0,
+         status: "Completed", batch_id: "Z", batch_name: "PML Arp Collection", updated_at: 1 }) as DownloadTask;
+    const [g] = groupCompleted([
+      file("a", "one.wav", "/dl/PML/Audio Previews/one.wav"),
+      file("b", "two.wav", "/dl/PML/Samples/two.wav"),
+    ]);
+    expect(g.name).toBe("PML Arp Collection");
+  });
+});

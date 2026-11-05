@@ -38,7 +38,10 @@ function buildGroup(id: string, tasks: DownloadTask[]): CompletedGroup {
   const extras = tasks.filter((t) => isExtra(t.filename)).sort((a, b) => b.total_bytes - a.total_bytes);
   const prefix = tasks.every((t) => t.filename.includes("/")) ? sharedValue(tasks.map((t) => t.filename.split("/")[0])) : null;
   const folder = sharedValue(tasks.map((t) => dirname(t.destination)));
-  const name = prefix ?? (tasks.length === 1 ? basename(tasks[0].filename) : (folder && basename(folder)) || basename(tasks[0].filename));
+  // The torrent / archive name recorded when the batch was queued is the best label; files from an
+  // archive's contents have no torrent-folder prefix and often span several subfolders.
+  const recorded = tasks.length > 1 ? tasks.find((t) => t.batch_name)?.batch_name : undefined;
+  const name = recorded || (prefix ?? (tasks.length === 1 ? basename(tasks[0].filename) : (folder && basename(folder)) || basename(tasks[0].filename)));
   return {
     id,
     name,

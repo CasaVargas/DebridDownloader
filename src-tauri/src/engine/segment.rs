@@ -22,6 +22,8 @@ pub struct SegmentCtx {
     pub cancel: CancellationToken,
     /// Send `Range` and require 206. False for servers without range support.
     pub use_range: bool,
+    /// Added to every byte position on the wire (ZIP members live inside a larger file).
+    pub base_offset: u64,
     /// Size unknown: EOF means done instead of "closed early".
     pub until_eof: bool,
     pub idle_timeout: Duration,
@@ -95,7 +97,7 @@ pub fn status_error(status: u16, headers: &HeaderMap) -> Option<SegmentError> {
     }
 }
 
-fn check_response(resp: &reqwest::Response, use_range: bool, pos: u64) -> Result<(), SegmentError> {
+fn check_response(resp: &reqwest::Response, use_range: bool, wire_pos: u64) -> Result<(), SegmentError> {
     let status = resp.status().as_u16();
     if let Some(e) = status_error(status, resp.headers()) {
         return Err(e);
@@ -108,7 +110,7 @@ fn check_response(resp: &reqwest::Response, use_range: bool, pos: u64) -> Result
             return Err(SegmentError::RangeIgnored);
         }
         match content_range_start(resp.headers()) {
-            Some(s) if s == pos => Ok(()),
+            Some(s) if s == wire_pos => Ok(()),
             _ => Err(SegmentError::RangeIgnored),
         }
     } else if status == 200 {
@@ -147,7 +149,8 @@ pub async fn run_segment(
 
     let mut req = ctx.client.get(&ctx.url);
     if ctx.use_range {
-        req = req.header(RANGE, format!("bytes={}-{}", pos, end_now));
+        let b = ctx.base_offset;
+        req = req.header(RANGE, format!("bytes={}-{}", pos + b, end_now + b));
     }
     let resp = tokio::select! {
         _ = ctx.cancel.cancelled() => return Err(SegmentError::Cancelled),
@@ -156,7 +159,7 @@ pub async fn run_segment(
             Ok(r) => r.map_err(classify_reqwest)?,
         },
     };
-    check_response(&resp, ctx.use_range, pos)?;
+    check_response(&resp, ctx.use_range, pos + ctx.base_offset)?;
 
     let mut file = OpenOptions::new().write(true).open(&ctx.path).await.map_err(disk)?;
     file.seek(SeekFrom::Start(pos)).await.map_err(disk)?;

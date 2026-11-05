@@ -958,6 +958,7 @@ dependencies = [
  "axum",
  "bzip2 0.4.4",
  "chrono",
+ "deflate64",
  "dirs 6.0.0",
  "env_logger",
  "fix-path-env",
@@ -967,6 +968,7 @@ dependencies = [
  "keyring",
  "libc",
  "log",
+ "lzma-rs",
  "quick-xml 0.37.5",
  "regex",
  "reqwest 0.12.28",
@@ -997,6 +999,7 @@ dependencies = [
  "winreg 0.52.0",
  "xz2",
  "zip 2.4.2",
+ "zstd",
 ]
 
 [[package]]

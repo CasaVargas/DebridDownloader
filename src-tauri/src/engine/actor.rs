@@ -25,6 +25,10 @@ pub enum Control {
     RetryFailed,
     CancelAll,
     ClearInactive,
+    PauseBatch(String),
+    ResumeBatch(String),
+    RetryBatch(String),
+    CancelBatch(String),
 }
 
 pub enum EngineMsg {
@@ -80,6 +84,8 @@ struct Running {
     segments_active: u32,
     /// When bytes last arrived; None until the first bytes (a fresh job is not "moving").
     last_bytes_at: Option<Instant>,
+    /// A compressed ZIP member is being decoded (shown as Extracting).
+    unpacking: bool,
 }
 
 struct SaveReq {
@@ -321,11 +327,11 @@ impl Actor {
             total_bytes: j.total_bytes,
             downloaded_bytes: downloaded as i64,
             speed: r.map(|r| r.speed).unwrap_or(0.0),
-            status: j.state.clone(),
+            status: if r.is_some_and(|r| r.unpacking) { JobState::Extracting } else { j.state.clone() },
             remote: match &j.kind {
                 JobKind::Remote { rclone_dest } => Some(rclone_dest.clone()),
                 JobKind::Symlink => Some("symlink".into()),
-                JobKind::Http => None,
+                JobKind::Http | JobKind::ZipEntry { .. } => None,
             },
             attempt: j.attempt,
             retry_at: j.retry_at,
@@ -334,6 +340,7 @@ impl Actor {
             error: j.error.clone(),
             waiting_for_network: self.offline.contains(&j.id),
             batch_id: j.batch_id.clone(),
+            batch_name: j.batch_name.clone(),
             updated_at: j.updated_at,
         }
     }
@@ -399,11 +406,12 @@ impl Actor {
                 speed: 0.0,
                 segments_active: 0,
                 last_bytes_at: None,
+                unpacking: false,
             },
         );
         let tx = self.tx.clone();
         match kind {
-            JobKind::Http => {
+            JobKind::Http | JobKind::ZipEntry { .. } => {
                 let deps = TransferDeps {
                     client: self.client.clone(),
                     limiter: self.limiter.clone(),
@@ -475,10 +483,27 @@ impl Actor {
                 force = true;
             }
             TransferUpdate::Url(u) => {
-                if let Some(j) = self.job_mut(id) {
-                    j.url = u;
+                let source = self.job_mut(id).map(|j| {
+                    j.url = u.clone();
+                    j.source.clone()
+                });
+                // Jobs from the same debrid link (e.g. every member of one ZIP) share the fresh URL,
+                // so they don't each spend a provider API call refreshing it.
+                if let Some(source) = source.filter(|s| *s != LinkSource::Direct) {
+                    let running = &self.running;
+                    for j in self.jobs.iter_mut() {
+                        if j.id != id && j.source == source && !j.state.is_terminal() && !running.contains_key(&j.id) {
+                            j.url = u.clone();
+                        }
+                    }
                 }
                 self.dirty = true;
+            }
+            TransferUpdate::Unpacking => {
+                if let Some(r) = self.running.get_mut(id) {
+                    r.unpacking = true;
+                }
+                force = true;
             }
             TransferUpdate::MaxSegments(n) => {
                 if let Some(j) = self.job_mut(id) {
@@ -690,6 +715,26 @@ impl Actor {
             }
             Control::CancelAll => {
                 for id in self.ids_where(|j| matches!(j.state, JobState::Pending | JobState::Downloading | JobState::Paused)) {
+                    self.cancel(&id);
+                }
+            }
+            Control::PauseBatch(b) => {
+                for id in self.ids_where(|j| j.batch_id == b && matches!(j.state, JobState::Pending | JobState::Downloading)) {
+                    self.pause(&id);
+                }
+            }
+            Control::ResumeBatch(b) => {
+                for id in self.ids_where(|j| j.batch_id == b && j.state == JobState::Paused) {
+                    self.resume(&id);
+                }
+            }
+            Control::RetryBatch(b) => {
+                for id in self.ids_where(|j| j.batch_id == b && matches!(j.state, JobState::Failed(_))) {
+                    self.retry(&id);
+                }
+            }
+            Control::CancelBatch(b) => {
+                for id in self.ids_where(|j| j.batch_id == b && matches!(j.state, JobState::Pending | JobState::Downloading | JobState::Paused)) {
                     self.cancel(&id);
                 }
             }

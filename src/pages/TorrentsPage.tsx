@@ -3,10 +3,12 @@ import { useMiniPlayer } from "../contexts/MiniPlayerContext";
 import { open } from "@tauri-apps/plugin-dialog";
 import DataTable, { type Column } from "../components/DataTable";
 import AddTorrentModal from "../components/AddTorrentModal";
+import ZipContentsDialog from "../components/ZipContentsDialog";
 import * as torrentsApi from "../api/torrents";
 import * as downloadsApi from "../api/downloads";
 import { getSettings } from "../api/settings";
 import { getStreamUrl } from "../api/streaming";
+import { getActiveProvider } from "../api/providers";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { confirmAction } from "../lib/confirm";
 import type { Torrent, TorrentInfo, AppSettings } from "../types";
@@ -54,6 +56,8 @@ const getFileExt = (path: string) => {
 
 const isInlineVideo = (path: string) => INLINE_VIDEO_EXTS.includes(getFileExt(path));
 const isExternalVideo = (path: string) => EXTERNAL_VIDEO_EXTS.includes(getFileExt(path));
+const isArchive = (path: string) => [".zip", ".rar"].includes(getFileExt(path));
+const baseName = (path: string) => path.split("/").pop() || path;
 
 export default function TorrentsPage() {
   const [torrents, setTorrents] = useState<Torrent[]>([]);
@@ -75,6 +79,12 @@ export default function TorrentsPage() {
   const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [zipTarget, setZipTarget] = useState<{ torrentId: string; fileId: number | null; name: string; torrentName: string } | null>(null);
+  const [notice, setNotice] = useState("");
+  // "Download Contents" is only enabled for Real-Debrid, the one provider it's been tested with.
+  const [providerId, setProviderId] = useState<string | null>(null);
+  useEffect(() => { getActiveProvider().then(setProviderId).catch(() => {}); }, []);
+  const archiveContents = providerId === "real-debrid";
 
   const { openPreview, loadingTorrentId: miniPlayerLoadingId } = useMiniPlayer();
 
@@ -382,6 +392,17 @@ export default function TorrentsPage() {
   ];
 
   const inspectorVisible = !!selectedId && inspectorOpen;
+  const zipFiles = canDownload && archiveContents ? detailInfo.files.filter((f) => f.selected && isArchive(f.path)) : [];
+  // Real-Debrid serves a torrent with many files as one RAR it packs itself: one link, many files.
+  const packed = canDownload && archiveContents && detailInfo.links.length === 1 && detailInfo.files.filter((f) => f.selected).length > 1;
+  const openPacked = () => {
+    if (!detailInfo) return;
+    setZipTarget({ torrentId: detailInfo.id, fileId: null, name: detailInfo.filename, torrentName: detailInfo.filename });
+  };
+  const openZip = (fileId: number, path: string) => {
+    if (!detailInfo) return;
+    setZipTarget({ torrentId: detailInfo.id, fileId, name: baseName(path), torrentName: detailInfo.filename });
+  };
 
   return (
     <>
@@ -404,6 +425,12 @@ export default function TorrentsPage() {
       />
 
       {error && <div className="border-b border-border px-4 py-2 text-sm text-danger">{error}</div>}
+      {notice && (
+        <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm text-fg-secondary">
+          <span className="min-w-0 flex-1 truncate">{notice}</span>
+          <Button size="sm" variant="ghost" onClick={() => setNotice("")}>Dismiss</Button>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
@@ -438,13 +465,25 @@ export default function TorrentsPage() {
                     {saving ? "Saving..." : "Select Files & Start"}
                   </Button>
                 )}
+                {packed && (
+                  <Button variant="primary" onClick={openPacked}>
+                    Download Contents
+                  </Button>
+                )}
                 {canDownload && (
-                  <Button variant="primary" onClick={handleDetailDownload} disabled={downloading || (pickable.length > 0 && picked.length === 0)}>
+                  <Button variant={packed ? "secondary" : "primary"} onClick={handleDetailDownload} disabled={downloading || (pickable.length > 0 && picked.length === 0)}>
                     {downloading
                       ? "Starting..."
-                      : allPicked || picked.length === 0
-                        ? "Download"
-                        : `Download ${picked.length} ${picked.length === 1 ? "file" : "files"}`}
+                      : packed
+                        ? "Download Archive"
+                        : allPicked || picked.length === 0
+                          ? "Download"
+                          : `Download ${picked.length} ${picked.length === 1 ? "file" : "files"}`}
+                  </Button>
+                )}
+                {!packed && zipFiles.length === 1 && (
+                  <Button onClick={() => openZip(zipFiles[0].id, zipFiles[0].path)}>
+                    Download Contents
                   </Button>
                 )}
                 {canDownload && (
@@ -546,6 +585,11 @@ export default function TorrentsPage() {
                             <span className={cn("block break-words text-sm", unavailable ? "text-fg-muted" : "text-fg")}>{name}</span>
                             {folder && <span className="block break-words text-xs text-fg-muted">{folder}</span>}
                           </label>
+                          {canDownload && archiveContents && file.selected && isArchive(file.path) && (
+                            <Button size="sm" className="-my-1" onClick={() => openZip(file.id, file.path)}>
+                              Contents
+                            </Button>
+                          )}
                           <span className="shrink-0 text-sm text-fg-muted tabular">{formatBytes(file.bytes)}</span>
                         </div>
                       );
@@ -564,6 +608,17 @@ export default function TorrentsPage() {
           ) : null}
         </Inspector>
       </div>
+
+      {zipTarget && (
+        <ZipContentsDialog
+          torrentId={zipTarget.torrentId}
+          fileId={zipTarget.fileId}
+          fileName={zipTarget.name}
+          torrentName={zipTarget.torrentName}
+          onClose={() => setZipTarget(null)}
+          onStarted={(root, count) => setNotice(`Downloading ${count} ${count === 1 ? "file" : "files"} from ${zipTarget.name} into ${root}`)}
+        />
+      )}
 
       {/* Add torrent modal */}
       {showAdd && (
