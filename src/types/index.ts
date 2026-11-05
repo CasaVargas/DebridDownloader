@@ -84,6 +84,7 @@ export type LinkSource =
   | { type: "RealDebrid"; hoster_link: string }
   | { type: "TorBox"; torrent_id: string; file_id: number }
   | { type: "Premiumize"; transfer_id: string; filename: string }
+  | { type: "AllDebrid"; hoster_link: string }
   | { type: "Direct" };
 
 export interface DownloadLink {

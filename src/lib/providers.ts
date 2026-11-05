@@ -2,6 +2,7 @@ export const PROVIDER_NAMES: Record<string, string> = {
   "real-debrid": "Real-Debrid",
   torbox: "TorBox",
   premiumize: "Premiumize",
+  alldebrid: "AllDebrid",
 };
 
 export function providerName(id: string): string {
