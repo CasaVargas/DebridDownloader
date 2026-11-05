@@ -271,6 +271,7 @@ pub fn run() {
             commands::downloads::resume_batch,
             commands::downloads::retry_batch,
             commands::downloads::cancel_batch,
+            commands::downloads::remove_completed_batch,
             commands::downloads::resume_all_downloads,
             commands::downloads::retry_failed_downloads,
             // Settings

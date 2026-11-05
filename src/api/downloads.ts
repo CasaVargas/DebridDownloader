@@ -93,3 +93,8 @@ export async function retryBatch(batchId: string): Promise<void> {
 export async function cancelBatch(batchId: string): Promise<void> {
   return invoke("cancel_batch", { batchId });
 }
+
+/** Remove a batch's completed downloads from the list (files stay on disk). */
+export async function removeCompletedBatch(batchId: string): Promise<void> {
+  return invoke("remove_completed_batch", { batchId });
+}

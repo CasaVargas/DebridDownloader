@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import DataTable, { type Column } from "../components/DataTable";
 import { Button, IconButton, Inspector, Toolbar } from "../components/ui";
@@ -18,6 +18,41 @@ const RemoveIcon = () => (
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
+
+const ChevronIcon = ({ open }: { open: boolean }) => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={open ? "rotate-90 transition-transform" : "transition-transform"}>
+    <polyline points="9 6 15 12 9 18" />
+  </svg>
+);
+
+/** Finished files of one torrent / archive's contents. */
+interface Group {
+  id: string;
+  name: string;
+  files: DownloadTask[];
+  totalBytes: number;
+  /** Deepest folder that holds every file of the group. */
+  folder: string;
+}
+
+type Row = { kind: "group"; group: Group } | { kind: "task"; task: DownloadTask; child: boolean };
+
+const groupKey = (id: string) => `batch:${id}`;
+
+/** Common parent directory of local paths ("/" or "\\" separated). */
+function commonFolder(paths: string[]): string {
+  const split = (p: string) => p.split(/[\\/]/).slice(0, -1);
+  let common = split(paths[0] ?? "");
+  for (const p of paths.slice(1)) {
+    const parts = split(p);
+    let i = 0;
+    while (i < common.length && i < parts.length && common[i] === parts[i]) i++;
+    common = common.slice(0, i);
+    if (common.length === 0) break;
+  }
+  const sep = (paths[0] ?? "").includes("\\") ? "\\" : "/"; // Windows paths use backslashes
+  return common.join(sep);
+}
 
 /** Reveal is only possible for files on this machine (local or symlinked), as before. */
 const canReveal = (t: DownloadTask) => !!t.destination && (!t.remote || t.remote === "symlink");
@@ -39,22 +74,84 @@ export default function CompletedPage() {
 
   const completedTasks = useMemo(() => tasks.filter((t) => t.status === "Completed"), [tasks]);
 
-  const filtered = useMemo(() => {
-    let result = completedTasks;
-    if (filter) {
-      const q = filter.toLowerCase();
-      result = result.filter((t) => t.filename.toLowerCase().includes(q));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleGroup = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Files of one batch (a torrent, or an archive's contents) are listed under one folder row.
+  const groups = useMemo(() => {
+    const byBatch = new Map<string, DownloadTask[]>();
+    for (const t of completedTasks) {
+      if (!t.batch_id) continue;
+      const list = byBatch.get(t.batch_id);
+      if (list) list.push(t);
+      else byBatch.set(t.batch_id, [t]);
     }
-    if (sortKey) {
-      result = [...result].sort((a, b) => {
-        let cmp = 0;
-        if (sortKey === "filename") cmp = a.filename.localeCompare(b.filename);
-        else if (sortKey === "total_bytes") cmp = a.total_bytes - b.total_bytes;
-        return sortDirection === "asc" ? cmp : -cmp;
+    const out = new Map<string, Group>();
+    for (const [id, files] of byBatch) {
+      if (files.length < 2) continue;
+      const name = files.find((t) => t.batch_name)?.batch_name || "Batch";
+      const local = files.filter((t) => !t.remote || t.remote === "symlink").map((t) => t.destination);
+      out.set(id, {
+        id,
+        name,
+        files,
+        totalBytes: files.reduce((s, t) => s + Math.max(0, t.total_bytes), 0),
+        folder: local.length === files.length ? commonFolder(local) : "",
       });
     }
-    return result;
-  }, [completedTasks, filter, sortKey, sortDirection]);
+    return out;
+  }, [completedTasks]);
+
+  const rows = useMemo(() => {
+    const q = filter.toLowerCase();
+    const matches = (t: DownloadTask) => !q || t.filename.toLowerCase().includes(q);
+    const bySort = <T,>(list: T[], name: (x: T) => string, size: (x: T) => number) =>
+      !sortKey
+        ? list
+        : [...list].sort((a, b) => {
+            const cmp = sortKey === "filename" ? name(a).localeCompare(name(b)) : sortKey === "total_bytes" ? size(a) - size(b) : 0;
+            return sortDirection === "asc" ? cmp : -cmp;
+          });
+    type Top = { kind: "group"; group: Group } | { kind: "task"; task: DownloadTask };
+    const top: Top[] = [];
+    const seen = new Set<string>();
+    for (const t of completedTasks) {
+      const g = t.batch_id ? groups.get(t.batch_id) : undefined;
+      if (g) {
+        if (!seen.has(g.id)) {
+          seen.add(g.id);
+          if (!q || g.name.toLowerCase().includes(q) || g.files.some(matches)) top.push({ kind: "group", group: g });
+        }
+      } else if (matches(t)) {
+        top.push({ kind: "task", task: t });
+      }
+    }
+    const sorted = bySort(
+      top,
+      (r) => (r.kind === "group" ? r.group.name : r.task.filename),
+      (r) => (r.kind === "group" ? r.group.totalBytes : r.task.total_bytes),
+    );
+    const out: Row[] = [];
+    for (const r of sorted) {
+      if (r.kind === "task") {
+        out.push({ kind: "task", task: r.task, child: false });
+        continue;
+      }
+      out.push(r);
+      const nameHit = q && r.group.name.toLowerCase().includes(q);
+      if (expanded.has(r.group.id) || (q && !nameHit)) {
+        const kids = q && !nameHit ? r.group.files.filter(matches) : r.group.files;
+        for (const t of bySort(kids, (x) => x.filename, (x) => x.total_bytes)) out.push({ kind: "task", task: t, child: true });
+      }
+    }
+    return out;
+  }, [completedTasks, groups, expanded, filter, sortKey, sortDirection]);
 
   useEffect(() => {
     const onDeselect = () => setSelectedId(null);
@@ -83,10 +180,19 @@ export default function CompletedPage() {
   };
 
   const selectRow = (t: DownloadTask) => { setSelectedId(t.id); setInspectorOpen(true); };
+  const clickRow = (r: Row) => {
+    if (r.kind === "group") {
+      setSelectedId(groupKey(r.group.id));
+      toggleGroup(r.group.id);
+    } else selectRow(r.task);
+  };
+  const handleRemoveGroup = (g: Group) => {
+    downloadsApi.removeCompletedBatch(g.id).then(() => refreshTasks()).catch(() => {});
+  };
   const selected = completedTasks.find((t) => t.id === selectedId) ?? null;
   const totalBytes = completedTasks.reduce((s, t) => s + t.total_bytes, 0);
 
-  const columns: Column<DownloadTask>[] = [
+  const taskColumns: Column<DownloadTask>[] = [
     {
       key: "filename",
       header: "Name",
@@ -143,6 +249,39 @@ export default function CompletedPage() {
     },
   ];
 
+  const groupCell: Record<string, (g: Group) => ReactNode> = {
+    filename: (g) => (
+      <div className="flex items-center gap-1.5">
+        <span className="shrink-0 text-fg-muted"><ChevronIcon open={expanded.has(g.id) || !!filter} /></span>
+        <span className="shrink-0 text-fg-muted"><FolderIcon /></span>
+        <span className="min-w-0 truncate text-base font-medium text-fg" title={g.name}>{g.name}</span>
+        <span className="shrink-0 text-sm text-fg-muted tabular">{g.files.length.toLocaleString()} files</span>
+      </div>
+    ),
+    total_bytes: (g) => <span className="text-base text-fg-secondary tabular">{formatBytes(g.totalBytes)}</span>,
+    destination: (g) => <span className="block truncate text-sm text-fg-muted" title={g.folder}>{g.folder || "--"}</span>,
+    actions: (g) => (
+      <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        {g.folder && (
+          <IconButton label="Show in Folder" onClick={() => revealItemInDir(g.folder).catch(() => {})}>
+            <FolderIcon />
+          </IconButton>
+        )}
+        <IconButton label="Remove all from the list (files stay on disk)" variant="danger" onClick={() => handleRemoveGroup(g)}>
+          <RemoveIcon />
+        </IconButton>
+      </div>
+    ),
+  };
+  const columns: Column<Row>[] = taskColumns.map((c) => ({
+    ...c,
+    render: (r: Row) => {
+      if (r.kind === "group") return groupCell[c.key]?.(r.group) ?? null;
+      const cell = c.render(r.task);
+      return r.child && c.key === "filename" ? <div className="pl-7">{cell}</div> : cell;
+    },
+  }));
+
   return (
     <>
       <Toolbar
@@ -160,9 +299,9 @@ export default function CompletedPage() {
         <div className="flex min-w-0 flex-1 flex-col">
           <DataTable
             columns={columns}
-            data={filtered}
-            rowKey={(t) => t.id}
-            onRowClick={selectRow}
+            data={rows}
+            rowKey={(r) => (r.kind === "group" ? groupKey(r.group.id) : r.task.id)}
+            onRowClick={clickRow}
             selectedId={selectedId}
             sortKey={sortKey}
             sortDirection={sortDirection}

@@ -29,6 +29,8 @@ pub enum Control {
     ResumeBatch(String),
     RetryBatch(String),
     CancelBatch(String),
+    /// Drop a batch's completed jobs from the list (the files stay on disk).
+    RemoveCompletedBatch(String),
 }
 
 pub enum EngineMsg {
@@ -735,6 +737,13 @@ impl Actor {
             Control::CancelBatch(b) => {
                 for id in self.ids_where(|j| j.batch_id == b && matches!(j.state, JobState::Pending | JobState::Downloading | JobState::Paused)) {
                     self.cancel(&id);
+                }
+            }
+            Control::RemoveCompletedBatch(b) => {
+                let before = self.jobs.len();
+                self.jobs.retain(|j| !(j.batch_id == b && j.state == JobState::Completed && !self.pipelines.contains(&j.id)));
+                if self.jobs.len() != before {
+                    self.sink.emit(EngineEvent::ListChanged);
                 }
             }
             Control::ClearInactive => {

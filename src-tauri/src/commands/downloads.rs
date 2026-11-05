@@ -260,6 +260,13 @@ pub async fn cancel_batch(state: State<'_, AppState>, batch_id: String) -> Resul
     Ok(())
 }
 
+/// Remove a batch's completed downloads from the list. Never touches the files.
+#[tauri::command]
+pub async fn remove_completed_batch(state: State<'_, AppState>, batch_id: String) -> Result<(), String> {
+    state.engine()?.remove_completed_batch(&batch_id);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn pause_all_downloads(state: State<'_, AppState>) -> Result<(), String> {
     state.engine()?.pause_all();
