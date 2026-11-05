@@ -286,11 +286,12 @@ pub fn parse_local_header(h: &[u8], spec: &ZipEntrySpec) -> Result<u64, SegmentE
     }
     let n = u16le(h, 26) as u64;
     let m = u16le(h, 28) as u64;
-    let start = spec.header_offset + LOCAL_HEADER_LEN + n + m;
-    if start + spec.compressed_size > spec.archive_size {
-        return Err(SegmentError::Transient("member extends past the end of the archive".into()));
+    // Offsets and sizes come from the archive; refuse anything that would wrap around.
+    let start = spec.header_offset.checked_add(LOCAL_HEADER_LEN + n + m);
+    match start {
+        Some(s) if s.checked_add(spec.compressed_size).is_some_and(|end| end <= spec.archive_size) => Ok(s),
+        _ => Err(SegmentError::Transient("member extends past the end of the archive".into())),
     }
-    Ok(start)
 }
 
 #[derive(Debug, PartialEq)]
@@ -467,7 +468,9 @@ pub fn parse_central_directory(cd: &[u8], expected: u64, shift: u64, archive_siz
         let name = name.replace('\\', "/");
         let is_dir = name.ends_with('/') || (ext_attr & 0x10 != 0 && usize_ == 0 && csize == 0);
         let encrypted = flags & 0x0001 != 0;
-        let header_offset = offset + shift;
+        // `None` when the stored offsets/sizes overflow (a damaged or crafted archive).
+        let member_end = offset.checked_add(shift).and_then(|h| h.checked_add(LOCAL_HEADER_LEN)).and_then(|h| h.checked_add(csize));
+        let header_offset = offset.wrapping_add(shift);
         let unsupported = if is_dir {
             None
         } else if disk_start != 0 {
@@ -478,7 +481,7 @@ pub fn parse_central_directory(cd: &[u8], expected: u64, shift: u64, archive_siz
             Some(format!("compression method {} ({}) isn't supported", method, method_name(method)))
         } else if method == METHOD_STORED && csize != usize_ {
             Some("stored size doesn't match".to_string())
-        } else if header_offset + LOCAL_HEADER_LEN + csize > archive_size {
+        } else if member_end.is_none_or(|end| end > archive_size) {
             Some("points past the end of the archive".to_string())
         } else if safe_relative_path(&name).is_none() {
             Some("unsafe path".to_string())

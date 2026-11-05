@@ -337,7 +337,7 @@ pub async fn run_transfer(mut job: Job, deps: TransferDeps, cancel: Cancellation
             if let Some(t) = p.total {
                 // A compressed member needs room for its download and the decoded file.
                 let extra = zip.as_ref().filter(|s| !s.is_stored()).map_or(0, |s| s.size);
-                ensure_space(&job.destination, t + extra)?;
+                ensure_space(&job.destination, t.saturating_add(extra))?;
             }
             prepare_part(&part, p.total).await?;
         }

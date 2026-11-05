@@ -168,7 +168,7 @@ pub async fn start_archive_contents_download(
     let root = contents_root(&destination_folder, settings.create_torrent_subfolders, torrent_name.as_deref(), &link.filename, &paths);
 
     // One up-front space check gives a clear message instead of hundreds of failed jobs.
-    let needed: u64 = entries.iter().filter(|e| !e.is_dir).map(|e| e.size).sum();
+    let needed: u64 = entries.iter().filter(|e| !e.is_dir).fold(0u64, |acc, e| acc.saturating_add(e.size));
     let mut probe_dir = root.clone();
     while !probe_dir.exists() {
         match probe_dir.parent() {

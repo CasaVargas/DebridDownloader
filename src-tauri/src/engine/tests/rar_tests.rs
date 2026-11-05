@@ -223,3 +223,65 @@ async fn large_files_cost_one_small_read_each() {
     assert!(fetched < 64 * 1024 + 10 * 17 * 1024, "fetched {fetched} bytes");
     assert!(!seen.lock().unwrap().is_empty());
 }
+
+// ── Crafted sizes: the header walk must never wrap around and loop ──
+
+fn vint5(mut v: u64) -> Vec<u8> {
+    let mut out = Vec::new();
+    loop {
+        let b = (v & 0x7f) as u8;
+        v >>= 7;
+        if v == 0 {
+            out.push(b);
+            return out;
+        }
+        out.push(b | 0x80);
+    }
+}
+
+/// A RAR5 block: CRC32 (not checked by the walker) + header size + header body.
+fn rar5_block(body: &[u8]) -> Vec<u8> {
+    let mut b = vec![0u8; 4];
+    b.extend(vint5(body.len() as u64));
+    b.extend_from_slice(body);
+    b
+}
+
+const RAR5_SIG: &[u8] = b"Rar!\x1a\x07\x01\x00";
+
+#[tokio::test]
+async fn rar5_wrapping_data_size_is_rejected() {
+    // Service header (type 3) with a data size that wraps `pos` back to this same header.
+    let mut body = vec![3u8, 0x2];
+    let header_len = 4 + 1 + (2 + 10) as u64; // crc + size vint + body (data_size vint is 10 bytes)
+    body.extend(vint5(0u64.wrapping_sub(header_len)));
+    assert_eq!(body.len(), 12);
+    let mut bytes = RAR5_SIG.to_vec();
+    bytes.extend(rar5_block(&body));
+    bytes.resize(4096, 0);
+    let s = serve(bytes).await;
+    let r = tokio::time::timeout(Duration::from_secs(10), list(&s, 512 * 1024)).await.expect("listing must not loop forever");
+    assert!(matches!(r, Err(ZipError::Format(_))), "{r:?}");
+}
+
+#[tokio::test]
+async fn rar5_wrapping_extra_record_size_is_ignored() {
+    // File header (type 2) with an extra area whose single record has a size that wraps.
+    let mut extra = vint5(0u64.wrapping_sub(10)); // rsize: 10-byte vint, rstart = 10 → wraps to 0
+    extra.push(0); // rtype
+    let mut body = vec![2u8, 0x1];
+    body.extend(vint5(extra.len() as u64)); // extra_size
+    // fflags=0, unp=1, attrs=0, comp=0 (store), os=0, name_len=1, name "a"
+    body.extend([0u8, 1, 0, 0, 0, 1, b'a']);
+    body.extend(&extra);
+    let mut bytes = RAR5_SIG.to_vec();
+    bytes.extend(rar5_block(&body));
+    bytes.extend(rar5_block(&[5u8, 0])); // end of archive
+    bytes.resize(4096, 0);
+    let s = serve(bytes).await;
+    let r = tokio::time::timeout(Duration::from_secs(10), list(&s, 512 * 1024)).await.expect("listing must not loop forever");
+    let l = r.unwrap();
+    assert_eq!(l.entries.len(), 1);
+    assert_eq!(l.entries[0].path, "a");
+    assert!(!l.entries[0].encrypted);
+}

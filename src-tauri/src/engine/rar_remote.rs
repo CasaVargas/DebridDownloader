@@ -116,7 +116,8 @@ impl V<'_> {
         Ok(v)
     }
     fn take(&mut self, n: usize) -> Result<&[u8], ZipError> {
-        let s = self.b.get(self.p..self.p + n).ok_or_else(|| ZipError::Format("bad RAR header".into()))?;
+        let end = self.p.checked_add(n).ok_or_else(|| ZipError::Format("bad RAR header".into()))?;
+        let s = self.b.get(self.p..end).ok_or_else(|| ZipError::Format("bad RAR header".into()))?;
         self.p += n;
         Ok(s)
     }
@@ -206,7 +207,7 @@ fn entry(
         Some(COMPRESSED.to_string())
     } else if packed != size {
         Some("stored size doesn't match".to_string())
-    } else if data_offset + packed > archive_size {
+    } else if data_offset.checked_add(packed).is_none_or(|end| end > archive_size) {
         Some("points past the end of the archive".to_string())
     } else if safe_relative_path(&path).is_none() {
         Some("unsafe path".to_string())
@@ -271,6 +272,14 @@ async fn read_listing_once(
         _ => return Err(ZipError::Format("RAR signature not found".into())),
     };
     Ok(ZipListing { archive_size: size, entries })
+}
+
+/// `pos + a + b` for sizes read from the archive: an error instead of wrapping around, so the
+/// header walk can only move forward.
+fn next_block(pos: u64, a: u64, b: u64) -> Result<u64, ZipError> {
+    pos.checked_add(a)
+        .and_then(|p| p.checked_add(b))
+        .ok_or_else(|| ZipError::Format("bad RAR block size".into()))
 }
 
 async fn walk_rar4(r: &mut Remote<'_>, mut pos: u64) -> Result<Vec<ZipEntry>, ZipError> {
@@ -343,7 +352,9 @@ async fn walk_rar4(r: &mut Remote<'_>, mut pos: u64) -> Result<Vec<ZipEntry>, Zi
             0x7a if flags & 0x0100 != 0 && h.len() >= 36 => add |= (u32le(&h, 32) as u64) << 32,
             _ => {}
         }
-        pos = pos + head_size + add;
+        // Sizes come from the archive: a wrapping sum could send the walk back to an earlier
+        // header and loop forever (release builds don't trap on overflow).
+        pos = next_block(pos, head_size, add)?;
         r.advance(add, out.len(), pos);
     }
     Ok(out)
@@ -366,7 +377,7 @@ async fn walk_rar5(r: &mut Remote<'_>, mut pos: u64) -> Result<Vec<ZipEntry>, Zi
         let hflags = v.vint()?;
         let extra_size = if hflags & 0x1 != 0 { v.vint()? } else { 0 };
         let data_size = if hflags & 0x2 != 0 { v.vint()? } else { 0 };
-        let data_start = pos + start + hsize;
+        let data_start = next_block(pos, start, hsize)?;
         match kind {
             4 => return Err(ZipError::Unsupported("This RAR's file list is encrypted (password protected)".into())),
             5 => break, // end of archive
@@ -393,7 +404,11 @@ async fn walk_rar5(r: &mut Remote<'_>, mut pos: u64) -> Result<Vec<ZipEntry>, Zi
                     if rtype == 1 {
                         encrypted = true;
                     }
-                    e.p = rstart + rsize as usize;
+                    // Each record must move the cursor forward, or a crafted size loops forever.
+                    match usize::try_from(rsize).ok().and_then(|n| rstart.checked_add(n)).filter(|&n| n > rstart) {
+                        Some(n) => e.p = n,
+                        None => break,
+                    }
                 }
                 let is_dir = fflags & 0x1 != 0;
                 if fflags & 0x8 != 0 {
@@ -415,7 +430,7 @@ async fn walk_rar5(r: &mut Remote<'_>, mut pos: u64) -> Result<Vec<ZipEntry>, Zi
             }
             _ => {}
         }
-        pos = data_start + data_size;
+        pos = next_block(data_start, 0, data_size)?;
         r.advance(data_size, out.len(), pos);
     }
     Ok(out)
