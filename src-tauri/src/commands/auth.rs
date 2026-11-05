@@ -216,6 +216,7 @@ pub fn create_provider(provider_id: &str) -> Result<Arc<dyn crate::providers::De
         "real-debrid" => Ok(Arc::new(RdClient::new())),
         "torbox" => Ok(Arc::new(crate::providers::torbox::client::TorBoxClient::new())),
         "premiumize" => Ok(Arc::new(crate::providers::premiumize::client::PremiumizeClient::new())),
+        "alldebrid" => Ok(Arc::new(crate::providers::alldebrid::client::AllDebridClient::new())),
         _ => Err(format!("Unknown provider: {}", provider_id)),
     }
 }
@@ -270,4 +271,19 @@ pub async fn get_active_provider(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     Ok(state.provider_id.read().await.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::create_provider;
+
+    #[test]
+    fn every_available_provider_can_be_created() {
+        for info in crate::providers::available_providers() {
+            let provider = create_provider(&info.id).unwrap_or_else(|e| panic!("{}: {}", info.id, e));
+            assert_eq!(provider.info().id, info.id);
+        }
+        assert_eq!(create_provider("alldebrid").unwrap().info().name, "AllDebrid");
+        assert!(create_provider("nope").is_err());
+    }
 }

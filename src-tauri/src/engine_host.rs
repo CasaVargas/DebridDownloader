@@ -50,6 +50,7 @@ fn provider_display_name(id: &str) -> String {
         "real-debrid" => "Real-Debrid",
         "torbox" => "TorBox",
         "premiumize" => "Premiumize",
+        "alldebrid" => "AllDebrid",
         other => other,
     }
     .to_string()
@@ -138,5 +139,8 @@ mod tests {
         assert!(check_provider(&rd, "real-debrid").is_ok());
         assert!(matches!(check_provider(&rd, "torbox"), Err(RefreshError::ProviderMismatch(p)) if p == "Real-Debrid"));
         assert!(matches!(check_provider(&LinkSource::Direct, "torbox"), Err(RefreshError::NotRefreshable)));
+        let ad = LinkSource::AllDebrid { hoster_link: "x".into() };
+        assert!(check_provider(&ad, "alldebrid").is_ok());
+        assert!(matches!(check_provider(&ad, "real-debrid"), Err(RefreshError::ProviderMismatch(p)) if p == "AllDebrid"));
     }
 }
