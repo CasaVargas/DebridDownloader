@@ -107,6 +107,8 @@ export interface ZipEntry {
   flags: number;
   /** Where the member's data starts (RAR); null for ZIP members. */
   data_offset: number | null;
+  /** `crc32` is real, so the downloaded file is verified against it. */
+  has_crc: boolean;
   encrypted: boolean;
   /** Why this member can't be downloaded on its own; null when it can. */
   unsupported: string | null;

@@ -82,8 +82,9 @@ async fn download_all(bytes: Vec<u8>, members: &[Member]) {
         assert_eq!(r, Ok(TransferOutcome::Finished), "{}", m.name);
         assert_eq!(read(&j.destination), m.data, "{}", m.name);
         assert!(!j.part_path().exists());
-        let compressed = !e.spec(0).is_stored();
-        assert_eq!(ups.contains(&TransferUpdate::Unpacking), compressed, "{}", m.name);
+        // Compressed members are decoded; stored ones with data are CRC-checked. Both show it.
+        let checked = !e.spec(0).is_stored() || (e.has_crc && e.size > 0);
+        assert_eq!(ups.contains(&TransferUpdate::Unpacking), checked, "{}", m.name);
     }
     // The archive itself was never fetched in full: no request covers it from 0.
     assert!(s.ranges().iter().all(|&(a, b)| !(a == 0 && b + 1 == bytes.len() as u64)));
@@ -141,6 +142,25 @@ async fn crc_mismatch_discards_the_download() {
     let j = entry_job(&dir, s.url(), &e, l.archive_size);
     let (r, _) = run(j.clone()).await;
     assert!(matches!(r, Err(TransferError::Transient(ref m)) if m.contains("CRC")), "{r:?}");
+    assert!(!j.part_path().exists());
+    assert!(!std::path::Path::new(&j.destination).exists());
+}
+
+#[tokio::test]
+async fn stored_crc_mismatch_discards_the_download() {
+    let m = sample();
+    let bytes = build_zip(&m, &[], false);
+    let s = serve(bytes).await;
+    let l = read_listing(&build_client(&fast_transfer_cfg()), &s.url(), T).await.unwrap();
+    let mut e = l.entries.iter().find(|e| e.path == "Show/S01/e1.mkv").unwrap().clone();
+    assert_eq!(e.method, METHOD_STORED);
+    assert!(e.has_crc);
+    e.crc32 ^= 1;
+    let dir = tempfile::tempdir().unwrap();
+    let j = entry_job(&dir, s.url(), &e, l.archive_size);
+    let (r, ups) = run(j.clone()).await;
+    assert!(matches!(r, Err(TransferError::Transient(ref m)) if m.contains("CRC")), "{r:?}");
+    assert!(ups.iter().any(|u| matches!(u, TransferUpdate::Unpacking)), "verification shows as a status");
     assert!(!j.part_path().exists());
     assert!(!std::path::Path::new(&j.destination).exists());
 }
@@ -250,6 +270,7 @@ fn lzma_member_decodes() {
         flags: 0x0002,
         data_offset: None,
         archive_size: 0,
+        has_crc: true,
     };
     assert!(matches!(decode_member(&part, &dest, &spec, &CancellationToken::new()), Ok(DecodeOutcome::Done)));
     assert_eq!(read(&dest), data);
