@@ -1,3 +1,4 @@
+pub mod alldebrid;
 pub mod premiumize;
 pub mod real_debrid;
 pub mod torbox;
@@ -34,6 +35,30 @@ pub trait DebridProvider: Send + Sync {
         file_id: u64,
     ) -> Result<DownloadLink, ProviderError>;
 
+    /// Links for only these files (ids from `TorrentInfo.files`). Like `get_download_links`, a file
+    /// that fails is logged and skipped; it errors only when none of the files resolve.
+    async fn get_download_links_for_files(
+        &self,
+        torrent_id: &str,
+        file_ids: &[u64],
+    ) -> Result<Vec<DownloadLink>, ProviderError> {
+        let mut links = Vec::new();
+        let mut first_err = None;
+        for &file_id in file_ids {
+            match self.get_download_link_for_file(torrent_id, file_id).await {
+                Ok(link) => links.push(link),
+                Err(e) => {
+                    log::warn!("Failed to get link for file {}: {}", file_id, e);
+                    first_err.get_or_insert(e);
+                }
+            }
+        }
+        match first_err {
+            Some(e) if links.is_empty() => Err(e),
+            _ => Ok(links),
+        }
+    }
+
     /// Get a fresh direct URL for a file whose link expired.
     async fn refresh_link(&self, source: &LinkSource) -> Result<DownloadLink, ProviderError>;
 
@@ -66,6 +91,12 @@ pub fn available_providers() -> Vec<ProviderInfo> {
         ProviderInfo {
             id: "premiumize".to_string(),
             name: "Premiumize".to_string(),
+            auth_method: AuthMethod::ApiKey,
+            supports_streaming: true,
+        },
+        ProviderInfo {
+            id: "alldebrid".to_string(),
+            name: "AllDebrid".to_string(),
             auth_method: AuthMethod::ApiKey,
             supports_streaming: true,
         },

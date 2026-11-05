@@ -385,6 +385,27 @@ impl DebridProvider for PremiumizeClient {
             .ok_or_else(|| shared::ProviderError::Other("File not found".to_string()))
     }
 
+    async fn get_download_links_for_files(
+        &self,
+        torrent_id: &str,
+        file_ids: &[u64],
+    ) -> Result<Vec<shared::DownloadLink>, shared::ProviderError> {
+        // File ids are positions in the folder listing; match on name so files without a link don't shift them.
+        let info = self.torrent_info(torrent_id).await?;
+        let wanted: Vec<&str> = info
+            .files
+            .iter()
+            .filter(|f| file_ids.contains(&f.id))
+            .map(|f| f.path.as_str())
+            .collect();
+        Ok(self
+            .get_download_links(torrent_id)
+            .await?
+            .into_iter()
+            .filter(|l| wanted.contains(&l.filename.as_str()))
+            .collect())
+    }
+
     async fn refresh_link(&self, source: &shared::LinkSource) -> Result<shared::DownloadLink, shared::ProviderError> {
         match source {
             shared::LinkSource::Premiumize { transfer_id, filename } => self

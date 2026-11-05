@@ -142,6 +142,7 @@ pub enum LinkSource {
     RealDebrid { hoster_link: String },
     TorBox { torrent_id: String, file_id: u64 },
     Premiumize { transfer_id: String, filename: String },
+    AllDebrid { hoster_link: String },
     #[default]
     Direct,
 }
@@ -153,6 +154,7 @@ impl LinkSource {
             LinkSource::RealDebrid { .. } => Some("real-debrid"),
             LinkSource::TorBox { .. } => Some("torbox"),
             LinkSource::Premiumize { .. } => Some("premiumize"),
+            LinkSource::AllDebrid { .. } => Some("alldebrid"),
             LinkSource::Direct => None,
         }
     }
@@ -205,6 +207,7 @@ pub struct OAuthToken {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::providers::alldebrid::client::AllDebridClient;
     use crate::providers::premiumize::client::PremiumizeClient;
     use crate::providers::real_debrid::client::RdClient;
     use crate::providers::torbox::client::TorBoxClient;
@@ -229,5 +232,30 @@ mod tests {
         assert!(RdClient::new().refresh_link(&LinkSource::Direct).await.is_err());
         assert!(TorBoxClient::new().refresh_link(&pm).await.is_err());
         assert!(PremiumizeClient::new().refresh_link(&rd).await.is_err());
+        let ad = LinkSource::AllDebrid { hoster_link: "https://alldebrid.com/f/x".into() };
+        assert!(AllDebridClient::new().refresh_link(&rd).await.is_err());
+        assert!(AllDebridClient::new().refresh_link(&LinkSource::Direct).await.is_err());
+        assert!(RdClient::new().refresh_link(&ad).await.is_err());
+        assert!(TorBoxClient::new().refresh_link(&ad).await.is_err());
+        assert!(PremiumizeClient::new().refresh_link(&ad).await.is_err());
+    }
+
+    #[test]
+    fn alldebrid_link_source_round_trips_and_names_its_provider() {
+        let ad = LinkSource::AllDebrid { hoster_link: "https://alldebrid.com/f/x".into() };
+        let json = serde_json::to_string(&ad).unwrap();
+        assert_eq!(json, r#"{"type":"AllDebrid","hoster_link":"https://alldebrid.com/f/x"}"#);
+        assert_eq!(serde_json::from_str::<LinkSource>(&json).unwrap(), ad);
+        assert_eq!(ad.provider_id(), Some("alldebrid"));
+    }
+
+    #[test]
+    fn alldebrid_is_an_available_api_key_provider() {
+        let ad = crate::providers::available_providers().into_iter().find(|p| p.id == "alldebrid").unwrap();
+        assert_eq!(ad.name, "AllDebrid");
+        assert_eq!(ad.auth_method, AuthMethod::ApiKey);
+        let client = AllDebridClient::new();
+        assert_eq!(client.info().id, ad.id);
+        assert_eq!(client.info().auth_method, AuthMethod::ApiKey);
     }
 }

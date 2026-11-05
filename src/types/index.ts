@@ -84,6 +84,7 @@ export type LinkSource =
   | { type: "RealDebrid"; hoster_link: string }
   | { type: "TorBox"; torrent_id: string; file_id: number }
   | { type: "Premiumize"; transfer_id: string; filename: string }
+  | { type: "AllDebrid"; hoster_link: string }
   | { type: "Direct" };
 
 export interface DownloadLink {
@@ -165,10 +166,12 @@ export interface DownloadTask {
   resumable?: boolean;
   error?: string | null;
   waiting_for_network?: boolean;
-  /** Jobs started together (one torrent, or one archive's contents) share a batch. */
+  /** Jobs started together (one torrent, or one archive's contents) share a batch; empty for symlinked files. */
   batch_id?: string;
   /** The torrent or archive name of the batch. */
   batch_name?: string;
+  /** Unix ms of the last state change; for a completed download, when it finished. */
+  updated_at?: number;
 }
 
 export interface DownloadProgress {

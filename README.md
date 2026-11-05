@@ -1,6 +1,6 @@
 # DebridDownloader
 
-A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com), [TorBox](https://torbox.app), and [Premiumize](https://premiumize.me). Resumable multi-connection downloads, a native interface in light or dark, and your tokens stay in your OS keychain.
+A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com), [TorBox](https://torbox.app), [Premiumize](https://premiumize.me), and [AllDebrid](https://alldebrid.com). Resumable multi-connection downloads, a native interface in light or dark, and your tokens stay in your OS keychain.
 
 [![Latest release](https://img.shields.io/github/v/release/CasaVargas/DebridDownloader?label=release)](https://github.com/CasaVargas/DebridDownloader/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/CasaVargas/DebridDownloader/total)](https://github.com/CasaVargas/DebridDownloader/releases)
@@ -49,7 +49,7 @@ A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com
 | Windows 10+ (x64 and ARM64) | `.exe` installer |
 | Linux (x64 and ARM64) | `.deb`, `.AppImage`, `.rpm` |
 
-Get them from the [website](https://casavargas.app/DebridDownloader/#download) or the [latest release](https://github.com/CasaVargas/DebridDownloader/releases/latest). You'll need a Real-Debrid, TorBox, or Premiumize account.
+Get them from the [website](https://casavargas.app/DebridDownloader/#download) or the [latest release](https://github.com/CasaVargas/DebridDownloader/releases/latest). You'll need a Real-Debrid, TorBox, Premiumize, or AllDebrid account.
 
 ## Getting started
 
@@ -58,6 +58,7 @@ Get them from the [website](https://casavargas.app/DebridDownloader/#download) o
    - **Real-Debrid:** sign in with OAuth, or paste a token from [real-debrid.com/apitoken](https://real-debrid.com/apitoken)
    - **TorBox:** paste your API key from [torbox.app](https://torbox.app)
    - **Premiumize:** paste your API key from [premiumize.me/account](https://www.premiumize.me/account)
+   - **AllDebrid:** paste an API key from [alldebrid.com/apikeys](https://alldebrid.com/apikeys/)
 3. Add a torrent with <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>N</kbd>, then download it once your provider has it ready.
 4. Optional: add tracker sources in **Settings → Search** to search from inside the app.
 
@@ -83,7 +84,7 @@ Get them from the [website](https://casavargas.app/DebridDownloader/#download) o
 
 DebridDownloader is a download manager for paid debrid services. It:
 
-- talks to the official [Real-Debrid](https://api.real-debrid.com/), [TorBox](https://api.torbox.app), and Premiumize APIs;
+- talks to the official [Real-Debrid](https://api.real-debrid.com/), [TorBox](https://api.torbox.app), Premiumize, and [AllDebrid](https://docs.alldebrid.com) APIs;
 - ships with **no tracker sources**, so users add their own;
 - does not host, index, or distribute any content;
 - works like other download managers such as JDownloader or aria2.
@@ -121,7 +122,7 @@ A Tauri v2 app: a React 19 + TypeScript + Tailwind v4 frontend in `src/` talks t
 |---|---|
 | `src-tauri/src/engine/` | The download engine. One actor owns every job; transfers write `{file}.part` with segmented `Range` requests and crash-safe checkpoints, persisted to `downloads.json`. No Tauri dependencies. |
 | `src-tauri/src/engine_host.rs` | Connects the engine to Tauri: events, provider link refresh, rclone. |
-| `src-tauri/src/providers/` | Real-Debrid, TorBox, and Premiumize clients behind one `DebridProvider` trait. |
+| `src-tauri/src/providers/` | Real-Debrid, TorBox, Premiumize, and AllDebrid clients behind one `DebridProvider` trait. |
 | `src-tauri/src/commands/` | IPC command handlers. |
 | `src-tauri/src/scrapers/` | Tracker search. |
 | `src/styles/tokens.css` | Every color, size, and spacing value in one place. |

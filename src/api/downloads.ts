@@ -5,10 +5,12 @@ import type {
   DownloadTask,
 } from "../types";
 
+/** Links for every file in the torrent, or only `fileIds` (ids from `TorrentInfo.files`). */
 export async function unrestrictTorrentLinks(
-  torrentId: string
+  torrentId: string,
+  fileIds?: number[]
 ): Promise<DownloadLink[]> {
-  return invoke("unrestrict_torrent_links", { torrentId });
+  return invoke("unrestrict_torrent_links", { torrentId, fileIds: fileIds ?? null });
 }
 
 export async function startDownloads(
@@ -92,9 +94,4 @@ export async function retryBatch(batchId: string): Promise<void> {
 
 export async function cancelBatch(batchId: string): Promise<void> {
   return invoke("cancel_batch", { batchId });
-}
-
-/** Remove a batch's completed downloads from the list (files stay on disk). */
-export async function removeCompletedBatch(batchId: string): Promise<void> {
-  return invoke("remove_completed_batch", { batchId });
 }
