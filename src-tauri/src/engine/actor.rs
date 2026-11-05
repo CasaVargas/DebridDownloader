@@ -295,9 +295,20 @@ impl Actor {
             .rev()
             .find(|j| j.destination == n.destination && matches!(j.state, JobState::Failed(_) | JobState::Cancelled))
         {
+            // A different kind of job (a ZIP member where a plain download failed, or a member of
+            // a changed archive) can't resume the old `.part`: its checkpoint describes other
+            // bytes. Start that one over. (Plain size changes are caught by the probe.)
+            if j.kind != n.kind {
+                let _ = std::fs::remove_file(j.part_path());
+                j.segments.clear();
+                j.kind = n.kind;
+                j.total_bytes = n.total_bytes;
+            }
+            j.filename = n.filename;
             j.url = n.url;
             j.source = n.source;
             j.batch_id = n.batch_id;
+            j.batch_name = n.batch_name;
             j.state = JobState::Pending;
             j.attempt = 0;
             j.error = None;
