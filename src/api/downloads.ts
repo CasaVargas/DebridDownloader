@@ -5,10 +5,12 @@ import type {
   DownloadTask,
 } from "../types";
 
+/** Links for every file in the torrent, or only `fileIds` (ids from `TorrentInfo.files`). */
 export async function unrestrictTorrentLinks(
-  torrentId: string
+  torrentId: string,
+  fileIds?: number[]
 ): Promise<DownloadLink[]> {
-  return invoke("unrestrict_torrent_links", { torrentId });
+  return invoke("unrestrict_torrent_links", { torrentId, fileIds: fileIds ?? null });
 }
 
 export async function startDownloads(

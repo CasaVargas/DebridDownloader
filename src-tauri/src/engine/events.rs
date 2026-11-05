@@ -20,6 +20,10 @@ pub struct JobView {
     pub resumable: bool,
     pub error: Option<String>,
     pub waiting_for_network: bool,
+    /// Files queued together (one torrent) share this; empty for symlinked files.
+    pub batch_id: String,
+    /// Unix ms of the last state change; for a completed job, when it finished.
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone)]

@@ -356,6 +356,31 @@ fn map_torrent_info(info: RdTorrentInfo) -> shared::TorrentInfo {
     }
 }
 
+/// Hoster links for the wanted files. RD lists one link per selected file, in file order, unless
+/// it packed the files into an archive (fewer links than files); then they can't be split.
+fn hoster_links_for_files<'a>(
+    info: &'a RdTorrentInfo,
+    file_ids: &[u64],
+) -> Result<Vec<&'a str>, shared::ProviderError> {
+    let selected: Vec<u64> = info.files.iter().filter(|f| f.selected == 1).map(|f| f.id).collect();
+    if selected.len() != info.links.len() {
+        return Err(shared::ProviderError::Other(
+            "Real-Debrid packed this torrent into a single archive, so its files can only be downloaded together"
+                .into(),
+        ));
+    }
+    file_ids
+        .iter()
+        .map(|id| {
+            selected
+                .iter()
+                .position(|s| s == id)
+                .map(|i| info.links[i].as_str())
+                .ok_or_else(|| shared::ProviderError::Other(format!("File {} isn't available on Real-Debrid", id)))
+        })
+        .collect()
+}
+
 fn map_download_link(link: RdUnrestrictedLink, hoster_link: &str) -> shared::DownloadLink {
     shared::DownloadLink {
         filename: link.filename,
@@ -481,6 +506,29 @@ impl DebridProvider for RdClient {
         Ok(map_download_link(unrestricted, link))
     }
 
+    async fn get_download_links_for_files(
+        &self,
+        torrent_id: &str,
+        file_ids: &[u64],
+    ) -> Result<Vec<shared::DownloadLink>, shared::ProviderError> {
+        let info = self.rd_torrent_info(torrent_id).await?;
+        let mut results = Vec::new();
+        let mut first_err = None;
+        for link in hoster_links_for_files(&info, file_ids)? {
+            match self.rd_unrestrict_link(link).await {
+                Ok(unrestricted) => results.push(map_download_link(unrestricted, link)),
+                Err(e) => {
+                    log::warn!("Failed to unrestrict link {}: {}", link, e);
+                    first_err.get_or_insert(e);
+                }
+            }
+        }
+        match first_err {
+            Some(e) if results.is_empty() => Err(e),
+            _ => Ok(results),
+        }
+    }
+
     async fn refresh_link(&self, source: &shared::LinkSource) -> Result<shared::DownloadLink, shared::ProviderError> {
         match source {
             shared::LinkSource::RealDebrid { hoster_link } => {
@@ -507,5 +555,40 @@ impl DebridProvider for RdClient {
             .filter(|(_, v)| v.as_object().map_or(false, |obj| !obj.is_empty()))
             .map(|(hash, _)| hash.to_lowercase())
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info(files: &[(u64, u8)], links: &[&str]) -> RdTorrentInfo {
+        serde_json::from_value(serde_json::json!({
+            "id": "T", "filename": "f", "hash": "h", "bytes": 0, "host": "rd", "split": 0,
+            "progress": 100.0, "status": "downloaded", "added": "",
+            "files": files.iter().map(|(id, sel)| serde_json::json!({ "id": id, "path": "/p", "bytes": 1, "selected": sel })).collect::<Vec<_>>(),
+            "links": links,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn maps_files_to_links_by_selected_order() {
+        // File 2 wasn't selected on RD, so links line up with files 1, 3, 4.
+        let i = info(&[(1, 1), (2, 0), (3, 1), (4, 1)], &["a", "b", "c"]);
+        assert_eq!(hoster_links_for_files(&i, &[4, 1]).unwrap(), vec!["c", "a"]);
+    }
+
+    #[test]
+    fn rejects_unselected_file() {
+        let i = info(&[(1, 1), (2, 0)], &["a"]);
+        assert!(hoster_links_for_files(&i, &[2]).is_err());
+    }
+
+    #[test]
+    fn rejects_packed_archive() {
+        // Three selected files but one link: RD bundled them into a RAR.
+        let i = info(&[(1, 1), (2, 1), (3, 1)], &["rar"]);
+        assert!(hoster_links_for_files(&i, &[1]).is_err());
     }
 }
