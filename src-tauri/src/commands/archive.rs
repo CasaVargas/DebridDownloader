@@ -38,6 +38,18 @@ pub struct ZipDownloadStarted {
     pub root: String,
 }
 
+/// Only provider this has been tested with. TorBox and Premiumize serve archives differently and
+/// haven't been verified, so the feature stays off for them.
+pub(crate) const SUPPORTED_PROVIDER: &str = "real-debrid";
+
+async fn require_supported_provider(state: &AppState) -> Result<(), String> {
+    let active = state.provider_id.read().await.clone();
+    if active != SUPPORTED_PROVIDER {
+        return Err("Downloading an archive's contents is only available with Real-Debrid".into());
+    }
+    Ok(())
+}
+
 fn client() -> reqwest::Client {
     reqwest::Client::builder().connect_timeout(Duration::from_secs(15)).build().expect("reqwest client")
 }
@@ -66,6 +78,7 @@ pub async fn inspect_torrent_archive(
     torrent_id: String,
     file_id: Option<u64>,
 ) -> Result<ZipInspection, String> {
+    require_supported_provider(&state).await?;
     let provider = state.get_provider().await;
     let link = match file_id {
         Some(id) => provider.get_download_link_for_file(&torrent_id, id).await.map_err(|e| e.to_string())?,
@@ -135,6 +148,7 @@ pub async fn start_archive_contents_download(
     destination_folder: String,
     torrent_name: Option<String>,
 ) -> Result<ZipDownloadStarted, String> {
+    require_supported_provider(&state).await?;
     let settings = state.settings.read().await.clone();
     if settings.symlink_mode {
         return Err("Downloading an archive's contents isn't available in symlink mode".into());
@@ -174,6 +188,7 @@ pub async fn start_archive_contents_download(
 
     let engine = state.engine()?;
     let batch_id = uuid::Uuid::new_v4().to_string();
+    let batch_name = torrent_name.clone().unwrap_or_else(|| archive_stem(&link.filename));
     let mut jobs = Vec::new();
     for (e, parts) in items {
         let dest = parts.iter().fold(root.clone(), |p, c| p.join(c));
@@ -189,6 +204,7 @@ pub async fn start_archive_contents_download(
             url: link.download.clone(),
             total_bytes: e.compressed_size as i64,
             batch_id: batch_id.clone(),
+            batch_name: batch_name.clone(),
         });
     }
     let ids = engine.enqueue(jobs).await;

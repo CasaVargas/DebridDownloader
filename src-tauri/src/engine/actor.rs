@@ -25,6 +25,10 @@ pub enum Control {
     RetryFailed,
     CancelAll,
     ClearInactive,
+    PauseBatch(String),
+    ResumeBatch(String),
+    RetryBatch(String),
+    CancelBatch(String),
 }
 
 pub enum EngineMsg {
@@ -335,6 +339,8 @@ impl Actor {
             resumable: j.resumable,
             error: j.error.clone(),
             waiting_for_network: self.offline.contains(&j.id),
+            batch_id: j.batch_id.clone(),
+            batch_name: j.batch_name.clone(),
         }
     }
 
@@ -708,6 +714,26 @@ impl Actor {
             }
             Control::CancelAll => {
                 for id in self.ids_where(|j| matches!(j.state, JobState::Pending | JobState::Downloading | JobState::Paused)) {
+                    self.cancel(&id);
+                }
+            }
+            Control::PauseBatch(b) => {
+                for id in self.ids_where(|j| j.batch_id == b && matches!(j.state, JobState::Pending | JobState::Downloading)) {
+                    self.pause(&id);
+                }
+            }
+            Control::ResumeBatch(b) => {
+                for id in self.ids_where(|j| j.batch_id == b && j.state == JobState::Paused) {
+                    self.resume(&id);
+                }
+            }
+            Control::RetryBatch(b) => {
+                for id in self.ids_where(|j| j.batch_id == b && matches!(j.state, JobState::Failed(_))) {
+                    self.retry(&id);
+                }
+            }
+            Control::CancelBatch(b) => {
+                for id in self.ids_where(|j| j.batch_id == b && matches!(j.state, JobState::Pending | JobState::Downloading | JobState::Paused)) {
                     self.cancel(&id);
                 }
             }

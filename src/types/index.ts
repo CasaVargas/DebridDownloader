@@ -165,6 +165,10 @@ export interface DownloadTask {
   resumable?: boolean;
   error?: string | null;
   waiting_for_network?: boolean;
+  /** Jobs started together (one torrent, or one archive's contents) share a batch. */
+  batch_id?: string;
+  /** The torrent or archive name of the batch. */
+  batch_name?: string;
 }
 
 export interface DownloadProgress {

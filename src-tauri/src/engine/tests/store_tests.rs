@@ -12,6 +12,7 @@ pub fn job(id: &str, state: JobState, dest: &str) -> Job {
             url: "http://x".into(),
             total_bytes: 100,
             batch_id: "b".into(),
+            batch_name: String::new(),
         },
         id.into(),
         0,
@@ -77,7 +78,10 @@ fn prune_keeps_active_and_newest_history() {
         j.updated_at = i as i64;
         jobs.push(j);
     }
-    jobs.push(job("active", JobState::Downloading, "/x"));
+    // A different batch: finished jobs of a still-running batch are never pruned.
+    let mut active = job("active", JobState::Downloading, "/x");
+    active.batch_id = "other".into();
+    jobs.push(active);
     prune_history(&mut jobs);
     assert_eq!(jobs.len(), HISTORY_CAP + 1);
     assert!(jobs.iter().any(|j| j.id == "active"));
@@ -139,4 +143,27 @@ fn readable_store_is_writable() {
     let store = Store::new(dir.path());
     store.load();
     assert!(store.is_writable());
+}
+
+#[test]
+fn prune_keeps_finished_jobs_of_a_running_batch() {
+    let mut jobs: Vec<Job> = (0..HISTORY_CAP + 50)
+        .map(|i| {
+            let mut j = job(&format!("old{i}"), JobState::Completed, &format!("/x/old{i}"));
+            j.batch_id = "done".into();
+            j
+        })
+        .collect();
+    for i in 0..600 {
+        let mut j = job(&format!("big{i}"), JobState::Completed, &format!("/x/big{i}"));
+        j.batch_id = "live".into();
+        j.updated_at = 1_000_000; // newer than every old job
+        jobs.push(j);
+    }
+    let mut running = job("live-pending", JobState::Pending, "/x/p");
+    running.batch_id = "live".into();
+    jobs.push(running);
+    prune_history(&mut jobs);
+    assert_eq!(jobs.iter().filter(|j| j.batch_id == "live").count(), 601, "running batch kept whole");
+    assert_eq!(jobs.iter().filter(|j| j.batch_id == "done").count(), HISTORY_CAP, "other history still capped");
 }

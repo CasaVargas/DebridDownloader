@@ -8,6 +8,7 @@ import * as torrentsApi from "../api/torrents";
 import * as downloadsApi from "../api/downloads";
 import { getSettings } from "../api/settings";
 import { getStreamUrl } from "../api/streaming";
+import { getActiveProvider } from "../api/providers";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { confirmAction } from "../lib/confirm";
 import type { Torrent, TorrentInfo, AppSettings } from "../types";
@@ -80,6 +81,10 @@ export default function TorrentsPage() {
   const [downloading, setDownloading] = useState(false);
   const [zipTarget, setZipTarget] = useState<{ torrentId: string; fileId: number | null; name: string; torrentName: string } | null>(null);
   const [notice, setNotice] = useState("");
+  // "Download Contents" is only enabled for Real-Debrid, the one provider it's been tested with.
+  const [providerId, setProviderId] = useState<string | null>(null);
+  useEffect(() => { getActiveProvider().then(setProviderId).catch(() => {}); }, []);
+  const archiveContents = providerId === "real-debrid";
 
   const { openPreview, loadingTorrentId: miniPlayerLoadingId } = useMiniPlayer();
 
@@ -363,9 +368,9 @@ export default function TorrentsPage() {
 
   const inspectorVisible = !!selectedId && inspectorOpen;
   const canDownload = detailInfo?.status === "downloaded";
-  const zipFiles = canDownload ? detailInfo.files.filter((f) => f.selected && isArchive(f.path)) : [];
+  const zipFiles = canDownload && archiveContents ? detailInfo.files.filter((f) => f.selected && isArchive(f.path)) : [];
   // Real-Debrid serves a torrent with many files as one RAR it packs itself: one link, many files.
-  const packed = canDownload && detailInfo.links.length === 1 && detailInfo.files.filter((f) => f.selected).length > 1;
+  const packed = canDownload && archiveContents && detailInfo.links.length === 1 && detailInfo.files.filter((f) => f.selected).length > 1;
   const openPacked = () => {
     if (!detailInfo) return;
     setZipTarget({ torrentId: detailInfo.id, fileId: null, name: detailInfo.filename, torrentName: detailInfo.filename });
@@ -533,7 +538,7 @@ export default function TorrentsPage() {
                         <span className="min-w-0 flex-1 truncate text-sm text-fg">
                           {file.path.startsWith("/") ? file.path.slice(1) : file.path}
                         </span>
-                        {canDownload && file.selected && isArchive(file.path) && (
+                        {canDownload && archiveContents && file.selected && isArchive(file.path) && (
                           <Button size="sm" onClick={() => openZip(file.id, file.path)}>
                             Contents
                           </Button>

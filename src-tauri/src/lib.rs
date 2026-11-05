@@ -267,6 +267,10 @@ pub fn run() {
             commands::downloads::resume_download,
             commands::downloads::retry_download,
             commands::downloads::pause_all_downloads,
+            commands::downloads::pause_batch,
+            commands::downloads::resume_batch,
+            commands::downloads::retry_batch,
+            commands::downloads::cancel_batch,
             commands::downloads::resume_all_downloads,
             commands::downloads::retry_failed_downloads,
             // Settings

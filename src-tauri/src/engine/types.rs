@@ -105,6 +105,9 @@ pub struct Job {
     pub size_resets: u32,
     #[serde(default)]
     pub batch_id: String,
+    /// What the batch is (torrent or archive name), shown as the group in the downloads list.
+    #[serde(default)]
+    pub batch_name: String,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -129,6 +132,7 @@ impl Job {
             post: PostStage::None,
             size_resets: 0,
             batch_id: n.batch_id,
+            batch_name: n.batch_name,
             created_at: now,
             updated_at: now,
         }
@@ -167,6 +171,7 @@ pub struct NewJob {
     pub url: String,
     pub total_bytes: i64,
     pub batch_id: String,
+    pub batch_name: String,
 }
 
 #[derive(Debug, Clone)]

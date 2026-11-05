@@ -20,6 +20,9 @@ pub struct JobView {
     pub resumable: bool,
     pub error: Option<String>,
     pub waiting_for_network: bool,
+    /// Jobs started together (one torrent, or one archive's contents) share a batch.
+    pub batch_id: String,
+    pub batch_name: String,
 }
 
 #[derive(Debug, Clone)]
