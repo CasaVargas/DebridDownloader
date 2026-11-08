@@ -2,49 +2,12 @@ use crate::providers::real_debrid::client::RdClient;
 use crate::providers::types::{
     DeviceCode, DeviceCredentials, OAuthToken, ProviderAuth, User,
 };
+use crate::secrets::Secrets;
 use crate::state::AppState;
-use keyring::Entry;
 use std::sync::Arc;
 use tauri::State;
 
-const KEYRING_SERVICE: &str = "com.jonathan.debriddownloader";
-
-fn get_entry(key: &str) -> Result<Entry, String> {
-    static MIGRATE: std::sync::Once = std::sync::Once::new();
-    MIGRATE.call_once(|| {
-        if let Err(e) = migrate_unprefixed_keys() {
-            log::warn!("Keyring migration failed: {}", e);
-        }
-    });
-    Entry::new(KEYRING_SERVICE, key).map_err(|e| format!("Keyring error: {}", e))
-}
-
-/// Rename pre-1.x unprefixed keys to `real-debrid.<key>`. Runs on the first keyring access rather
-/// than in `setup`: setup is on the main thread after the window exists, so a macOS keychain
-/// prompt there froze the webview on a blank white window (#38).
-fn migrate_unprefixed_keys() -> Result<(), keyring::Error> {
-    let migration_key = Entry::new(KEYRING_SERVICE, "migration_v2_done")?;
-    if migration_key.get_password().is_ok() {
-        return Ok(()); // already migrated
-    }
-
-    let keys = ["api_token", "refresh_token", "oauth_client_id", "oauth_client_secret"];
-    for key in &keys {
-        if let Ok(entry) = Entry::new(KEYRING_SERVICE, key) {
-            if let Ok(value) = entry.get_password() {
-                if let Ok(new_entry) = Entry::new(KEYRING_SERVICE, &prefixed_key("real-debrid", key)) {
-                    let _ = new_entry.set_password(&value);
-                }
-                let _ = entry.delete_credential();
-            }
-        }
-    }
-
-    migration_key.set_password("done")
-}
-
-fn map_keyring_save_error(context: &str, err: keyring::Error) -> String {
-    let msg = format!("{}", err);
+fn map_keyring_save_error(context: &str, msg: String) -> String {
     if msg.contains("Windows error code 8") {
         format!(
             "Failed to save {}: Windows Credential Manager is full. \
@@ -63,7 +26,11 @@ fn prefixed_key(provider_id: &str, key: &str) -> String {
 
 /// Save API token and set on provider (validate first, then persist)
 #[tauri::command]
-pub async fn set_api_token(state: State<'_, AppState>, token: String) -> Result<(), String> {
+pub async fn set_api_token(
+    state: State<'_, AppState>,
+    secrets: State<'_, Secrets>,
+    token: String,
+) -> Result<(), String> {
     let provider = state.get_provider().await;
     // Validate token before persisting
     provider
@@ -71,39 +38,42 @@ pub async fn set_api_token(state: State<'_, AppState>, token: String) -> Result<
         .await
         .map_err(|e| format!("{}", e))?;
 
-    // Only save to keyring after validation succeeds
+    // Only save the secret after validation succeeds
     let provider_id = state.provider_id.read().await.clone();
-    let entry = get_entry(&prefixed_key(&provider_id, "api_token"))?;
-    entry
-        .set_password(&token)
+    secrets
+        .set(&prefixed_key(&provider_id, "api_token"), &token)
         .map_err(|e| map_keyring_save_error("token", e))?;
     Ok(())
 }
 
-/// Load token from keyring and set on provider
+/// Load token from the secret store and set on provider
 #[tauri::command]
-pub async fn load_saved_token(state: State<'_, AppState>) -> Result<bool, String> {
+pub async fn load_saved_token(
+    state: State<'_, AppState>,
+    secrets: State<'_, Secrets>,
+) -> Result<bool, String> {
     let provider_id = state.provider_id.read().await.clone();
-    let entry = get_entry(&prefixed_key(&provider_id, "api_token"))?;
-    match entry.get_password() {
-        Ok(token) => {
+    match secrets.get(&prefixed_key(&provider_id, "api_token")) {
+        Ok(Some(token)) => {
             let provider = state.get_provider().await;
             let _ = provider.authenticate(&ProviderAuth::Token(token)).await;
             Ok(true)
         }
-        Err(_) => Ok(false),
+        Ok(None) | Err(_) => Ok(false),
     }
 }
 
 /// Clear stored token
 #[tauri::command]
-pub async fn logout(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn logout(
+    state: State<'_, AppState>,
+    secrets: State<'_, Secrets>,
+) -> Result<(), String> {
     let provider_id = state.provider_id.read().await.clone();
 
     // Clear all possible credential keys for this provider
     for key in &["api_token", "refresh_token", "oauth_client_id", "oauth_client_secret"] {
-        let _ = get_entry(&prefixed_key(&provider_id, key))
-            .and_then(|e| e.delete_credential().map_err(|e| format!("{}", e)));
+        let _ = secrets.delete(&prefixed_key(&provider_id, key));
     }
 
     // Reset provider to a fresh instance
@@ -122,14 +92,17 @@ pub async fn is_authenticated(state: State<'_, AppState>) -> Result<bool, String
 
 /// Get current user info
 #[tauri::command]
-pub async fn get_user(state: State<'_, AppState>) -> Result<User, String> {
+pub async fn get_user(
+    state: State<'_, AppState>,
+    secrets: State<'_, Secrets>,
+) -> Result<User, String> {
     let provider = state.get_provider().await;
     let provider_id = state.provider_id.read().await.clone();
-    let entry = get_entry(&prefixed_key(&provider_id, "api_token"))
-        .map_err(|e| format!("{}", e))?;
-    let token = entry
-        .get_password()
-        .map_err(|_| "No saved token".to_string())?;
+    let token = secrets
+        .get(&prefixed_key(&provider_id, "api_token"))
+        .ok()
+        .flatten()
+        .ok_or_else(|| "No saved token".to_string())?;
     provider
         .authenticate(&ProviderAuth::Token(token))
         .await
@@ -155,6 +128,7 @@ pub async fn oauth_start(state: State<'_, AppState>) -> Result<DeviceCode, Strin
 #[tauri::command]
 pub async fn oauth_poll_credentials(
     state: State<'_, AppState>,
+    secrets: State<'_, Secrets>,
     device_code: String,
 ) -> Result<Option<DeviceCredentials>, String> {
     let provider = state.get_provider().await;
@@ -166,11 +140,11 @@ pub async fn oauth_poll_credentials(
         .await
     {
         Ok(creds) => {
-            get_entry(&prefixed_key(&provider_id, "oauth_client_id"))?
-                .set_password(&creds.client_id)
+            secrets
+                .set(&prefixed_key(&provider_id, "oauth_client_id"), &creds.client_id)
                 .map_err(|e| map_keyring_save_error("client_id", e))?;
-            get_entry(&prefixed_key(&provider_id, "oauth_client_secret"))?
-                .set_password(&creds.client_secret)
+            secrets
+                .set(&prefixed_key(&provider_id, "oauth_client_secret"), &creds.client_secret)
                 .map_err(|e| map_keyring_save_error("client_secret", e))?;
             Ok(Some(creds))
         }
@@ -181,6 +155,7 @@ pub async fn oauth_poll_credentials(
 #[tauri::command]
 pub async fn oauth_get_token(
     state: State<'_, AppState>,
+    secrets: State<'_, Secrets>,
     client_id: String,
     client_secret: String,
     device_code: String,
@@ -194,11 +169,11 @@ pub async fn oauth_get_token(
         .await
         .map_err(|e| format!("{}", e))?;
 
-    get_entry(&prefixed_key(&provider_id, "api_token"))?
-        .set_password(&token.access_token)
+    secrets
+        .set(&prefixed_key(&provider_id, "api_token"), &token.access_token)
         .map_err(|e| map_keyring_save_error("access token", e))?;
-    get_entry(&prefixed_key(&provider_id, "refresh_token"))?
-        .set_password(&token.refresh_token)
+    secrets
+        .set(&prefixed_key(&provider_id, "refresh_token"), &token.refresh_token)
         .map_err(|e| map_keyring_save_error("refresh token", e))?;
 
     rd.set_token(token.access_token.clone()).await;
@@ -238,6 +213,7 @@ pub async fn get_auth_method(
 pub async fn switch_provider(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
+    secrets: State<'_, Secrets>,
     provider_id: String,
 ) -> Result<bool, String> {
     let new_provider = create_provider(&provider_id)?;
@@ -252,14 +228,11 @@ pub async fn switch_provider(
     drop(settings);
 
     // Try to load saved credentials
-    let entry = get_entry(&prefixed_key(&provider_id, "api_token"));
-    if let Ok(entry) = entry {
-        if let Ok(token) = entry.get_password() {
-            let provider = state.get_provider().await;
-            match provider.authenticate(&ProviderAuth::Token(token)).await {
-                Ok(_) => return Ok(true),
-                Err(_) => return Ok(false),
-            }
+    if let Ok(Some(token)) = secrets.get(&prefixed_key(&provider_id, "api_token")) {
+        let provider = state.get_provider().await;
+        match provider.authenticate(&ProviderAuth::Token(token)).await {
+            Ok(_) => return Ok(true),
+            Err(_) => return Ok(false),
         }
     }
 
