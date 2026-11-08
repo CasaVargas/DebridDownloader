@@ -66,6 +66,10 @@ pub struct ZipEntrySpec {
     pub data_offset: Option<u64>,
     /// Size of the whole archive; a different size on the server means the archive changed.
     pub archive_size: u64,
+    /// `crc32` is real (RAR5 headers may omit it), so stored members can be verified too.
+    /// False for jobs queued before this existed.
+    #[serde(default)]
+    pub has_crc: bool,
 }
 
 impl ZipEntrySpec {
@@ -90,6 +94,8 @@ pub struct ZipEntry {
     pub flags: u16,
     #[serde(default)]
     pub data_offset: Option<u64>,
+    #[serde(default)]
+    pub has_crc: bool,
     pub encrypted: bool,
     /// None when the member can be downloaded; otherwise why not.
     pub unsupported: Option<String>,
@@ -106,6 +112,7 @@ impl ZipEntry {
             flags: self.flags,
             data_offset: self.data_offset,
             archive_size,
+            has_crc: self.has_crc,
         }
     }
 }
@@ -498,6 +505,7 @@ pub fn parse_central_directory(cd: &[u8], expected: u64, shift: u64, archive_siz
             crc32,
             flags,
             data_offset: None,
+            has_crc: true,
             encrypted,
             unsupported,
         });
@@ -572,6 +580,25 @@ pub fn safe_relative_path(name: &str) -> Option<Vec<String>> {
         parts.push(clean_component(c));
     }
     if parts.is_empty() { None } else { Some(parts) }
+}
+
+/// CRC-32 of a whole file, for verifying a stored member. `Ok(None)` when cancelled.
+/// Blocking; run on a blocking thread.
+pub fn crc_file(path: &Path, cancel: &CancellationToken) -> Result<Option<u32>, String> {
+    use std::io::Read;
+    let mut f = std::fs::File::open(path).map_err(|e| format!("Disk error: {e}"))?;
+    let mut crc = flate2::Crc::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        if cancel.is_cancelled() {
+            return Ok(None);
+        }
+        let n = f.read(&mut buf).map_err(|e| format!("Disk error: {e}"))?;
+        if n == 0 {
+            return Ok(Some(crc.sum()));
+        }
+        crc.update(&buf[..n]);
+    }
 }
 
 pub enum DecodeOutcome {

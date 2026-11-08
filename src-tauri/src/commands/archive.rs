@@ -190,12 +190,15 @@ pub async fn start_archive_contents_download(
     let batch_id = uuid::Uuid::new_v4().to_string();
     let batch_name = torrent_name.clone().unwrap_or_else(|| archive_stem(&link.filename));
     let mut jobs = Vec::new();
+    let mut taken = std::collections::HashSet::new();
     for (e, parts) in items {
-        let dest = parts.iter().fold(root.clone(), |p, c| p.join(c));
         if e.is_dir {
+            let dest = parts.iter().fold(root.clone(), |p, c| p.join(c));
             tokio::fs::create_dir_all(&dest).await.map_err(|err| format!("Couldn't create {}: {}", dest.display(), err))?;
             continue;
         }
+        let parts = unique_file_parts(parts, &mut taken);
+        let dest = parts.iter().fold(root.clone(), |p, c| p.join(c));
         jobs.push(NewJob {
             kind: JobKind::ZipEntry { entry: e.spec(archive_size) },
             filename: parts.last().cloned().unwrap_or_default(),
@@ -211,12 +214,45 @@ pub async fn start_archive_contents_download(
     Ok(ZipDownloadStarted { ids, root: root.to_string_lossy().to_string() })
 }
 
+/// Archive paths that differ only by case (or repeat exactly) are one file on macOS and Windows,
+/// and two jobs would write the same `.part`. Later ones get a ` (2)`, ` (3)`... suffix.
+pub(crate) fn unique_file_parts(mut parts: Vec<String>, taken: &mut std::collections::HashSet<String>) -> Vec<String> {
+    let key = |p: &[String]| p.join("/").to_lowercase();
+    if taken.insert(key(&parts)) {
+        return parts;
+    }
+    let last = parts.pop().unwrap_or_default();
+    let (stem, ext) = match last.rfind('.') {
+        Some(i) if i > 0 => (&last[..i], &last[i..]),
+        _ => (last.as_str(), ""),
+    };
+    for n in 2.. {
+        parts.push(format!("{stem} ({n}){ext}"));
+        if taken.insert(key(&parts)) {
+            return parts;
+        }
+        parts.pop();
+    }
+    unreachable!()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn p(s: &str) -> Vec<String> {
         safe_relative_path(s).unwrap()
+    }
+
+    #[test]
+    fn case_only_duplicates_get_a_suffix() {
+        let mut taken = std::collections::HashSet::new();
+        assert_eq!(unique_file_parts(p("Show/Foo.txt"), &mut taken), p("Show/Foo.txt"));
+        assert_eq!(unique_file_parts(p("show/foo.TXT"), &mut taken), p("show/foo (2).TXT"));
+        assert_eq!(unique_file_parts(p("Show/Foo.txt"), &mut taken), p("Show/Foo (3).txt"));
+        assert_eq!(unique_file_parts(p("Show/README"), &mut taken), p("Show/README"));
+        assert_eq!(unique_file_parts(p("Show/readme"), &mut taken), p("Show/readme (2)"));
+        assert_eq!(unique_file_parts(p("Other/Foo.txt"), &mut taken), p("Other/Foo.txt"));
     }
 
     #[test]

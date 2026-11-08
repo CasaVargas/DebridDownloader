@@ -253,6 +253,36 @@ async fn requeue_of_failed_destination_reuses_the_job() {
 }
 
 #[tokio::test]
+async fn requeue_as_a_different_kind_starts_over() {
+    use std::io::Write;
+    // A plain download of a.bin fails partway, leaving a checkpointed `.part`...
+    let plain = MockServer::start(MockOpts {
+        size: 200_000, ranges: true, drop_after: Some(10), drop_times: 100_000, ..Default::default()
+    })
+    .await;
+    let h = harness(EngineConfig::default());
+    let a = h.engine.enqueue(vec![h.new_job("a.bin", plain.url(), 200_000, "b1")]).await;
+    h.wait_until("failed", |l| matches!(l[0].status, JobState::Failed(_))).await;
+
+    // ...then the same path is queued as a ZIP member. It must download the member, not resume
+    // the old checkpoint as a plain download of the whole archive.
+    let member: Vec<u8> = (0..150_000u32).map(|i| (i % 251) as u8).collect();
+    let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    w.start_file("a.bin", zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored)).unwrap();
+    w.write_all(&member).unwrap();
+    let archive = w.finish().unwrap().into_inner();
+    let zs = MockServer::start(MockOpts { size: archive.len(), ranges: true, data: Some(archive.clone()), ..Default::default() }).await;
+    let listing = crate::engine::zip_remote::read_listing(&crate::engine::transfer::build_client(&fast_transfer_cfg()), &zs.url(), Duration::from_secs(5)).await.unwrap();
+    let e = &listing.entries[0];
+    let mut n = h.new_job("a.bin", zs.url(), e.compressed_size as i64, "b2");
+    n.kind = JobKind::ZipEntry { entry: e.spec(listing.archive_size) };
+    let b = h.engine.enqueue(vec![n]).await;
+    assert_eq!(a, b);
+    let list = h.wait_until("completed", all(JobState::Completed)).await;
+    assert_eq!(read(&list[0].destination), member);
+}
+
+#[tokio::test]
 async fn clear_keeps_part_of_live_job_with_same_destination() {
     use super::store_tests::job;
     use crate::engine::store::Store;

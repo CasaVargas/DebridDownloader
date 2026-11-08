@@ -7,6 +7,14 @@ import type { ArchiveListingProgress, ZipEntry, ZipInspection } from "../types";
 import { formatBytes } from "../utils";
 import { Button, Dialog, Input, Spinner } from "./ui";
 
+/** Fixed row height of the file list (`h-7.5`), so long lists can render only what's on screen. */
+const ROW_PX = 30;
+/** Height of the list box (`max-h-80`). */
+const LIST_PX = 320;
+/** Lists longer than this render a window of rows (archives can hold tens of thousands). */
+const WINDOW_AFTER = 200;
+const OVERSCAN = 10;
+
 /**
  * "Download contents" for a ZIP or RAR inside a torrent: lists the archive remotely and downloads each
  * selected file straight into place, so a large archive never has to be unzipped afterwards.
@@ -33,6 +41,7 @@ export default function ZipContentsDialog({
   const [filter, setFilter] = useState("");
   const [starting, setStarting] = useState(false);
   const [progress, setProgress] = useState<ArchiveListingProgress | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
 
   useEffect(() => {
     const unlisten = listen<ArchiveListingProgress>("archive-listing-progress", (e) => {
@@ -65,6 +74,13 @@ export default function ZipContentsDialog({
     const q = filter.trim().toLowerCase();
     return q ? files.filter((e) => e.path.toLowerCase().includes(q)) : files;
   }, [files, filter]);
+
+  const windowed = visible.length > WINDOW_AFTER;
+  // Clamp: filtering shrinks the list before the browser reports the clamped scroll position.
+  const top = Math.min(scrollTop, Math.max(0, visible.length * ROW_PX - LIST_PX));
+  const first = windowed ? Math.max(0, Math.floor(top / ROW_PX) - OVERSCAN) : 0;
+  const last = windowed ? Math.min(visible.length, Math.ceil((top + LIST_PX) / ROW_PX) + OVERSCAN) : visible.length;
+  const shown = windowed ? visible.slice(first, last) : visible;
 
   const chosen = usable.filter((e) => selected.has(e.path));
   const chosenBytes = chosen.reduce((s, e) => s + e.size, 0);
@@ -175,15 +191,19 @@ export default function ZipContentsDialog({
               None
             </Button>
           </div>
-          <div className="max-h-80 overflow-y-auto rounded-md border border-border">
-            {visible.map((e) => {
+          <div
+            className="max-h-80 overflow-y-auto rounded-md border border-border"
+            onScroll={windowed ? (ev) => setScrollTop(ev.currentTarget.scrollTop) : undefined}
+          >
+            {first > 0 && <div aria-hidden style={{ height: first * ROW_PX }} />}
+            {shown.map((e, i) => {
               const slash = e.path.lastIndexOf("/");
               const folder = slash >= 0 ? e.path.slice(0, slash + 1) : "";
               const name = slash >= 0 ? e.path.slice(slash + 1) : e.path;
               return (
                 <label
-                  key={e.path}
-                  className="flex min-h-7.5 items-center gap-2 border-b border-border-subtle px-2 py-1 last:border-b-0 hover:bg-raised"
+                  key={`${first + i}:${e.path}`}
+                  className="flex h-7.5 items-center gap-2 border-b border-border-subtle px-2 py-1 last:border-b-0 hover:bg-raised"
                   title={e.unsupported ?? e.path}
                 >
                   <input
@@ -203,6 +223,7 @@ export default function ZipContentsDialog({
                 </label>
               );
             })}
+            {last < visible.length && <div aria-hidden style={{ height: (visible.length - last) * ROW_PX }} />}
             {visible.length === 0 && <p className="px-2 py-3 text-sm text-fg-muted">No files match.</p>}
           </div>
         </div>

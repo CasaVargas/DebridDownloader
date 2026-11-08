@@ -191,7 +191,7 @@ fn entry(
     packed: u64,
     size: u64,
     stored: bool,
-    crc32: u32,
+    crc32: Option<u32>,
     encrypted: bool,
     split: bool,
     archive_size: u64,
@@ -221,9 +221,10 @@ fn entry(
         compressed_size: packed,
         size,
         method: if stored { METHOD_STORED } else { METHOD_RAR_COMPRESSED },
-        crc32,
+        crc32: crc32.unwrap_or(0),
         flags: 0,
         data_offset: Some(data_offset),
+        has_crc: crc32.is_some(),
         encrypted,
         unsupported,
     }
@@ -343,7 +344,7 @@ async fn walk_rar4(r: &mut Remote<'_>, mut pos: u64) -> Result<Vec<ZipEntry>, Zi
                     packed,
                     unp,
                     method == 0x30,
-                    crc,
+                    Some(crc),
                     flags & 0x0004 != 0,
                     flags & 0x0003 != 0,
                     size,
@@ -388,7 +389,7 @@ async fn walk_rar5(r: &mut Remote<'_>, mut pos: u64) -> Result<Vec<ZipEntry>, Zi
                 if fflags & 0x2 != 0 {
                     v.u32()?;
                 }
-                let crc = if fflags & 0x4 != 0 { v.u32()? } else { 0 };
+                let crc = if fflags & 0x4 != 0 { Some(v.u32()?) } else { None };
                 let comp = v.vint()?;
                 let _os = v.vint()?;
                 let name_len = v.vint()? as usize;
