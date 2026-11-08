@@ -9,6 +9,7 @@ mod rclone;
 mod tmdb;
 mod organizer;
 mod scrapers;
+pub mod secrets;
 mod state;
 mod streaming;
 mod watchlist;
@@ -139,7 +140,7 @@ pub fn run() {
 
             // No keyring access here: setup runs on the main thread after the window exists, so a
             // macOS keychain prompt would freeze the webview white (#38). The legacy-key migration
-            // runs on first keyring use in commands::auth instead.
+            // runs on first keyring use in secrets::KeyringStore instead.
 
             // Start streaming proxy server
             let state: tauri::State<'_, AppState> = app.state();
@@ -221,6 +222,8 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::new())
+        // Desktop build keeps secrets in the OS keyring (constructing it touches no keychain).
+        .manage(secrets::Secrets(std::sync::Arc::new(secrets::KeyringStore::new())))
         // Closing the main window hides it to the tray; downloads keep running. Quit from the tray (or ⌘Q) exits.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
