@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
-use tauri_plugin_store::StoreExt;
+use crate::persistence::{Persistence, TRACKER_CONFIGS_KEY, WATCH_RULES_KEY};
+use tauri::State;
 
 #[derive(Serialize, Deserialize)]
 struct ExportData {
@@ -20,7 +20,7 @@ pub struct ImportResult {
 
 #[tauri::command]
 pub async fn export_settings(
-    app: AppHandle,
+    persistence: State<'_, Persistence>,
     state: State<'_, AppState>,
     include_credentials: bool,
     frontend_settings_json: String,
@@ -40,8 +40,7 @@ pub async fn export_settings(
     }
 
     // Load tracker configs from store
-    let store = app.store("settings.json").map_err(|e| e.to_string())?;
-    let mut tracker_configs = store.get("tracker_configs");
+    let mut tracker_configs = persistence.get(TRACKER_CONFIGS_KEY)?;
 
     // Strip tracker API keys if not including credentials
     if !include_credentials {
@@ -54,7 +53,7 @@ pub async fn export_settings(
         }
     }
 
-    let watch_rules = store.get("watch_rules");
+    let watch_rules = persistence.get(WATCH_RULES_KEY)?;
 
     let frontend_value: Option<serde_json::Value> =
         serde_json::from_str(&frontend_settings_json).ok();
@@ -72,7 +71,7 @@ pub async fn export_settings(
 
 #[tauri::command]
 pub async fn import_settings(
-    app: AppHandle,
+    persistence: State<'_, Persistence>,
     state: State<'_, AppState>,
     json: String,
 ) -> Result<ImportResult, String> {
@@ -83,7 +82,7 @@ pub async fn import_settings(
 
     // Import app settings (persist + update in-memory)
     if let Ok(settings) = serde_json::from_value::<crate::state::AppSettings>(data.app_settings) {
-        crate::commands::settings::save_app_settings(&app, &settings)?;
+        crate::commands::settings::save_app_settings(&persistence, &settings)?;
         let config = settings.engine_config(state.rar_tool);
         *state.settings.write().await = settings;
         if let Ok(engine) = state.engine() {
@@ -93,10 +92,8 @@ pub async fn import_settings(
     }
 
     // Import tracker configs
-    let store = app.store("settings.json").map_err(|e| e.to_string())?;
     if let Some(configs) = data.tracker_configs {
-        store.set("tracker_configs", configs);
-        store.save().map_err(|e| e.to_string())?;
+        persistence.set(TRACKER_CONFIGS_KEY, configs)?;
         imported.push("tracker_configs".to_string());
     }
 
@@ -105,8 +102,7 @@ pub async fn import_settings(
         if let Ok(rules) = serde_json::from_value::<Vec<crate::watchlist::WatchRule>>(rules_value.clone()) {
             *state.watch_rules.write().await = rules;
         }
-        store.set("watch_rules", rules_value);
-        store.save().map_err(|e| e.to_string())?;
+        persistence.set(WATCH_RULES_KEY, rules_value)?;
         imported.push("watch_rules".to_string());
     }
 

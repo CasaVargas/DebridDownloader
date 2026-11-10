@@ -8,6 +8,7 @@ mod media_servers;
 mod rclone;
 mod tmdb;
 mod organizer;
+pub mod persistence;
 mod scrapers;
 pub mod secrets;
 mod state;
@@ -21,7 +22,6 @@ use tauri::{
     Emitter, Manager,
 };
 use tauri_plugin_deep_link::DeepLinkExt;
-use tauri_plugin_store::StoreExt;
 
 /// Holds a magnet URI received during cold start, before the frontend is ready.
 pub struct PendingMagnetUri(pub std::sync::Mutex<Option<String>>);
@@ -61,6 +61,13 @@ pub fn run() {
         }))
         .manage(PendingMagnetUri(std::sync::Mutex::new(None)))
         .setup(|app| {
+            // settings.json (AppSettings blob, watchlist, tracker configs) through the persistence
+            // seam; the desktop build keeps using tauri-plugin-store.
+            app.manage(persistence::Persistence(std::sync::Arc::new(persistence::TauriStore::new(
+                app.handle().clone(),
+                commands::settings::SETTINGS_STORE,
+            ))));
+
             // Deep-link handler for magnet URIs
             let app_handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
@@ -155,9 +162,9 @@ pub fn run() {
             // Load persisted AppSettings from store (falls through to defaults on first run)
             {
                 let state: tauri::State<'_, AppState> = app.state();
-                let store = app.store(commands::settings::SETTINGS_STORE).map_err(|e| e.to_string())?;
-                if let Some(val) = store.get(commands::settings::SETTINGS_KEY) {
-                    match serde_json::from_value::<state::AppSettings>(val.clone()) {
+                let store: tauri::State<'_, persistence::Persistence> = app.state();
+                if let Some(val) = store.get(commands::settings::SETTINGS_KEY)? {
+                    match serde_json::from_value::<state::AppSettings>(val) {
                         Ok(loaded) => {
                             *state.settings.blocking_write() = loaded.clone();
                             *state.provider_id.blocking_write() = loaded.provider.clone();
@@ -174,22 +181,22 @@ pub fn run() {
             // Load watch list data from store and spawn watch loop
             {
                 let state: tauri::State<'_, AppState> = app.state();
-                let store = app.store("settings.json").map_err(|e| e.to_string())?;
+                let store: tauri::State<'_, persistence::Persistence> = app.state();
 
-                if let Some(val) = store.get("watch_rules") {
-                    if let Ok(rules) = serde_json::from_value::<Vec<watchlist::WatchRule>>(val.clone()) {
+                if let Some(val) = store.get(persistence::WATCH_RULES_KEY)? {
+                    if let Ok(rules) = serde_json::from_value::<Vec<watchlist::WatchRule>>(val) {
                         *state.watch_rules.blocking_write() = rules;
                     }
                 }
 
-                if let Some(val) = store.get("watch_matches") {
-                    if let Ok(matches) = serde_json::from_value::<Vec<watchlist::WatchMatch>>(val.clone()) {
+                if let Some(val) = store.get(persistence::WATCH_MATCHES_KEY)? {
+                    if let Ok(matches) = serde_json::from_value::<Vec<watchlist::WatchMatch>>(val) {
                         *state.watch_matches.blocking_write() = matches;
                     }
                 }
 
-                if let Some(val) = store.get("watch_seen_hashes") {
-                    if let Ok(seen) = serde_json::from_value::<std::collections::HashMap<String, std::collections::HashSet<String>>>(val.clone()) {
+                if let Some(val) = store.get(persistence::WATCH_SEEN_KEY)? {
+                    if let Ok(seen) = serde_json::from_value::<std::collections::HashMap<String, std::collections::HashSet<String>>>(val) {
                         *state.watch_seen.blocking_write() = seen;
                     }
                 }

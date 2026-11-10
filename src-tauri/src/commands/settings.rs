@@ -1,16 +1,11 @@
+use crate::persistence::Persistence;
 use crate::state::{AppSettings, AppState};
-use tauri::{AppHandle, State};
-use tauri_plugin_store::StoreExt;
+use tauri::State;
 
-pub const SETTINGS_STORE: &str = "settings.json";
-pub const SETTINGS_KEY: &str = "app_settings";
+pub use crate::persistence::{SETTINGS_KEY, SETTINGS_STORE};
 
-pub fn save_app_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
-    let store = app.store(SETTINGS_STORE).map_err(|e| e.to_string())?;
-    let json = serde_json::to_value(settings).map_err(|e| e.to_string())?;
-    store.set(SETTINGS_KEY, json);
-    store.save().map_err(|e| e.to_string())?;
-    Ok(())
+pub fn save_app_settings(persistence: &Persistence, settings: &AppSettings) -> Result<(), String> {
+    persistence.set_json(SETTINGS_KEY, settings)
 }
 
 #[tauri::command]
@@ -21,11 +16,11 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, Str
 
 #[tauri::command]
 pub async fn update_settings(
-    app: AppHandle,
+    persistence: State<'_, Persistence>,
     state: State<'_, AppState>,
     settings: AppSettings,
 ) -> Result<(), String> {
-    save_app_settings(&app, &settings)?;
+    save_app_settings(&persistence, &settings)?;
     let config = settings.engine_config(state.rar_tool);
     *state.settings.write().await = settings;
     if let Ok(engine) = state.engine() {

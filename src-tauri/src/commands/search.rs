@@ -1,12 +1,12 @@
 use crate::providers::torbox::client::TorBoxClient;
 use crate::scrapers::{self, SearchResponse, TorrentScraper, TrackerConfig};
 use crate::state::AppState;
+use crate::persistence::{Persistence, TRACKER_CONFIGS_KEY};
 use tauri::State;
-use tauri_plugin_store::StoreExt;
 
 #[tauri::command]
 pub async fn search_torrents(
-    app: tauri::AppHandle,
+    persistence: State<'_, Persistence>,
     state: State<'_, AppState>,
     query: String,
     category: Option<String>,
@@ -20,7 +20,7 @@ pub async fn search_torrents(
         page,
     };
 
-    let configs = load_tracker_configs(&app);
+    let configs = persistence.load_tracker_configs();
 
     let mut extra: Vec<Box<dyn TorrentScraper>> = Vec::new();
 
@@ -43,20 +43,18 @@ pub async fn search_torrents(
 }
 
 #[tauri::command]
-pub async fn get_tracker_configs(app: tauri::AppHandle) -> Result<Vec<TrackerConfig>, String> {
-    Ok(load_tracker_configs(&app))
+pub async fn get_tracker_configs(
+    persistence: State<'_, Persistence>,
+) -> Result<Vec<TrackerConfig>, String> {
+    Ok(persistence.load_tracker_configs())
 }
 
 #[tauri::command]
 pub async fn save_tracker_configs(
-    app: tauri::AppHandle,
+    persistence: State<'_, Persistence>,
     configs: Vec<TrackerConfig>,
 ) -> Result<(), String> {
-    let store = app.store("settings.json").map_err(|e| e.to_string())?;
-    let json = serde_json::to_value(&configs).map_err(|e| e.to_string())?;
-    store.set("tracker_configs", json);
-    store.save().map_err(|e| e.to_string())?;
-    Ok(())
+    persistence.set_json(TRACKER_CONFIGS_KEY, &configs)
 }
 
 #[tauri::command]
@@ -153,16 +151,4 @@ pub async fn check_cache_availability(
         .check_availability(&hashes)
         .await
         .map_err(|e| format!("{}", e))
-}
-
-fn load_tracker_configs(app: &tauri::AppHandle) -> Vec<TrackerConfig> {
-    let store = match app.store("settings.json") {
-        Ok(s) => s,
-        Err(_) => return vec![],
-    };
-
-    match store.get("tracker_configs") {
-        Some(val) => serde_json::from_value(val.clone()).unwrap_or_default(),
-        None => vec![],
-    }
 }
