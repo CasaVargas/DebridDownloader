@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tauri::{Emitter, Manager};
-use tauri_plugin_store::StoreExt;
+use crate::persistence::{Persistence, WATCH_MATCHES_KEY, WATCH_RULES_KEY, WATCH_SEEN_KEY};
 use crate::scrapers::{self, SearchParams, TrackerConfig};
 use crate::state::AppState;
 
@@ -178,7 +178,8 @@ pub async fn start_watch_loop(app: tauri::AppHandle, cancel: CancellationToken) 
         let state: tauri::State<'_, AppState> = app.state();
 
         // Load tracker configs
-        let tracker_configs = load_tracker_configs(&app);
+        let persistence = app.state::<Persistence>();
+        let tracker_configs = persistence.load_tracker_configs();
         if tracker_configs.is_empty() {
             if !logged_no_trackers {
                 log::info!("Watch loop: no trackers configured, skipping");
@@ -233,7 +234,7 @@ pub async fn start_watch_loop(app: tauri::AppHandle, cancel: CancellationToken) 
                         let drain_count = matches.len() - MAX_MATCHES;
                         matches.drain(..drain_count);
                     }
-                    let _ = save_to_store(&app, "watch_matches", &*matches);
+                    let _ = persistence.set_json(WATCH_MATCHES_KEY, &*matches);
                 }
             }
 
@@ -263,7 +264,7 @@ pub async fn start_watch_loop(app: tauri::AppHandle, cancel: CancellationToken) 
                         }
                     }
                 }
-                let _ = save_to_store(&app, "watch_rules", &*rules);
+                let _ = persistence.set_json(WATCH_RULES_KEY, &*rules);
             }
         }
     }
@@ -334,7 +335,7 @@ async fn run_rule(
                 rule_seen.remove(&h);
             }
         }
-        let _ = save_to_store(app, "watch_seen_hashes", &*seen_map);
+        let _ = app.state::<Persistence>().set_json(WATCH_SEEN_KEY, &*seen_map);
     }
 
     new_matches
@@ -383,29 +384,6 @@ async fn auto_add(
         );
     }
 
-    Ok(())
-}
-
-fn load_tracker_configs(app: &tauri::AppHandle) -> Vec<TrackerConfig> {
-    let store = match app.store("settings.json") {
-        Ok(s) => s,
-        Err(_) => return vec![],
-    };
-    match store.get("tracker_configs") {
-        Some(val) => serde_json::from_value(val.clone()).unwrap_or_default(),
-        None => vec![],
-    }
-}
-
-fn save_to_store<T: Serialize>(
-    app: &tauri::AppHandle,
-    key: &str,
-    value: &T,
-) -> Result<(), String> {
-    let store = app.store("settings.json").map_err(|e| e.to_string())?;
-    let json = serde_json::to_value(value).map_err(|e| e.to_string())?;
-    store.set(key, json);
-    store.save().map_err(|e| e.to_string())?;
     Ok(())
 }
 

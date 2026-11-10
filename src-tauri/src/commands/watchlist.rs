@@ -1,36 +1,23 @@
-use crate::scrapers::TrackerConfig;
 use crate::state::AppState;
 use crate::watchlist::{self, WatchMatch, WatchRule, WatchAction, RuleType, MatchStatus};
+use crate::persistence::{Persistence, WATCH_MATCHES_KEY, WATCH_RULES_KEY, WATCH_SEEN_KEY};
 use tauri::{Emitter, Manager, State};
-use tauri_plugin_store::StoreExt;
 
 // ── Store helpers ───────────────────────────────────────────────────
 
-fn save_rules(app: &tauri::AppHandle, rules: &[WatchRule]) -> Result<(), String> {
-    let store = app.store("settings.json").map_err(|e| e.to_string())?;
-    let json = serde_json::to_value(rules).map_err(|e| e.to_string())?;
-    store.set("watch_rules", json);
-    store.save().map_err(|e| e.to_string())?;
-    Ok(())
+fn save_rules(persistence: &Persistence, rules: &[WatchRule]) -> Result<(), String> {
+    persistence.set_json(WATCH_RULES_KEY, rules)
 }
 
-fn save_matches(app: &tauri::AppHandle, matches: &[WatchMatch]) -> Result<(), String> {
-    let store = app.store("settings.json").map_err(|e| e.to_string())?;
-    let json = serde_json::to_value(matches).map_err(|e| e.to_string())?;
-    store.set("watch_matches", json);
-    store.save().map_err(|e| e.to_string())?;
-    Ok(())
+fn save_matches(persistence: &Persistence, matches: &[WatchMatch]) -> Result<(), String> {
+    persistence.set_json(WATCH_MATCHES_KEY, matches)
 }
 
 fn save_seen(
-    app: &tauri::AppHandle,
+    persistence: &Persistence,
     seen: &std::collections::HashMap<String, std::collections::HashSet<String>>,
 ) -> Result<(), String> {
-    let store = app.store("settings.json").map_err(|e| e.to_string())?;
-    let json = serde_json::to_value(seen).map_err(|e| e.to_string())?;
-    store.set("watch_seen_hashes", json);
-    store.save().map_err(|e| e.to_string())?;
-    Ok(())
+    persistence.set_json(WATCH_SEEN_KEY, seen)
 }
 
 // ── Commands ────────────────────────────────────────────────────────
@@ -43,7 +30,7 @@ pub async fn get_watch_rules(state: State<'_, AppState>) -> Result<Vec<WatchRule
 
 #[tauri::command]
 pub async fn add_watch_rule(
-    app: tauri::AppHandle,
+    persistence: State<'_, Persistence>,
     state: State<'_, AppState>,
     rule: WatchRule,
 ) -> Result<WatchRule, String> {
@@ -55,13 +42,13 @@ pub async fn add_watch_rule(
 
     let mut rules = state.watch_rules.write().await;
     rules.push(rule.clone());
-    save_rules(&app, &rules)?;
+    save_rules(&persistence, &rules)?;
     Ok(rule)
 }
 
 #[tauri::command]
 pub async fn update_watch_rule(
-    app: tauri::AppHandle,
+    persistence: State<'_, Persistence>,
     state: State<'_, AppState>,
     rule: WatchRule,
 ) -> Result<WatchRule, String> {
@@ -74,7 +61,7 @@ pub async fn update_watch_rule(
     let mut rules = state.watch_rules.write().await;
     if let Some(existing) = rules.iter_mut().find(|r| r.id == rule.id) {
         *existing = rule.clone();
-        save_rules(&app, &rules)?;
+        save_rules(&persistence, &rules)?;
         Ok(rule)
     } else {
         Err("Rule not found".to_string())
@@ -83,21 +70,21 @@ pub async fn update_watch_rule(
 
 #[tauri::command]
 pub async fn delete_watch_rule(
-    app: tauri::AppHandle,
+    persistence: State<'_, Persistence>,
     state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
     let mut rules = state.watch_rules.write().await;
     rules.retain(|r| r.id != id);
-    save_rules(&app, &rules)?;
+    save_rules(&persistence, &rules)?;
 
     let mut matches = state.watch_matches.write().await;
     matches.retain(|m| m.rule_id != id);
-    save_matches(&app, &matches)?;
+    save_matches(&persistence, &matches)?;
 
     let mut seen = state.watch_seen.write().await;
     seen.remove(&id);
-    save_seen(&app, &seen)?;
+    save_seen(&persistence, &seen)?;
 
     Ok(())
 }
@@ -116,7 +103,7 @@ pub async fn get_watch_matches(
 
 #[tauri::command]
 pub async fn clear_watch_matches(
-    app: tauri::AppHandle,
+    persistence: State<'_, Persistence>,
     state: State<'_, AppState>,
     rule_id: Option<String>,
 ) -> Result<(), String> {
@@ -125,13 +112,14 @@ pub async fn clear_watch_matches(
         Some(id) => matches.retain(|m| m.rule_id != id),
         None => matches.clear(),
     }
-    save_matches(&app, &matches)?;
+    save_matches(&persistence, &matches)?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn run_watch_rule_now(
     app: tauri::AppHandle,
+    persistence: State<'_, Persistence>,
     state: State<'_, AppState>,
     id: String,
 ) -> Result<Vec<WatchMatch>, String> {
@@ -142,7 +130,7 @@ pub async fn run_watch_rule_now(
 
     let rule = rule.ok_or("Rule not found")?;
 
-    let tracker_configs = load_tracker_configs(&app);
+    let tracker_configs = persistence.load_tracker_configs();
     if tracker_configs.is_empty() {
         return Err("No trackers configured".to_string());
     }
@@ -160,7 +148,7 @@ pub async fn run_watch_rule_now(
             let drain_count = matches.len() - watchlist::MAX_MATCHES;
             matches.drain(..drain_count);
         }
-        save_matches(&app, &matches)?;
+        save_matches(&persistence, &matches)?;
 
         let mut rules = state.watch_rules.write().await;
         if let Some(existing) = rules.iter_mut().find(|r| r.id == id) {
@@ -182,19 +170,8 @@ pub async fn run_watch_rule_now(
                 }
             }
         }
-        save_rules(&app, &rules)?;
+        save_rules(&persistence, &rules)?;
     }
 
     Ok(new_matches)
-}
-
-fn load_tracker_configs(app: &tauri::AppHandle) -> Vec<TrackerConfig> {
-    let store = match app.store("settings.json") {
-        Ok(s) => s,
-        Err(_) => return vec![],
-    };
-    match store.get("tracker_configs") {
-        Some(val) => serde_json::from_value(val.clone()).unwrap_or_default(),
-        None => vec![],
-    }
 }

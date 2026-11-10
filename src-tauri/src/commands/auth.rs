@@ -211,7 +211,7 @@ pub async fn get_auth_method(
 
 #[tauri::command]
 pub async fn switch_provider(
-    app: tauri::AppHandle,
+    persistence: State<'_, crate::persistence::Persistence>,
     state: State<'_, AppState>,
     secrets: State<'_, Secrets>,
     provider_id: String,
@@ -224,7 +224,7 @@ pub async fn switch_provider(
     // Update + persist settings
     let mut settings = state.settings.write().await;
     settings.provider = provider_id.clone();
-    crate::commands::settings::save_app_settings(&app, &settings)?;
+    crate::commands::settings::save_app_settings(&persistence, &settings)?;
     drop(settings);
 
     // Try to load saved credentials
