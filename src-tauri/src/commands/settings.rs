@@ -5,7 +5,6 @@ use crate::state::{AppSettings, AppState};
 use tauri::State;
 
 pub use crate::persistence::{SETTINGS_KEY, SETTINGS_STORE};
-pub use crate::service::settings::save_app_settings;
 
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {

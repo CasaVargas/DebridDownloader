@@ -7,6 +7,7 @@
 //! host can call the same functions.
 
 pub mod auth;
+pub mod backup;
 pub mod downloads;
 pub mod search;
 pub mod settings;
