@@ -5,6 +5,8 @@ description = "Real-Debrid Torrent Downloader"
 authors = ["Jonathan"]
 license = "GPL-3.0-or-later"
 edition = "2021"
+# Two [[bin]] targets: `cargo run` (used by `tauri dev`) needs a default.
+default-run = "debriddownloader"
 
 [lib]
 name = "debriddownloader_lib"
