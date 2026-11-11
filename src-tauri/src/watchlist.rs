@@ -4,7 +4,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
+use crate::events::AppEvents;
 use crate::persistence::{Persistence, WATCH_MATCHES_KEY, WATCH_RULES_KEY, WATCH_SEEN_KEY};
 use crate::scrapers::{self, SearchParams, TrackerConfig};
 use crate::state::AppState;
@@ -165,6 +166,7 @@ pub const MAX_SEEN_PER_RULE: usize = 5000;
 
 pub async fn start_watch_loop(app: tauri::AppHandle, cancel: CancellationToken) {
     let mut logged_no_trackers = false;
+    let events = crate::engine_host::TauriEvents::new(app.clone());
 
     loop {
         tokio::select! {
@@ -175,104 +177,115 @@ pub async fn start_watch_loop(app: tauri::AppHandle, cancel: CancellationToken) 
             _ = tokio::time::sleep(Duration::from_secs(TICK_INTERVAL_SECS)) => {}
         }
 
-        let state: tauri::State<'_, AppState> = app.state();
-
-        // Load tracker configs
+        let state = app.state::<AppState>();
         let persistence = app.state::<Persistence>();
-        let tracker_configs = persistence.load_tracker_configs();
-        if tracker_configs.is_empty() {
-            if !logged_no_trackers {
-                log::info!("Watch loop: no trackers configured, skipping");
-                logged_no_trackers = true;
-            }
-            continue;
+        if run_due_rules(&state, &persistence, &events, &cancel).await {
+            logged_no_trackers = false;
+        } else if !logged_no_trackers {
+            log::info!("Watch loop: no trackers configured, skipping");
+            logged_no_trackers = true;
         }
-        logged_no_trackers = false;
+    }
+}
 
-        // Snapshot enabled rules that are due
-        let rules_snapshot: Vec<WatchRule> = {
-            let rules = state.watch_rules.read().await;
-            let now = chrono::Utc::now();
-            rules
-                .iter()
-                .filter(|r| {
-                    if !r.enabled {
-                        return false;
-                    }
-                    match &r.last_checked {
-                        None => true,
-                        Some(ts) => {
-                            if let Ok(last) = chrono::DateTime::parse_from_rfc3339(ts) {
-                                let elapsed = now.signed_duration_since(last);
-                                elapsed.num_minutes() >= r.interval_minutes as i64
-                            } else {
-                                true
-                            }
+/// One watch-loop tick: run every enabled rule whose interval has elapsed, record and emit its new
+/// matches, and stamp `last_checked`. Returns `false` (and does nothing) when no trackers are
+/// configured.
+pub async fn run_due_rules(
+    state: &AppState,
+    persistence: &Persistence,
+    events: &dyn AppEvents,
+    cancel: &CancellationToken,
+) -> bool {
+    let tracker_configs = persistence.load_tracker_configs();
+    if tracker_configs.is_empty() {
+        return false;
+    }
+
+    // Snapshot enabled rules that are due
+    let rules_snapshot: Vec<WatchRule> = {
+        let rules = state.watch_rules.read().await;
+        let now = chrono::Utc::now();
+        rules
+            .iter()
+            .filter(|r| {
+                if !r.enabled {
+                    return false;
+                }
+                match &r.last_checked {
+                    None => true,
+                    Some(ts) => {
+                        if let Ok(last) = chrono::DateTime::parse_from_rfc3339(ts) {
+                            let elapsed = now.signed_duration_since(last);
+                            elapsed.num_minutes() >= r.interval_minutes as i64
+                        } else {
+                            true
                         }
                     }
-                })
-                .cloned()
-                .collect()
-        };
-
-        for rule in &rules_snapshot {
-            if cancel.is_cancelled() {
-                return;
-            }
-
-            let new_matches = run_rule(&app, &state, rule, &tracker_configs).await;
-
-            if !new_matches.is_empty() {
-                for m in &new_matches {
-                    let _ = app.emit("watchlist-match", m.clone());
                 }
+            })
+            .cloned()
+            .collect()
+    };
 
-                {
-                    let mut matches = state.watch_matches.write().await;
-                    matches.extend(new_matches.clone());
-                    if matches.len() > MAX_MATCHES {
-                        let drain_count = matches.len() - MAX_MATCHES;
-                        matches.drain(..drain_count);
-                    }
-                    let _ = persistence.set_json(WATCH_MATCHES_KEY, &*matches);
-                }
+    for rule in &rules_snapshot {
+        if cancel.is_cancelled() {
+            return true;
+        }
+
+        let new_matches = run_rule(state, persistence, rule, &tracker_configs).await;
+
+        if !new_matches.is_empty() {
+            for m in &new_matches {
+                events.emit("watchlist-match", m);
             }
 
             {
-                let mut rules = state.watch_rules.write().await;
-                if let Some(existing) = rules.iter_mut().find(|r| r.id == rule.id) {
-                    if existing.last_checked == rule.last_checked {
-                        existing.last_checked = Some(chrono::Utc::now().to_rfc3339());
+                let mut matches = state.watch_matches.write().await;
+                matches.extend(new_matches.clone());
+                if matches.len() > MAX_MATCHES {
+                    let drain_count = matches.len() - MAX_MATCHES;
+                    matches.drain(..drain_count);
+                }
+                let _ = persistence.set_json(WATCH_MATCHES_KEY, &*matches);
+            }
+        }
 
-                        if let RuleType::TvShow {
-                            ref mut last_season,
-                            ref mut last_episode,
-                        } = existing.rule_type
-                        {
-                            for m in &new_matches {
-                                if let (Some(s), Some(e)) = (m.season, m.episode) {
-                                    let current = (
-                                        last_season.unwrap_or(0),
-                                        last_episode.unwrap_or(0),
-                                    );
-                                    if (s, e) > current {
-                                        *last_season = Some(s);
-                                        *last_episode = Some(e);
-                                    }
+        {
+            let mut rules = state.watch_rules.write().await;
+            if let Some(existing) = rules.iter_mut().find(|r| r.id == rule.id) {
+                if existing.last_checked == rule.last_checked {
+                    existing.last_checked = Some(chrono::Utc::now().to_rfc3339());
+
+                    if let RuleType::TvShow {
+                        ref mut last_season,
+                        ref mut last_episode,
+                    } = existing.rule_type
+                    {
+                        for m in &new_matches {
+                            if let (Some(s), Some(e)) = (m.season, m.episode) {
+                                let current = (
+                                    last_season.unwrap_or(0),
+                                    last_episode.unwrap_or(0),
+                                );
+                                if (s, e) > current {
+                                    *last_season = Some(s);
+                                    *last_episode = Some(e);
                                 }
                             }
                         }
                     }
                 }
-                let _ = persistence.set_json(WATCH_RULES_KEY, &*rules);
             }
+            let _ = persistence.set_json(WATCH_RULES_KEY, &*rules);
         }
     }
+    true
 }
 
 async fn run_rule(
-    app: &tauri::AppHandle,
-    state: &tauri::State<'_, AppState>,
+    state: &AppState,
+    persistence: &Persistence,
     rule: &WatchRule,
     tracker_configs: &[TrackerConfig],
 ) -> Vec<WatchMatch> {
@@ -301,7 +314,7 @@ async fn run_rule(
         let (status, action_taken) = match rule.action {
             WatchAction::Notify => (MatchStatus::Notified, WatchAction::Notify),
             WatchAction::AutoAdd => {
-                match auto_add(app, state, &result.magnet).await {
+                match auto_add(state, &result.magnet).await {
                     Ok(()) => (MatchStatus::Added, WatchAction::AutoAdd),
                     Err(reason) => (MatchStatus::Failed(reason), WatchAction::AutoAdd),
                 }
@@ -335,15 +348,14 @@ async fn run_rule(
                 rule_seen.remove(&h);
             }
         }
-        let _ = app.state::<Persistence>().set_json(WATCH_SEEN_KEY, &*seen_map);
+        let _ = persistence.set_json(WATCH_SEEN_KEY, &*seen_map);
     }
 
     new_matches
 }
 
 async fn auto_add(
-    app: &tauri::AppHandle,
-    state: &tauri::State<'_, AppState>,
+    state: &AppState,
     magnet: &str,
 ) -> Result<(), String> {
     let provider = state.get_provider().await;
@@ -389,10 +401,10 @@ async fn auto_add(
 
 /// Public entry point for running a single rule on demand (used by run_watch_rule_now command)
 pub async fn run_rule_standalone(
-    app: &tauri::AppHandle,
-    state: &tauri::State<'_, AppState>,
+    state: &AppState,
+    persistence: &Persistence,
     rule: &WatchRule,
     tracker_configs: &[TrackerConfig],
 ) -> Vec<WatchMatch> {
-    run_rule(app, state, rule, tracker_configs).await
+    run_rule(state, persistence, rule, tracker_configs).await
 }

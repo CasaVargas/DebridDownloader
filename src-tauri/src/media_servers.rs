@@ -1,9 +1,9 @@
-use tauri::{AppHandle, Emitter};
+use crate::events::AppEvents;
 
 /// Trigger library scan on all configured media servers.
 /// Fire-and-forget: errors are logged and emitted as toasts, never block the caller.
 pub async fn trigger_scans(
-    app: &AppHandle,
+    app: &dyn AppEvents,
     plex_url: Option<&str>,
     plex_token: Option<&str>,
     jellyfin_url: Option<&str>,
