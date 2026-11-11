@@ -6,6 +6,23 @@ use crate::state::{AppState, DownloadStatus, DownloadTask};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 
+/// Desktop [`AppEvents`](crate::events::AppEvents): every event goes to the webview via `app.emit`.
+#[derive(Clone)]
+pub struct TauriEvents {
+    app: AppHandle,
+}
+impl TauriEvents {
+    pub fn new(app: AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl crate::events::AppEvents for TauriEvents {
+    fn emit_json(&self, event: &str, payload: serde_json::Value) {
+        let _ = self.app.emit(event, payload);
+    }
+}
+
 pub struct TauriSink {
     app: AppHandle,
 }
@@ -30,7 +47,7 @@ impl EventSink for TauriSink {
                 tauri::async_runtime::spawn(async move {
                     let s = app.state::<AppState>().settings.read().await.clone();
                     crate::media_servers::trigger_scans(
-                        &app,
+                        &TauriEvents::new(app.clone()),
                         s.plex_url.as_deref(),
                         s.plex_token.as_deref(),
                         s.jellyfin_url.as_deref(),
