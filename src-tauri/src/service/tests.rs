@@ -676,7 +676,7 @@ fn service_and_event_seam_are_tauri_free() {
 #[test]
 fn moved_commands_delegate_to_the_service() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/commands");
-    for domain in ["auth", "downloads", "search", "settings", "torrents", "watchlist"] {
+    for domain in ["auth", "backup", "downloads", "search", "settings", "torrents", "watchlist"] {
         let text = std::fs::read_to_string(dir.join(format!("{}.rs", domain))).unwrap();
         let commands: Vec<&str> = text.split("#[tauri::command]").skip(1).collect();
         assert!(!commands.is_empty(), "{}", domain);
