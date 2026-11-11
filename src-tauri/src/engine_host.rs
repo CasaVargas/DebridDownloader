@@ -1,53 +1,81 @@
-//! Tauri adapters for the engine's seams.
+//! Host adapters for the engine's seams, shared by the desktop app and the headless server.
+//!
+//! Each adapter reaches the shared [`AppState`] through a [`StateHandle`]: the desktop app passes
+//! its `AppHandle`, the headless server an `Arc<AppState>`. Events go out through
+//! [`AppEvents`](crate::events::AppEvents). Only the Tauri half below is desktop-only.
 use crate::engine::{
     EngineEvent, EventSink, Job, LinkRefresher, LinkSource, RefreshError, RefreshedLink, RemoteOutcome, RemoteRunner,
 };
-use crate::state::{AppState, DownloadStatus, DownloadTask};
-use tauri::{AppHandle, Emitter, Manager};
+use crate::events::AppEvents;
+use crate::state::{DownloadStatus, DownloadTask, StateHandle};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
-/// Desktop [`AppEvents`](crate::events::AppEvents): every event goes to the webview via `app.emit`.
-#[derive(Clone)]
-pub struct TauriEvents {
-    app: AppHandle,
-}
-impl TauriEvents {
-    pub fn new(app: AppHandle) -> Self {
-        Self { app }
+// ── Tauri half (desktop) ──
+
+#[cfg(feature = "desktop")]
+pub use desktop::TauriEvents;
+
+#[cfg(feature = "desktop")]
+mod desktop {
+    use crate::state::{AppState, StateHandle};
+    use tauri::{AppHandle, Emitter, Manager};
+
+    /// Desktop [`AppEvents`](crate::events::AppEvents): every event goes to the webview via `app.emit`.
+    #[derive(Clone)]
+    pub struct TauriEvents {
+        app: AppHandle,
+    }
+    impl TauriEvents {
+        pub fn new(app: AppHandle) -> Self {
+            Self { app }
+        }
+    }
+
+    impl crate::events::AppEvents for TauriEvents {
+        fn emit_json(&self, event: &str, payload: serde_json::Value) {
+            let _ = self.app.emit(event, payload);
+        }
+    }
+
+    /// The desktop app keeps `AppState` in Tauri's managed state.
+    impl StateHandle for AppHandle {
+        fn app_state(&self) -> &AppState {
+            self.state::<AppState>().inner()
+        }
     }
 }
 
-impl crate::events::AppEvents for TauriEvents {
-    fn emit_json(&self, event: &str, payload: serde_json::Value) {
-        let _ = self.app.emit(event, payload);
+// ── Engine seams ──
+
+/// Engine events to the UI: progress and list changes, plus media-server scans when a batch ends.
+pub struct HostSink<H: StateHandle + Clone> {
+    host: H,
+    events: Arc<dyn AppEvents>,
+}
+impl<H: StateHandle + Clone> HostSink<H> {
+    pub fn new(host: H, events: Arc<dyn AppEvents>) -> Self {
+        Self { host, events }
     }
 }
 
-pub struct TauriSink {
-    app: AppHandle,
-}
-impl TauriSink {
-    pub fn new(app: AppHandle) -> Self {
-        Self { app }
-    }
-}
-
-impl EventSink for TauriSink {
+impl<H: StateHandle + Clone> EventSink for HostSink<H> {
     fn emit(&self, event: EngineEvent) {
         match event {
             EngineEvent::Progress(view) => {
-                let _ = self.app.emit("download-progress", &view);
+                self.events.emit("download-progress", &view);
             }
             EngineEvent::ListChanged => {
-                let _ = self.app.emit("downloads-changed", ());
+                self.events.emit("downloads-changed", &());
             }
             EngineEvent::BatchFinished { batch_id } => {
                 log::info!("Download batch {} finished; triggering media-server scans", batch_id);
-                let app = self.app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let s = app.state::<AppState>().settings.read().await.clone();
+                let host = self.host.clone();
+                let events = self.events.clone();
+                tokio::spawn(async move {
+                    let s = host.app_state().settings.read().await.clone();
                     crate::media_servers::trigger_scans(
-                        &TauriEvents::new(app.clone()),
+                        events.as_ref(),
                         s.plex_url.as_deref(),
                         s.plex_token.as_deref(),
                         s.jellyfin_url.as_deref(),
@@ -81,19 +109,19 @@ pub fn check_provider(source: &LinkSource, active: &str) -> Result<(), RefreshEr
     }
 }
 
-pub struct ProviderRefresher {
-    app: AppHandle,
+pub struct ProviderRefresher<H: StateHandle> {
+    host: H,
 }
-impl ProviderRefresher {
-    pub fn new(app: AppHandle) -> Self {
-        Self { app }
+impl<H: StateHandle> ProviderRefresher<H> {
+    pub fn new(host: H) -> Self {
+        Self { host }
     }
 }
 
 #[async_trait::async_trait]
-impl LinkRefresher for ProviderRefresher {
+impl<H: StateHandle> LinkRefresher for ProviderRefresher<H> {
     async fn refresh(&self, source: &LinkSource) -> Result<RefreshedLink, RefreshError> {
-        let state = self.app.state::<AppState>();
+        let state = self.host.app_state();
         let active = state.provider_id.read().await.clone();
         check_provider(source, &active)?;
         let provider = state.get_provider().await; // clones the Arc; no lock held across .await
@@ -105,17 +133,18 @@ impl LinkRefresher for ProviderRefresher {
     }
 }
 
-pub struct TauriRemoteRunner {
-    app: AppHandle,
+/// Runs `JobKind::Remote` jobs through `rclone rcat`, emitting progress on `events`.
+pub struct RcloneRunner {
+    events: Arc<dyn AppEvents>,
 }
-impl TauriRemoteRunner {
-    pub fn new(app: AppHandle) -> Self {
-        Self { app }
+impl RcloneRunner {
+    pub fn new(events: Arc<dyn AppEvents>) -> Self {
+        Self { events }
     }
 }
 
 #[async_trait::async_trait]
-impl RemoteRunner for TauriRemoteRunner {
+impl RemoteRunner for RcloneRunner {
     async fn run(&self, job: Job, cancel: CancellationToken, speed_limit: Option<u64>) -> Result<RemoteOutcome, String> {
         let (wtx, mut wrx) = tokio::sync::watch::channel(false);
         let bridge = tokio::spawn(async move {
@@ -135,7 +164,7 @@ impl RemoteRunner for TauriRemoteRunner {
             status: DownloadStatus::Pending,
             remote: job.remote_dest().map(str::to_string),
         };
-        let result = crate::rclone::download_to_rclone(self.app.clone(), &mut task, &mut wrx, speed_limit).await;
+        let result = crate::rclone::download_to_rclone(self.events.as_ref(), &mut task, &mut wrx, speed_limit).await;
         bridge.abort();
         match result {
             Ok(()) if task.status == DownloadStatus::Cancelled => Ok(RemoteOutcome::Cancelled),

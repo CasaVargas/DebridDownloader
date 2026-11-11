@@ -10,18 +10,49 @@ edition = "2021"
 name = "debriddownloader_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# The desktop app (Tauri) is the default. `--no-default-features --features headless` builds the
+# Tauri-free server binary instead (no webview, no display needed).
+[features]
+default = ["desktop"]
+desktop = [
+    "dep:tauri-build",
+    "dep:tauri",
+    "dep:tauri-plugin-opener",
+    "dep:tauri-plugin-dialog",
+    "dep:tauri-plugin-fs",
+    "dep:tauri-plugin-store",
+    "dep:tauri-plugin-autostart",
+    "dep:tauri-plugin-deep-link",
+    "dep:tauri-plugin-single-instance",
+    "dep:tauri-plugin-updater",
+    "dep:tauri-plugin-process",
+    "dep:tauri-plugin-notification",
+    "dep:fix-path-env",
+]
+headless = []
+
+[[bin]]
+name = "debriddownloader"
+path = "src/main.rs"
+required-features = ["desktop"]
+
+[[bin]]
+name = "debriddownloader-headless"
+path = "src/bin/headless.rs"
+required-features = ["headless"]
+
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", features = [], optional = true }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-opener = "2"
-tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
-tauri-plugin-store = "2"
-tauri-plugin-autostart = "2"
-tauri-plugin-deep-link = "2"
-tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri = { version = "2", features = ["tray-icon"], optional = true }
+tauri-plugin-opener = { version = "2", optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
+tauri-plugin-fs = { version = "2", optional = true }
+tauri-plugin-store = { version = "2", optional = true }
+tauri-plugin-autostart = { version = "2", optional = true }
+tauri-plugin-deep-link = { version = "2", optional = true }
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"], optional = true }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -52,10 +83,10 @@ which = "7"
 async-trait = "0.1"
 quick-xml = "0.37"
 sha1 = "0.10"
-tauri-plugin-updater = "2.10.0"
-tauri-plugin-process = "2.3.1"
-tauri-plugin-notification = "2"
-fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
+tauri-plugin-updater = { version = "2.10.0", optional = true }
+tauri-plugin-process = { version = "2.3.1", optional = true }
+tauri-plugin-notification = { version = "2", optional = true }
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", optional = true }
 fs4 = "0.13"
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -69,4 +100,5 @@ libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
 tokio = { version = "1", features = ["full", "test-util"] }

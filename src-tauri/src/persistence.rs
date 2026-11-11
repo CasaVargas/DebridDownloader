@@ -59,17 +59,20 @@ impl Persistence {
 // ── Tauri-store backend (desktop) ──
 
 /// `tauri-plugin-store` backend: every call goes through `app.store(file)`, as before the seam.
+#[cfg(feature = "desktop")]
 pub struct TauriStore<R: tauri::Runtime = tauri::Wry> {
     app: tauri::AppHandle<R>,
     file: String,
 }
 
+#[cfg(feature = "desktop")]
 impl<R: tauri::Runtime> TauriStore<R> {
     pub fn new(app: tauri::AppHandle<R>, file: impl Into<String>) -> Self {
         Self { app, file: file.into() }
     }
 }
 
+#[cfg(feature = "desktop")]
 impl<R: tauri::Runtime> KvStore for TauriStore<R> {
     fn get(&self, key: &str) -> Result<Option<Value>, String> {
         use tauri_plugin_store::StoreExt;
