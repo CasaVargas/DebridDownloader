@@ -4,7 +4,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tauri::Manager;
 use crate::events::AppEvents;
 use crate::persistence::{Persistence, WATCH_MATCHES_KEY, WATCH_RULES_KEY, WATCH_SEEN_KEY};
 use crate::scrapers::{self, SearchParams, TrackerConfig};
@@ -164,9 +163,13 @@ const TICK_INTERVAL_SECS: u64 = 60;
 pub const MAX_MATCHES: usize = 500;
 pub const MAX_SEEN_PER_RULE: usize = 5000;
 
-pub async fn start_watch_loop(app: tauri::AppHandle, cancel: CancellationToken) {
+pub async fn start_watch_loop<H: crate::state::StateHandle>(
+    host: H,
+    persistence: Persistence,
+    events: std::sync::Arc<dyn AppEvents>,
+    cancel: CancellationToken,
+) {
     let mut logged_no_trackers = false;
-    let events = crate::engine_host::TauriEvents::new(app.clone());
 
     loop {
         tokio::select! {
@@ -177,9 +180,7 @@ pub async fn start_watch_loop(app: tauri::AppHandle, cancel: CancellationToken) 
             _ = tokio::time::sleep(Duration::from_secs(TICK_INTERVAL_SECS)) => {}
         }
 
-        let state = app.state::<AppState>();
-        let persistence = app.state::<Persistence>();
-        if run_due_rules(&state, &persistence, &events, &cancel).await {
+        if run_due_rules(host.app_state(), &persistence, events.as_ref(), &cancel).await {
             logged_no_trackers = false;
         } else if !logged_no_trackers {
             log::info!("Watch loop: no trackers configured, skipping");

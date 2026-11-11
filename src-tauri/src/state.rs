@@ -175,3 +175,15 @@ impl AppState {
         self.engine.get().cloned().ok_or_else(|| "Download engine is not running".to_string())
     }
 }
+
+/// Reaches the shared [`AppState`] from a long-lived host adapter (engine seams, watch loop):
+/// the desktop app implements it for its `AppHandle`, the headless server uses `Arc<AppState>`.
+pub trait StateHandle: Send + Sync + 'static {
+    fn app_state(&self) -> &AppState;
+}
+
+impl StateHandle for Arc<AppState> {
+    fn app_state(&self) -> &AppState {
+        self
+    }
+}

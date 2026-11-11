@@ -15,7 +15,7 @@ pub mod types;
 pub mod zip_remote;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use events::{EngineEvent, EventSink, JobView};
 pub use refresh::{LinkRefresher, RefreshError, RefreshedLink};

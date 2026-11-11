@@ -1,9 +1,15 @@
+// The headless build compiles the shared core without the Tauri command layer, so some of it is
+// only reachable from the desktop app.
+#![cfg_attr(not(feature = "desktop"), allow(dead_code, unused_imports))]
+
+#[cfg(feature = "desktop")]
 mod commands;
 mod providers;
 mod engine;
 mod engine_host;
 mod events;
 mod extractor;
+pub mod headless;
 mod media_parser;
 mod media_servers;
 mod rclone;
@@ -12,22 +18,29 @@ mod organizer;
 pub mod persistence;
 mod scrapers;
 pub mod secrets;
+pub mod server;
 mod service;
 mod state;
 mod streaming;
 mod watchlist;
 
+#[cfg(feature = "desktop")]
 use state::AppState;
+#[cfg(feature = "desktop")]
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
+#[cfg(feature = "desktop")]
 use tauri_plugin_deep_link::DeepLinkExt;
 
 /// Holds a magnet URI received during cold start, before the frontend is ready.
+#[cfg(feature = "desktop")]
 pub struct PendingMagnetUri(pub std::sync::Mutex<Option<String>>);
 
+/// The desktop app.
+#[cfg(feature = "desktop")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = fix_path_env::fix();
@@ -204,9 +217,11 @@ pub fn run() {
                 }
 
                 let app_handle = app.handle().clone();
+                let persistence = store.inner().clone();
+                let events = std::sync::Arc::new(engine_host::TauriEvents::new(app_handle.clone()));
                 let cancel = state.watch_cancel.clone();
                 tauri::async_runtime::spawn(async move {
-                    watchlist::start_watch_loop(app_handle, cancel).await;
+                    watchlist::start_watch_loop(app_handle, persistence, events, cancel).await;
                 });
             }
 
@@ -216,13 +231,15 @@ pub fn run() {
                 let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
                 let config = state.settings.blocking_read().engine_config(state.rar_tool);
                 let handle = app.handle().clone();
+                let events: std::sync::Arc<dyn events::AppEvents> =
+                    std::sync::Arc::new(engine_host::TauriEvents::new(handle.clone()));
                 let engine = tauri::async_runtime::block_on(async move {
                     engine::Engine::start(engine::EngineDeps::new(
                         data_dir,
                         config,
-                        std::sync::Arc::new(engine_host::TauriSink::new(handle.clone())),
-                        std::sync::Arc::new(engine_host::ProviderRefresher::new(handle.clone())),
-                        std::sync::Arc::new(engine_host::TauriRemoteRunner::new(handle)),
+                        std::sync::Arc::new(engine_host::HostSink::new(handle.clone(), events.clone())),
+                        std::sync::Arc::new(engine_host::ProviderRefresher::new(handle)),
+                        std::sync::Arc::new(engine_host::RcloneRunner::new(events)),
                     ))
                 });
                 let _ = state.engine.set(engine);

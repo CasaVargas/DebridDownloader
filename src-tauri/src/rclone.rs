@@ -1,7 +1,7 @@
 use crate::state::{DownloadStatus, DownloadTask};
 use futures::StreamExt;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use crate::events::AppEvents;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DownloadProgress {
@@ -14,7 +14,7 @@ pub struct DownloadProgress {
     pub remote: Option<String>,
 }
 
-pub fn emit_progress(app: &AppHandle, task: &DownloadTask) {
+pub fn emit_progress(events: &dyn AppEvents, task: &DownloadTask) {
     let progress = DownloadProgress {
         id: task.id.clone(),
         filename: task.filename.clone(),
@@ -24,7 +24,7 @@ pub fn emit_progress(app: &AppHandle, task: &DownloadTask) {
         status: task.status.clone(),
         remote: task.remote.clone(),
     };
-    let _ = app.emit("download-progress", &progress);
+    events.emit("download-progress", &progress);
 }
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
@@ -106,7 +106,7 @@ pub fn is_rclone_path(path: &str) -> bool {
 
 /// Download a file by piping HTTP stream to rclone rcat
 pub async fn download_to_rclone(
-    app: AppHandle,
+    events: &dyn AppEvents,
     task: &mut DownloadTask,
     cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
     speed_limit: Option<u64>,
@@ -128,7 +128,7 @@ pub async fn download_to_rclone(
     task.status = DownloadStatus::Downloading;
     task.downloaded_bytes = 0;
 
-    emit_progress(&app, task);
+    emit_progress(events, task);
 
     // Build rclone rcat command
     // destination is the full rclone path like "gdrive:Media/Movies/file.mkv"
@@ -196,7 +196,7 @@ pub async fn download_to_rclone(
                         }
 
                         if last_emit.elapsed().as_millis() >= 100 {
-                            emit_progress(&app, task);
+                            emit_progress(events, task);
                             last_emit = std::time::Instant::now();
                         }
                     }
@@ -221,7 +221,7 @@ pub async fn download_to_rclone(
                     });
 
                     task.status = DownloadStatus::Cancelled;
-                    emit_progress(&app, task);
+                    emit_progress(events, task);
                     return Ok(());
                 }
             }
@@ -235,7 +235,7 @@ pub async fn download_to_rclone(
         let _ = child.kill().await;
         let _ = child.wait().await; // Reap the process to avoid zombies
         task.status = DownloadStatus::Failed(e.clone());
-        emit_progress(&app, task);
+        emit_progress(events, task);
         return Err(e);
     }
 
@@ -253,13 +253,13 @@ pub async fn download_to_rclone(
             stderr
         };
         task.status = DownloadStatus::Failed(err.clone());
-        emit_progress(&app, task);
+        emit_progress(events, task);
         return Err(err);
     }
 
     task.status = DownloadStatus::Completed;
     task.speed = 0.0;
-    emit_progress(&app, task);
+    emit_progress(events, task);
 
     Ok(())
 }
