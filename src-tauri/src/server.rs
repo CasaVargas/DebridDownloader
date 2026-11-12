@@ -73,6 +73,8 @@ pub struct ServerState {
     /// otherwise hold a graceful shutdown open forever.
     pub(crate) shutdown: CancellationToken,
     token: Arc<str>,
+    /// The web UI bundle (`npm run build:web`) served at `/`, if any.
+    web_dir: Option<Arc<std::path::Path>>,
 }
 
 impl ServerState {
@@ -91,7 +93,14 @@ impl ServerState {
             broadcast: events,
             shutdown: CancellationToken::new(),
             token: token.into(),
+            web_dir: None,
         }
+    }
+
+    /// Serve the web UI bundle in `dir` at `/` (see [`web_fallback`]).
+    pub(crate) fn with_web_dir(mut self, dir: Option<std::path::PathBuf>) -> Self {
+        self.web_dir = dir.map(Into::into);
+        self
     }
 }
 
@@ -167,7 +176,96 @@ pub fn router(s: ServerState) -> Router {
         .route("/health", get(health))
         .route("/login", post(login))
         .merge(api)
+        .fallback(web_fallback)
         .with_state(s)
+}
+
+// ── Web UI ──────────────────────────────────────────────────────────
+
+/// Everything no route matched. `/api/*` stays a JSON 404, so a mistyped API path never gets the
+/// UI. With a web dir, `GET`/`HEAD` serve the file at that path, or `index.html` for a client
+/// route (no file extension) so a reload on `/downloads` works. The bundle is public: the login
+/// screen is part of it, and every API route still needs the token.
+async fn web_fallback(State(s): State<ServerState>, req: Request) -> Response {
+    let path = req.uri().path();
+    let not_found = || (StatusCode::NOT_FOUND, Json(json!({ "error": "Not found" }))).into_response();
+    if path == "/api" || path.starts_with("/api/") {
+        return not_found();
+    }
+    let Some(root) = s.web_dir.as_deref() else {
+        return not_found();
+    };
+    if req.method() != axum::http::Method::GET && req.method() != axum::http::Method::HEAD {
+        return StatusCode::METHOD_NOT_ALLOWED.into_response();
+    }
+    let Some(segments) = web_path_segments(path) else {
+        return not_found();
+    };
+    if let Some(last) = segments.last() {
+        let file = segments.iter().fold(root.to_path_buf(), |p, seg| p.join(seg));
+        if let Ok(bytes) = tokio::fs::read(&file).await {
+            return web_file(&file, bytes, req.method());
+        }
+        // A missing asset is a 404, not the index (which would fail as a script or a stylesheet).
+        if last.contains('.') {
+            return not_found();
+        }
+    }
+    let index = root.join("index.html");
+    match tokio::fs::read(&index).await {
+        Ok(bytes) => web_file(&index, bytes, req.method()),
+        Err(_) => not_found(),
+    }
+}
+
+/// The decoded segments of a request path, or `None` if one could leave the web dir
+/// (`..`, a drive or a backslash).
+fn web_path_segments(path: &str) -> Option<Vec<String>> {
+    let decoded = urlencoding::decode(path).ok()?;
+    let mut out = Vec::new();
+    for seg in decoded.split('/') {
+        match seg {
+            "" | "." => continue,
+            ".." => return None,
+            s if s.contains('\\') || s.contains(':') || s.contains('\0') => return None,
+            s => out.push(s.to_string()),
+        }
+    }
+    Some(out)
+}
+
+fn web_file(path: &std::path::Path, bytes: Vec<u8>, method: &axum::http::Method) -> Response {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    let mime = match ext.as_str() {
+        "html" => "text/html; charset=utf-8",
+        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "json" | "map" => "application/json",
+        "webmanifest" => "application/manifest+json",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "ico" => "image/x-icon",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        "wasm" => "application/wasm",
+        "txt" => "text/plain; charset=utf-8",
+        _ => "application/octet-stream",
+    };
+    // Vite fingerprints everything under `assets/`; the index must be re-fetched to pick up a new build.
+    let cache = if ext == "html" { "no-cache" } else { "public, max-age=3600" };
+    let len = bytes.len();
+    let body = if method == axum::http::Method::HEAD { axum::body::Body::empty() } else { axum::body::Body::from(bytes) };
+    let mut resp = Response::new(body);
+    let h = resp.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static(mime));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(len));
+    h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    resp
 }
 
 // ── Auth ────────────────────────────────────────────────────────────
@@ -1052,6 +1150,81 @@ mod tests {
         let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let json = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
         (status, headers, json)
+    }
+
+    /// A raw GET against `router`: status, headers and body text.
+    async fn get_raw(router: &Router, path: &str) -> (StatusCode, HeaderMap, String) {
+        let req = Request::builder().method(Method::GET).uri(path).body(Body::empty()).unwrap();
+        let resp = router.clone().oneshot(req).await.unwrap();
+        let (status, headers) = (resp.status(), resp.headers().clone());
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        (status, headers, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    /// A web dir like `npm run build:web` writes, plus a secret next to it that must not leak.
+    fn web_bundle() -> (tempfile::TempDir, std::path::PathBuf) {
+        let parent = tempfile::tempdir().unwrap();
+        let web = parent.path().join("dist-web");
+        std::fs::create_dir_all(web.join("assets")).unwrap();
+        std::fs::write(web.join("index.html"), "<!doctype html><title>DD</title><div id=\"root\"></div>").unwrap();
+        std::fs::write(web.join("assets/index-abc.js"), "export const x = 1;").unwrap();
+        std::fs::write(web.join("assets/index-abc.css"), "body{}").unwrap();
+        std::fs::write(web.join("app-icon.png"), [0x89, b'P', b'N', b'G']).unwrap();
+        std::fs::write(parent.path().join("secrets.json"), "{\"server.auth_token\":\"x\"}").unwrap();
+        (parent, web)
+    }
+
+    #[tokio::test]
+    async fn web_ui_is_served_at_root_with_spa_fallback() {
+        let h = harness().await;
+        let (_parent, web) = web_bundle();
+        let s = ServerState::new(h.state.clone(), h.persistence.clone(), h.secrets.clone(), h.events.clone(), TOKEN.into());
+        let app = router(s.with_web_dir(Some(web)));
+
+        // The index at `/` and for every client route, without a token.
+        for path in ["/", "/downloads", "/torrents", "/settings/general", "/auth"] {
+            let (status, headers, body) = get_raw(&app, path).await;
+            assert_eq!(status, StatusCode::OK, "{}", path);
+            assert_eq!(headers[header::CONTENT_TYPE], "text/html; charset=utf-8", "{}", path);
+            assert_eq!(headers[header::CACHE_CONTROL], "no-cache", "{}", path);
+            assert!(body.contains("<div id=\"root\">"), "{}: {}", path, body);
+        }
+        // Assets with their content type.
+        let (status, headers, body) = get_raw(&app, "/assets/index-abc.js").await;
+        assert_eq!((status, body.as_str()), (StatusCode::OK, "export const x = 1;"));
+        assert_eq!(headers[header::CONTENT_TYPE], "text/javascript; charset=utf-8");
+        assert_eq!(get_raw(&app, "/assets/index-abc.css").await.1[header::CONTENT_TYPE], "text/css; charset=utf-8");
+        assert_eq!(get_raw(&app, "/app-icon.png").await.1[header::CONTENT_TYPE], "image/png");
+        // A missing asset is a 404, not the index.
+        assert_eq!(get_raw(&app, "/assets/missing.js").await.0, StatusCode::NOT_FOUND);
+
+        // `/api/*` takes precedence: real routes still need the token, unknown ones are JSON 404s.
+        let (status, _, body) = get_raw(&app, "/api/downloads").await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert!(!body.contains("root"));
+        assert_eq!(ok(&h, Method::GET, "/api/downloads", None).await, json!([]));
+        let (status, _, body) = get_raw(&app, "/api/no-such-route").await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&body).unwrap(), json!({ "error": "Not found" }));
+        assert_eq!(get_raw(&app, "/health").await.0, StatusCode::OK);
+
+        // Nothing outside the web dir.
+        for path in ["/../secrets.json", "/assets/../../secrets.json", "/%2e%2e/secrets.json", "/..%2fsecrets.json", "/..%5csecrets.json"] {
+            let (status, _, body) = get_raw(&app, path).await;
+            assert!(!body.contains("server.auth_token"), "{} leaked: {}", path, body);
+            assert_ne!(status, StatusCode::OK, "{}", path);
+        }
+        // Only reads.
+        let (status, _, _) = call(&app, Method::POST, "/downloads", None, Auth::None).await;
+        assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    #[tokio::test]
+    async fn without_a_web_dir_only_the_api_is_served() {
+        let h = harness().await;
+        assert_eq!(get_raw(&h.router, "/").await.0, StatusCode::NOT_FOUND);
+        assert_eq!(get_raw(&h.router, "/downloads").await.0, StatusCode::NOT_FOUND);
+        assert_eq!(get_raw(&h.router, "/api/downloads").await.0, StatusCode::UNAUTHORIZED);
     }
 
     /// An authorized call; panics unless it answers 200.
