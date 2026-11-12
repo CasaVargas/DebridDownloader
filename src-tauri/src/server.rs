@@ -5,7 +5,13 @@
 //! The token lives in the [`SecretStore`] under [`AUTH_TOKEN_KEY`]. Routes call the same
 //! `crate::service` functions as the Tauri commands; request bodies use the commands' argument
 //! names (camelCase, as `invoke()` sends them).
+//!
+//! `GET /api/events` is a Server-Sent Events stream of the app events the desktop emits through
+//! Tauri (`download-progress`, `downloads-changed`, `watchlist-match`, ...): each SSE `event:` is
+//! the desktop event name and its `data:` the same JSON payload. It takes the cookie too, since a
+//! browser `EventSource` can't set an `Authorization` header.
 
+use crate::engine_host::{BroadcastEvent, BroadcastEvents};
 use crate::events::AppEvents;
 use crate::persistence::Persistence;
 use crate::providers::types::{
@@ -24,13 +30,18 @@ use axum::extract::{FromRequest, FromRequestParts, Path, Query, Request, State};
 use axum::http::request::Parts;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::middleware::{self, Next};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use futures::{Stream, StreamExt};
 use serde_json::json;
+use std::convert::Infallible;
 use std::sync::Arc;
+use tokio::sync::broadcast::{self, error::RecvError};
+use tokio_util::sync::CancellationToken;
 
 /// Secret-store key of the server token (env override `DEBRIDDOWNLOADER_SECRET_SERVER_AUTH_TOKEN`).
 pub const AUTH_TOKEN_KEY: &str = "server.auth_token";
@@ -56,6 +67,11 @@ pub struct ServerState {
     pub(crate) persistence: Persistence,
     pub(crate) secrets: Secrets,
     pub(crate) events: Arc<dyn AppEvents>,
+    /// The same sink as `events`; `/api/events` subscribes to it.
+    pub(crate) broadcast: Arc<BroadcastEvents>,
+    /// Cancelled when the server shuts down; ends open `/api/events` streams, which would
+    /// otherwise hold a graceful shutdown open forever.
+    pub(crate) shutdown: CancellationToken,
     token: Arc<str>,
 }
 
@@ -64,10 +80,18 @@ impl ServerState {
         state: Arc<AppState>,
         persistence: Persistence,
         secrets: Secrets,
-        events: Arc<dyn AppEvents>,
+        events: Arc<BroadcastEvents>,
         token: String,
     ) -> Self {
-        Self { state, persistence, secrets, events, token: token.into() }
+        Self {
+            state,
+            persistence,
+            secrets,
+            events: events.clone(),
+            broadcast: events,
+            shutdown: CancellationToken::new(),
+            token: token.into(),
+        }
     }
 }
 
@@ -136,6 +160,8 @@ pub fn router(s: ServerState) -> Router {
         .route("/api/rclone/remotes/validate", post(validate_rclone_remote))
         .route("/api/extractor/rar-tool", get(detect_rar_tool))
         .route("/api/media-servers/test", post(test_media_server))
+        // Events (SSE)
+        .route("/api/events", get(event_stream))
         .route_layer(middleware::from_fn_with_state(s.clone(), require_token));
     Router::new()
         .route("/health", get(health))
@@ -208,6 +234,39 @@ async fn login(State(s): State<ServerState>, Body(body): Body<LoginRequest>) -> 
         resp.headers_mut().insert(header::SET_COOKIE, v);
     }
     resp
+}
+
+// ── Events (SSE) ────────────────────────────────────────────────────
+
+/// `GET /api/events`: every app event from now on, as SSE, until the client goes away or the
+/// server shuts down.
+async fn event_stream(State(s): State<ServerState>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    // Subscribe here, not lazily in the stream, so nothing emitted after the response is lost.
+    let rx = s.broadcast.subscribe();
+    let stop = s.shutdown.clone();
+    let stream = sse_events(rx).take_until(async move { stop.cancelled().await });
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
+/// The SSE stream of a broadcast subscription. A subscriber that lagged behind and lost events
+/// gets a `downloads-changed` in their place, so the UI refetches the list instead of showing
+/// stale progress; the stream ends when the channel closes.
+fn sse_events(rx: broadcast::Receiver<BroadcastEvent>) -> impl Stream<Item = Result<Event, Infallible>> {
+    futures::stream::unfold(rx, |mut rx| async move {
+        let event = match rx.recv().await {
+            Ok(ev) => sse_event(&ev.name, &ev.payload),
+            Err(RecvError::Lagged(missed)) => {
+                log::warn!("An /api/events subscriber fell behind and missed {} events", missed);
+                sse_event("downloads-changed", &serde_json::Value::Null)
+            }
+            Err(RecvError::Closed) => return None,
+        };
+        Some((Ok(event), rx))
+    })
+}
+
+fn sse_event(name: &str, payload: &serde_json::Value) -> Event {
+    Event::default().event(name).data(payload.to_string())
 }
 
 // ── Routes ──────────────────────────────────────────────────────────
@@ -914,7 +973,7 @@ mod tests {
         state: Arc<AppState>,
         persistence: Persistence,
         secrets: Secrets,
-        events: Arc<crate::events::RecordingEvents>,
+        events: Arc<BroadcastEvents>,
         fake: Arc<FakeProvider>,
         /// Base URL of [`stub_server`].
         stub: String,
@@ -935,10 +994,15 @@ mod tests {
 
     /// A server over a fresh data dir with a running engine and a fake provider (no Tauri anywhere).
     async fn harness() -> Harness {
+        harness_with_capacity(BroadcastEvents::DEFAULT_CAPACITY).await
+    }
+
+    /// [`harness`] whose `/api/events` subscribers may fall `capacity` events behind.
+    async fn harness_with_capacity(capacity: usize) -> Harness {
         let dir = tempfile::tempdir().unwrap();
         let state = Arc::new(AppState::new());
-        let recording = Arc::new(crate::events::RecordingEvents::default());
-        let events: Arc<dyn AppEvents> = recording.clone();
+        let broadcast = Arc::new(BroadcastEvents::new(capacity));
+        let events: Arc<dyn AppEvents> = broadcast.clone();
         let engine = engine::Engine::start(engine::EngineDeps::new(
             dir.path().join("engine"),
             crate::state::AppSettings::default().engine_config(state.rar_tool),
@@ -949,13 +1013,13 @@ mod tests {
         assert!(state.engine.set(engine).is_ok());
         let persistence = Persistence(Arc::new(JsonFileStore::in_dir(dir.path())));
         let secrets = Secrets(Arc::new(FileStore::with_env_prefix(dir.path().join("secrets.json"), "DD_SERVER_TEST_NO_ENV_")));
-        let router = router(ServerState::new(state.clone(), persistence.clone(), secrets.clone(), events, TOKEN.into()));
+        let router = router(ServerState::new(state.clone(), persistence.clone(), secrets.clone(), broadcast.clone(), TOKEN.into()));
         let h = Harness {
             router,
             state,
             persistence,
             secrets,
-            events: recording,
+            events: broadcast,
             fake: Arc::new(FakeProvider::default()),
             stub: stub_server().await,
             dir,
@@ -1103,6 +1167,8 @@ mod tests {
             .into_iter()
             .map(|(m, p, _)| (m.to_string(), p.split('?').next().unwrap().to_string()))
             .chain([("GET".into(), "/health".into()), ("POST".into(), "/login".into())])
+            // An endless SSE body; covered by the `/api/events` tests below.
+            .chain([("GET".into(), "/api/events".into())])
             .collect();
         let mut registered = registered_routes();
         tested.sort();
@@ -1223,6 +1289,188 @@ mod tests {
         let (status, _, json) = call(&h.router, Method::POST, "/api/downloads", Some(body), Auth::Bearer(TOKEN)).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert!(json["error"].as_str().unwrap().contains("mount path"));
+    }
+
+    // ── /api/events ──
+
+    /// Open `/api/events` with `auth`; the status, headers and (unread) body.
+    async fn open_events(router: &Router, auth: Auth<'_>) -> (StatusCode, HeaderMap, Body) {
+        let mut req = Request::builder().method(Method::GET).uri("/api/events");
+        req = match auth {
+            Auth::None => req,
+            Auth::Bearer(t) => req.header(header::AUTHORIZATION, format!("Bearer {}", t)),
+            Auth::Cookie(t) => req.header(header::COOKIE, format!("theme=dark; {}={}", AUTH_COOKIE, t)),
+        };
+        let resp = router.clone().oneshot(req.body(Body::empty()).unwrap()).await.unwrap();
+        let (parts, body) = resp.into_parts();
+        (parts.status, parts.headers, body)
+    }
+
+    /// Reads SSE frames off a response body as `(event, data)`, skipping keep-alive comments.
+    struct SseReader {
+        body: axum::body::BodyDataStream,
+        buf: String,
+    }
+
+    impl SseReader {
+        fn new(body: Body) -> Self {
+            Self { body: body.into_data_stream(), buf: String::new() }
+        }
+
+        /// The next event, or `None` when the stream ends or nothing comes within 10 s.
+        async fn next(&mut self) -> Option<(String, serde_json::Value)> {
+            loop {
+                while let Some(end) = self.buf.find("\n\n") {
+                    let frame: String = self.buf.drain(..end + 2).collect();
+                    let (mut name, mut data) = (None, String::new());
+                    for line in frame.lines() {
+                        if let Some(v) = line.strip_prefix("event:") {
+                            name = Some(v.trim().to_string());
+                        } else if let Some(v) = line.strip_prefix("data:") {
+                            data.push_str(v.trim_start());
+                        }
+                    }
+                    if let Some(name) = name {
+                        return Some((name, serde_json::from_str(&data).expect("SSE data is JSON")));
+                    }
+                }
+                match tokio::time::timeout(Duration::from_secs(10), self.body.next()).await {
+                    Ok(Some(Ok(bytes))) => self.buf.push_str(std::str::from_utf8(&bytes).unwrap()),
+                    _ => return None,
+                }
+            }
+        }
+
+        /// Read until the `download-progress` event that shows job `id` completed; every event
+        /// read on the way, that one included.
+        async fn until_completed(&mut self, id: &str) -> Vec<(String, serde_json::Value)> {
+            let completed = serde_json::to_value(JobState::Completed).unwrap();
+            let mut seen = vec![];
+            while let Some((name, data)) = self.next().await {
+                let done = name == "download-progress" && data["id"] == id && data["status"] == completed;
+                seen.push((name, data));
+                if done {
+                    return seen;
+                }
+            }
+            panic!("no completion event for {}; got {:?}", id, seen);
+        }
+    }
+
+    /// Queue a 300 kB download of `episode.mkv` from `cdn` over HTTP; its job id.
+    async fn add_episode(h: &Harness, cdn: &MockServer) -> String {
+        let body = json!({
+            "links": [{ "filename": "episode.mkv", "filesize": 300_000, "download": cdn.url(), "streamable": null,
+                "source": serde_json::to_value(LinkSource::Direct).unwrap() }],
+            "destinationFolder": h.dir.path().join("out").to_string_lossy(),
+        });
+        ok(h, Method::POST, "/api/downloads", Some(body)).await[0].as_str().unwrap().to_string()
+    }
+
+    /// Subscribe to `/api/events`, add a download served by the mock CDN, and get its progress and
+    /// completion as SSE, under the desktop's event names and payloads.
+    #[tokio::test]
+    async fn events_stream_download_progress_and_completion() {
+        let h = harness().await;
+        let cdn = MockServer::start(MockOpts {
+            size: 300_000,
+            ranges: true,
+            chunk_delay: Some(Duration::from_millis(5)),
+            ..Default::default()
+        })
+        .await;
+        let (status, headers, body) = open_events(&h.router, Auth::Bearer(TOKEN)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(headers[header::CONTENT_TYPE], "text/event-stream");
+        let mut sse = SseReader::new(body);
+
+        let id = add_episode(&h, &cdn).await;
+        let seen = sse.until_completed(&id).await;
+
+        // The list changed when the job was added.
+        assert!(seen.iter().any(|(name, data)| name == "downloads-changed" && data.is_null()), "{:?}", seen);
+        // Progress came before completion, as `JobView` payloads.
+        let progress: Vec<&serde_json::Value> =
+            seen.iter().filter(|(name, data)| name == "download-progress" && data["id"] == id.as_str()).map(|(_, d)| d).collect();
+        // `until_completed` stops at the first completed one, so the others were in flight.
+        assert!(progress.len() >= 2, "{:?}", seen);
+        let last = progress.last().unwrap();
+        assert_eq!(last["filename"], "episode.mkv");
+        assert_eq!(last["downloaded_bytes"], 300_000);
+        assert_eq!(std::fs::read(h.dir.path().join("out").join("episode.mkv")).unwrap(), pattern(300_000));
+
+        // Watchlist matches and other app events go out the same way.
+        h.events.emit_json("watchlist-match", json!({ "rule_id": "r1" }));
+        assert_eq!(sse.next().await, Some(("watchlist-match".to_string(), json!({ "rule_id": "r1" }))));
+    }
+
+    #[tokio::test]
+    async fn events_need_the_token_or_the_cookie() {
+        let h = harness().await;
+        for bad in [Auth::None, Auth::Bearer("wrong"), Auth::Bearer(&TOKEN[..10]), Auth::Cookie("wrong")] {
+            let (status, headers, body) = open_events(&h.router, bad).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED);
+            assert_eq!(headers[header::WWW_AUTHENTICATE], "Bearer");
+            let bytes = axum::body::to_bytes(body, usize::MAX).await.unwrap();
+            assert_eq!(serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["error"], "Unauthorized");
+        }
+        // `EventSource` can't set headers, so the `/login` cookie works as well as the bearer token.
+        for good in [Auth::Bearer(TOKEN), Auth::Cookie(TOKEN)] {
+            let (status, headers, body) = open_events(&h.router, good).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(headers[header::CONTENT_TYPE], "text/event-stream");
+            let mut sse = SseReader::new(body);
+            h.events.emit_json("downloads-changed", serde_json::Value::Null);
+            assert_eq!(sse.next().await, Some(("downloads-changed".to_string(), serde_json::Value::Null)));
+        }
+    }
+
+    /// A subscriber that doesn't read doesn't hold the engine up: the download completes while its
+    /// stream lags, and when it reads again it's told to refetch, then gets the newest events.
+    #[tokio::test]
+    async fn a_lagging_events_subscriber_does_not_block_the_engine() {
+        let h = harness_with_capacity(4).await;
+        let cdn = MockServer::start(MockOpts {
+            size: 300_000,
+            ranges: true,
+            chunk_delay: Some(Duration::from_millis(5)),
+            ..Default::default()
+        })
+        .await;
+        let (status, _, body) = open_events(&h.router, Auth::Bearer(TOKEN)).await;
+        assert_eq!(status, StatusCode::OK);
+
+        let id = add_episode(&h, &cdn).await;
+        // Nobody reads the stream while the job runs to completion.
+        wait_for_job(&h, &id, "Completed", |j| j["status"] == serde_json::to_value(JobState::Completed).unwrap()).await;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        // More events than the subscriber can hold.
+        for i in 0..10 {
+            h.events.emit_json("watchlist-match", json!({ "n": i }));
+        }
+
+        let mut sse = SseReader::new(body);
+        assert_eq!(sse.next().await, Some(("downloads-changed".to_string(), serde_json::Value::Null)));
+        for i in 6..10 {
+            assert_eq!(sse.next().await, Some(("watchlist-match".to_string(), json!({ "n": i }))));
+        }
+        // Still subscribed after lagging.
+        h.events.emit_json("downloads-changed", serde_json::Value::Null);
+        assert_eq!(sse.next().await, Some(("downloads-changed".to_string(), serde_json::Value::Null)));
+    }
+
+    /// Server shutdown ends open streams, so a graceful shutdown doesn't wait on them.
+    #[tokio::test]
+    async fn events_stream_ends_on_shutdown() {
+        let dir = tempfile::tempdir().unwrap();
+        let broadcast = Arc::new(BroadcastEvents::default());
+        let persistence = Persistence(Arc::new(JsonFileStore::in_dir(dir.path())));
+        let secrets = Secrets(Arc::new(FileStore::with_env_prefix(dir.path().join("secrets.json"), "DD_SERVER_TEST_NO_ENV_")));
+        let s = ServerState::new(Arc::new(AppState::new()), persistence, secrets, broadcast, TOKEN.into());
+        let (_, _, body) = open_events(&router(s.clone()), Auth::Bearer(TOKEN)).await;
+        let mut sse = SseReader::new(body);
+        s.shutdown.cancel();
+        assert_eq!(tokio::time::timeout(Duration::from_secs(5), sse.next()).await.unwrap(), None);
     }
 
     /// The job `id` in the downloads list, polled until `pred` holds (or a timeout).
@@ -1438,9 +1686,17 @@ mod tests {
         // Watchlist: add, run against the stub tracker, read matches, clear, delete.
         ok(&h, Method::POST, "/api/watch/rules", Some(json!({ "rule": rule("r2") }))).await;
         assert_eq!(h.persistence.get(WATCH_RULES_KEY).unwrap().unwrap().as_array().unwrap().len(), 2);
+        let mut events = h.events.subscribe();
         let found = ok(&h, Method::POST, "/api/watch/rules/r2/run", None).await;
         assert_eq!(found[0]["info_hash"], "abcdef0123456789abcdef0123456789abcdef01");
-        assert_eq!(h.events.named("watchlist-match").len(), 1);
+        let mut matches = vec![];
+        while let Ok(ev) = events.try_recv() {
+            if ev.name == "watchlist-match" {
+                matches.push(ev.payload);
+            }
+        }
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0]["rule_id"], "r2");
         assert_eq!(ok(&h, Method::GET, "/api/watch/matches?ruleId=r2", None).await.as_array().unwrap().len(), 1);
         assert_eq!(ok(&h, Method::GET, "/api/watch/matches?ruleId=r1", None).await, json!([]));
         ok(&h, Method::DELETE, "/api/watch/matches?ruleId=r2", None).await;
