@@ -51,3 +51,21 @@ jobs:
           sudo apt-get install -y libdbus-1-dev pkg-config
       - name: Headless integration tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features headless --test headless_smoke --test headless_restart
+
+  # Builds the headless image (layers cached in the Actions cache), then runs it: /health smoke,
+  # and a restart on the same /config volume to show a secret and a setting persist.
+  docker:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: debriddownloader:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke and persistence
+        run: bash scripts/docker-smoke.sh debriddownloader:ci

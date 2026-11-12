@@ -142,6 +142,7 @@ npm run tauri dev        # app with hot reload
 | Rust tests (download engine) | `cargo test --manifest-path src-tauri/Cargo.toml` |
 | Type check | `npx tsc --noEmit` |
 | Production build | `npm run tauri build` |
+| Docker image smoke and persistence check | `docker build -t debriddownloader . && bash scripts/docker-smoke.sh debriddownloader` |
 
 Installers land in `src-tauri/target/release/bundle/`. CI runs the tests on every pull request.
 
