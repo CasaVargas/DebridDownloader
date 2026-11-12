@@ -38,6 +38,7 @@ A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com
 - Plex, Jellyfin, and Emby rescans when downloads finish
 - rclone remotes as download destinations
 - Plain-language error messages from your provider
+- A headless server edition with the same interface in a browser, as a [Docker image](#docker-headless-server) for a NAS or home server
 - Tokens stored in macOS Keychain, Windows Credential Manager, or Secret Service
 - Signed and notarized macOS builds, signed Windows installers, and in-app updates
 
@@ -48,6 +49,7 @@ A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com
 | macOS (Apple Silicon, macOS 11+) | `.dmg` |
 | Windows 10+ (x64 and ARM64) | `.exe` installer |
 | Linux (x64 and ARM64) | `.deb`, `.AppImage`, `.rpm` |
+| Docker and Unraid (amd64 and arm64) | `ghcr.io/casavargas/debriddownloader`, see [Docker](#docker-headless-server) |
 
 Get them from the [website](https://casavargas.app/DebridDownloader/#download) or the [latest release](https://github.com/CasaVargas/DebridDownloader/releases/latest). You'll need a Real-Debrid, TorBox, Premiumize, or AllDebrid account.
 
@@ -105,11 +107,39 @@ docker run -d --name debriddownloader \
   ghcr.io/casavargas/debriddownloader:latest
 ```
 
-To build it yourself: `docker build -t debriddownloader .` from a checkout.
+Then:
 
-On Unraid, install **DebridDownloader** from the Apps tab; the template is [`docker/unraid/debriddownloader.xml`](docker/unraid/debriddownloader.xml), published through [debriddownloader-unraid](https://github.com/CasaVargas/debriddownloader-unraid).
+1. Open `http://<host>:8777/` and paste the token.
+2. Sign in to your debrid provider in the web UI. Its token is saved in `/config`.
+3. Add a magnet or a `.torrent` file. Downloads land in the folder you mounted at `/downloads`.
 
-Open `http://<host>:8777/` and sign in with the token. `GET /health` answers `200` without a token, for health checks.
+The same thing with Docker Compose:
+
+```yaml
+services:
+  debriddownloader:
+    image: ghcr.io/casavargas/debriddownloader:latest
+    container_name: debriddownloader
+    ports:
+      - "8777:8777"
+    volumes:
+      - debriddownloader-config:/config
+      - /path/to/downloads:/downloads
+    environment:
+      DEBRIDDOWNLOADER_SECRET_SERVER_AUTH_TOKEN: pick-a-long-random-token
+      PUID: "1000"
+      PGID: "1000"
+    restart: unless-stopped
+
+volumes:
+  debriddownloader-config:
+```
+
+To update, pull the new image and recreate the container (`docker compose pull && docker compose up -d`); settings and unfinished downloads are kept in `/config`. Tags are `latest` and each version number, such as `1.8.0`.
+
+**Unraid:** the Community Applications template is [`docker/unraid/debriddownloader.xml`](docker/unraid/debriddownloader.xml), published through [debriddownloader-unraid](https://github.com/CasaVargas/debriddownloader-unraid). It sets `PUID`/`PGID` to `99`/`100` and asks for the token.
+
+To build the image yourself: `docker build -t debriddownloader .` from a checkout. `GET /health` answers `200` without a token, for health checks.
 
 | Volume | What's in it |
 |---|---|
