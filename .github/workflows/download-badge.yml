@@ -1,0 +1,62 @@
+name: Download badge
+
+# Keeps the README's download counter current. It writes a shields.io endpoint
+# file (downloads.json) to the `badges` branch, which holds nothing else. See
+# scripts/download-badge.sh for why the stock shields badge is not used.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - scripts/download-badge.sh
+      - .github/workflows/download-badge.yml
+  workflow_dispatch:
+
+concurrency:
+  group: download-badge
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  badge:
+    name: Update download badge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Count installer downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/download-badge.sh > "$RUNNER_TEMP/downloads.json"
+          cat "$RUNNER_TEMP/downloads.json"
+
+      - name: Publish to the badges branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git fetch -q origin badges 2>/dev/null \
+            && [ "$(git show FETCH_HEAD:downloads.json 2>/dev/null)" = "$(cat "$RUNNER_TEMP/downloads.json")" ]; then
+            echo "Count unchanged; nothing to publish."
+            exit 0
+          fi
+          # The branch is one generated file, so it is rebuilt as a single
+          # commit each time instead of growing a commit per day.
+          work="$RUNNER_TEMP/badges"
+          mkdir "$work"
+          cp "$RUNNER_TEMP/downloads.json" "$work/"
+          cd "$work"
+          git init -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads.json
+          git commit -q -m "chore(badge): update download count"
+          git push -q --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges

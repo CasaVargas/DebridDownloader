@@ -3,7 +3,7 @@
 A free, open-source desktop downloader for [Real-Debrid](https://real-debrid.com), [TorBox](https://torbox.app), [Premiumize](https://premiumize.me), and [AllDebrid](https://alldebrid.com). Resumable multi-connection downloads, a native interface in light or dark, and your tokens stay in your OS keychain.
 
 [![Latest release](https://img.shields.io/github/v/release/CasaVargas/DebridDownloader?label=release)](https://github.com/CasaVargas/DebridDownloader/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/CasaVargas/DebridDownloader/total)](https://github.com/CasaVargas/DebridDownloader/releases)
+[![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FCasaVargas%2FDebridDownloader%2Fbadges%2Fdownloads.json)](https://github.com/CasaVargas/DebridDownloader/releases)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 **[Download](https://casavargas.app/DebridDownloader/#download)** · **[Website](https://casavargas.app/DebridDownloader/)** · **[Release notes](https://github.com/CasaVargas/DebridDownloader/releases)**
