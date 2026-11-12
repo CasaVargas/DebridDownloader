@@ -12,9 +12,12 @@
 //!
 //! The data dir holds `settings.json` (same shape as the desktop store), `secrets.json` (provider
 //! tokens and the server token, `0600`) and `downloads.json`.
+//!
+//! App events (download progress, list changes, watchlist matches) go out over SSE on
+//! `GET /api/events` through a [`BroadcastEvents`] sink.
 
 use crate::engine::{self, EngineDeps};
-use crate::engine_host::{HostSink, ProviderRefresher, RcloneRunner};
+use crate::engine_host::{BroadcastEvents, HostSink, ProviderRefresher, RcloneRunner};
 use crate::events::AppEvents;
 use crate::persistence::{
     JsonFileStore, Persistence, SETTINGS_KEY, WATCH_MATCHES_KEY, WATCH_RULES_KEY, WATCH_SEEN_KEY,
@@ -126,15 +129,6 @@ fn default_data_dir(env: &impl Fn(&str) -> Option<String>) -> PathBuf {
 
 // ── Bootstrap ───────────────────────────────────────────────────────
 
-/// Events have no listener yet (the SSE transport comes later); log them.
-struct LogEvents;
-
-impl AppEvents for LogEvents {
-    fn emit_json(&self, event: &str, payload: serde_json::Value) {
-        log::debug!("event {}: {}", event, payload);
-    }
-}
-
 /// A running headless core: shared state, the engine and the watch loop.
 pub struct Headless {
     pub(crate) server: ServerState,
@@ -154,7 +148,9 @@ impl Headless {
         let state = Arc::new(AppState::new());
         load_persisted(&state, &persistence).await?;
 
-        let events: Arc<dyn AppEvents> = Arc::new(LogEvents);
+        // Every event fans out to the `/api/events` subscribers.
+        let broadcast = Arc::new(BroadcastEvents::default());
+        let events: Arc<dyn AppEvents> = broadcast.clone();
         let config = state.settings.read().await.engine_config(state.rar_tool);
         let engine = engine::Engine::start(EngineDeps::new(
             data_dir.to_path_buf(),
@@ -186,7 +182,7 @@ impl Headless {
             state.watch_cancel.clone(),
         ));
 
-        Ok(Headless { server: ServerState::new(state, persistence, secrets, events, token) })
+        Ok(Headless { server: ServerState::new(state, persistence, secrets, broadcast, token) })
     }
 
     pub fn router(&self) -> axum::Router {
@@ -195,6 +191,7 @@ impl Headless {
 
     /// Stop the watch loop and checkpoint downloads so they resume on the next start.
     pub async fn shutdown(&self) {
+        self.server.shutdown.cancel();
         self.server.state.watch_cancel.cancel();
         if let Some(engine) = self.server.state.engine.get().cloned() {
             engine.shutdown().await;
@@ -250,6 +247,12 @@ pub async fn serve(
     let addr = listener.local_addr().map_err(|e| e.to_string())?;
     log::info!("DebridDownloader headless listening on http://{} (data dir {})", addr, config.data_dir.display());
     on_bound(addr);
+    // Graceful shutdown waits for open connections; end the SSE streams so it doesn't wait forever.
+    let streams = core.server.shutdown.clone();
+    let shutdown = async move {
+        shutdown.await;
+        streams.cancel();
+    };
     let served = axum::serve(listener, core.router()).with_graceful_shutdown(shutdown).await;
     core.shutdown().await;
     served.map_err(|e| format!("Server error: {}", e))
@@ -408,10 +411,46 @@ mod tests {
         // The generated token landed in the data dir, and the engine state is there too.
         let secrets: serde_json::Value =
             serde_json::from_slice(&std::fs::read(dir.path().join("secrets.json")).unwrap()).unwrap();
-        assert!(secrets[server::AUTH_TOKEN_KEY].as_str().is_some_and(|t| t.len() >= 32));
+        let token = secrets[server::AUTH_TOKEN_KEY].as_str().unwrap();
+        assert!(token.len() >= 32);
+
+        // The SSE route is served, and an open stream doesn't keep the server from shutting down.
+        let client = reqwest::Client::new();
+        let resp = client.get(format!("http://{}/api/events", addr)).send().await.unwrap();
+        assert_eq!(resp.status(), 401);
+        let events = client.get(format!("http://{}/api/events", addr)).bearer_auth(token).send().await.unwrap();
+        assert_eq!(events.status(), 200);
+        assert_eq!(events.headers()["content-type"], "text/event-stream");
 
         stop_tx.send(()).unwrap();
         tokio::time::timeout(std::time::Duration::from_secs(20), server).await.unwrap().unwrap().unwrap();
+        drop(events);
+    }
+
+    /// The headless host's app events (engine, watchlist, routes) reach `/api/events` subscribers.
+    #[tokio::test]
+    async fn start_wires_events_to_the_sse_broadcast() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = Headless::start(dir.path()).await.unwrap();
+        let mut rx = core.server.broadcast.subscribe();
+        core.server.events.emit("watchlist-match", &serde_json::json!({ "rule_id": "r1" }));
+        let ev = rx.recv().await.unwrap();
+        assert_eq!((ev.name.as_str(), ev.payload["rule_id"].as_str()), ("watchlist-match", Some("r1")));
+        // The engine's sink is the same broadcast: a change to the job list is announced.
+        let job = engine::NewJob {
+            kind: engine::JobKind::Symlink,
+            filename: "a.mkv".into(),
+            destination: dir.path().join("a.mkv").to_string_lossy().into(),
+            source: engine::LinkSource::Direct,
+            url: "http://x".into(),
+            total_bytes: 1,
+            batch_id: String::new(),
+            batch_name: String::new(),
+        };
+        core.server.state.engine().unwrap().add_completed(job).await;
+        let ev = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv()).await.unwrap().unwrap();
+        assert_eq!(ev.name, "downloads-changed");
+        core.shutdown().await;
     }
 
     #[tokio::test]

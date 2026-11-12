@@ -46,6 +46,53 @@ mod desktop {
     }
 }
 
+// ── Broadcast half (headless SSE) ──
+
+/// One app event as the SSE route sends it: the desktop event name and its JSON payload.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BroadcastEvent {
+    pub name: String,
+    pub payload: serde_json::Value,
+}
+
+/// Headless [`AppEvents`]: fans every event (`download-progress`, `downloads-changed`,
+/// `watchlist-match`, ...) out to every subscriber through a `tokio::sync::broadcast` channel,
+/// under the same names and payloads the desktop emits.
+///
+/// Emitting never waits on a subscriber. One that falls more than `capacity` events behind loses
+/// the oldest (its next `recv` is `RecvError::Lagged`), so a slow browser can't hold up the engine.
+pub struct BroadcastEvents {
+    tx: tokio::sync::broadcast::Sender<BroadcastEvent>,
+}
+
+impl BroadcastEvents {
+    /// Events a subscriber may fall behind by before it starts losing them.
+    pub const DEFAULT_CAPACITY: usize = 1024;
+
+    pub fn new(capacity: usize) -> Self {
+        let (tx, _) = tokio::sync::broadcast::channel(capacity.max(1));
+        Self { tx }
+    }
+
+    /// A receiver of every event emitted from now on.
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<BroadcastEvent> {
+        self.tx.subscribe()
+    }
+}
+
+impl Default for BroadcastEvents {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_CAPACITY)
+    }
+}
+
+impl AppEvents for BroadcastEvents {
+    fn emit_json(&self, event: &str, payload: serde_json::Value) {
+        // `Err` only means nobody is subscribed right now.
+        let _ = self.tx.send(BroadcastEvent { name: event.to_string(), payload });
+    }
+}
+
 // ── Engine seams ──
 
 /// Engine events to the UI: progress and list changes, plus media-server scans when a batch ends.
@@ -188,5 +235,35 @@ mod tests {
         let ad = LinkSource::AllDebrid { hoster_link: "x".into() };
         assert!(check_provider(&ad, "alldebrid").is_ok());
         assert!(matches!(check_provider(&ad, "real-debrid"), Err(RefreshError::ProviderMismatch(p)) if p == "AllDebrid"));
+    }
+
+    #[tokio::test]
+    async fn broadcast_events_fan_out_to_every_subscriber() {
+        let events = BroadcastEvents::default();
+        // No subscriber: the event is dropped, not an error or a panic.
+        events.emit_json("downloads-changed", serde_json::Value::Null);
+
+        let (mut a, mut b) = (events.subscribe(), events.subscribe());
+        let sink: &dyn AppEvents = &events;
+        sink.emit("watchlist-match", &serde_json::json!({ "rule_id": "r1" }));
+        for rx in [&mut a, &mut b] {
+            let ev = rx.recv().await.unwrap();
+            assert_eq!(ev.name, "watchlist-match");
+            assert_eq!(ev.payload["rule_id"], "r1");
+        }
+    }
+
+    /// A subscriber that never reads doesn't block the emitter; it lags and skips to the newest.
+    #[tokio::test]
+    async fn a_lagging_subscriber_loses_old_events_without_blocking() {
+        use tokio::sync::broadcast::error::RecvError;
+        let events = BroadcastEvents::new(2);
+        let mut slow = events.subscribe();
+        for i in 0..10 {
+            events.emit_json("download-progress", serde_json::json!(i));
+        }
+        assert!(matches!(slow.recv().await, Err(RecvError::Lagged(8))));
+        assert_eq!(slow.recv().await.unwrap().payload, serde_json::json!(8));
+        assert_eq!(slow.recv().await.unwrap().payload, serde_json::json!(9));
     }
 }
