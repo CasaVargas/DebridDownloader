@@ -1,4 +1,5 @@
-# Build context for the Dockerfile: only package files, the web sources and src-tauri/ are used.
+# Build context for the Dockerfile: only package files, the web sources, src-tauri/ and
+# docker/entrypoint.sh are used.
 .git
 .github
 .vscode

@@ -4,9 +4,10 @@
 #   docker build -t debriddownloader .
 #   bash scripts/docker-smoke.sh debriddownloader
 #
-# 1. Starts the image with a fresh /config volume and no token env, waits for 200 from /health.
-# 2. Reads the server token generated into /config/secrets.json, saves a setting with
-#    PUT /api/settings.
+# 1. Starts the image with a fresh /config volume, no token env and PUID/PGID 99:100 (Unraid's
+#    nobody:users), waits for 200 from /health.
+# 2. Reads the server token generated into /config/secrets.json (owned by 99:100, mode 600),
+#    saves a setting with PUT /api/settings.
 # 3. Removes the container, starts a new one on the same /config volume, and checks that the
 #    secret (the token) and the setting are both still there.
 #
@@ -16,6 +17,7 @@ set -euo pipefail
 IMAGE="${1:?usage: docker-smoke.sh <image>}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-60}"
 SAVED_CONCURRENCY=7
+RUN_AS=99:100
 
 NAME="dd-smoke-$$"
 VOLUME="dd-smoke-config-$$"
@@ -42,7 +44,8 @@ done
 
 # Start the container on the shared /config volume and wait for /health. Sets BASE.
 start() {
-  docker run -d --name "$NAME" -p 127.0.0.1::8777 -v "$VOLUME:/config" "$IMAGE" >/dev/null
+  docker run -d --name "$NAME" -p 127.0.0.1::8777 -v "$VOLUME:/config" \
+    -e "PUID=${RUN_AS%:*}" -e "PGID=${RUN_AS#*:}" "$IMAGE" >/dev/null
   BASE="http://$(docker port "$NAME" 8777/tcp | head -n1)"
   for _ in $(seq "$HEALTH_TIMEOUT"); do
     if [ "$(http_code "$BASE/health")" = 200 ]; then
@@ -82,6 +85,17 @@ TOKEN="$(stored_token)" || fail "no server.auth_token in /config/secrets.json"
 [ "$(http_code "$BASE/api/downloads" -H "Authorization: Bearer $TOKEN")" = 200 ] \
   || fail "the generated token was not accepted"
 echo "401 without the token, 200 with it"
+
+step "Files are written as PUID:PGID"
+for file in secrets.json settings.json; do
+  owner="$(docker exec "$NAME" stat -c %u:%g "/config/$file")"
+  [ "$owner" = "$RUN_AS" ] || fail "/config/$file is owned by $owner, expected $RUN_AS"
+done
+mode="$(docker exec "$NAME" stat -c %a /config/secrets.json)"
+[ "$mode" = 600 ] || fail "/config/secrets.json has mode $mode, expected 600"
+server_uid="$(docker exec "$NAME" stat -c %u /proc/1)"
+[ "$server_uid" = "${RUN_AS%:*}" ] || fail "the server runs as uid $server_uid, expected ${RUN_AS%:*}"
+echo "secrets.json and settings.json are $RUN_AS, secrets.json is 600, the server is uid $server_uid"
 
 step "Save a setting through the HTTP API"
 settings="$(api /api/settings)"

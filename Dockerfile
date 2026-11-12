@@ -8,6 +8,7 @@
 #
 # /config  -> data dir: settings.json, downloads.json, secrets.json (provider + server tokens)
 # /downloads -> default download folder (seeded into settings.json on first start)
+# PUID/PGID  -> the user the server runs as and files are written as (default 1000:1000)
 # See "Docker (headless server)" in README.md.
 
 # ── 1. Web bundle (dist-web/) ──────────────────────────────────────
@@ -38,48 +39,31 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 # ── 3. Runtime: slim Debian, no GTK/webkit ────────────────────────
 FROM debian:bookworm-slim AS runtime
+# setpriv (util-linux, already in the base image) drops root in the entrypoint.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates libdbus-1-3 libssl3 \
  && rm -rf /var/lib/apt/lists/* \
- && groupadd --system --gid 1000 debrid \
- && useradd --system --uid 1000 --gid debrid --home-dir /config --shell /usr/sbin/nologin debrid \
- && mkdir -p /config /downloads /app \
- && chown debrid:debrid /config /downloads
+ && mkdir -p /config /downloads /app
 
 COPY --from=server /usr/local/bin/debriddownloader-headless /usr/local/bin/debriddownloader-headless
 COPY --from=web /src/dist-web /app/web
+COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# On first start (no settings.json in /config yet), make /downloads the download folder.
-# An existing settings.json is never touched.
-COPY <<'EOF' /usr/local/bin/docker-entrypoint.sh
-#!/bin/sh
-set -e
-data_dir="${DEBRIDDOWNLOADER_DATA_DIR:-/config}"
-if [ ! -e "$data_dir/settings.json" ]; then
-  mkdir -p "$data_dir"
-  cat > "$data_dir/settings.json" <<JSON
-{
-  "app_settings": {
-    "download_folder": "${DEBRIDDOWNLOADER_DOWNLOAD_DIR:-/downloads}",
-    "max_concurrent_downloads": 3,
-    "create_torrent_subfolders": true,
-    "theme": "dark"
-  }
-}
-JSON
-fi
-exec /usr/local/bin/debriddownloader-headless "$@"
-EOF
-RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+LABEL org.opencontainers.image.title="DebridDownloader" \
+      org.opencontainers.image.description="Headless DebridDownloader: the download engine and HTTP API, serving the browser UI" \
+      org.opencontainers.image.source="https://github.com/CasaVargas/DebridDownloader" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later"
 
+# The entrypoint starts as root, then runs the server as PUID:PGID.
 ENV DEBRIDDOWNLOADER_BIND=0.0.0.0 \
     DEBRIDDOWNLOADER_PORT=8777 \
     DEBRIDDOWNLOADER_DATA_DIR=/config \
     DEBRIDDOWNLOADER_WEB_DIR=/app/web \
     DEBRIDDOWNLOADER_DOWNLOAD_DIR=/downloads \
-    HOME=/config
+    HOME=/config \
+    PUID=1000 \
+    PGID=1000
 
-USER debrid:debrid
 VOLUME ["/config", "/downloads"]
 EXPOSE 8777
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
