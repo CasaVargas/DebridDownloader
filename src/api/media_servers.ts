@@ -1,9 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
+import { call } from "./transport";
 
 export async function testMediaServer(
   serverType: string,
   url: string,
   credential: string
 ): Promise<string> {
-  return invoke("test_media_server", { serverType, url, credential });
+  return call("test_media_server", { serverType, url, credential });
 }

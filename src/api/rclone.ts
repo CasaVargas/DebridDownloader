@@ -1,16 +1,16 @@
-import { invoke } from "@tauri-apps/api/core";
+import { call } from "./transport";
 import type { RcloneInfo } from "../types";
 
 export async function checkRclone(): Promise<RcloneInfo | null> {
-  return invoke("check_rclone");
+  return call("check_rclone");
 }
 
 export async function listRcloneRemotes(): Promise<string[]> {
-  return invoke("list_rclone_remotes");
+  return call("list_rclone_remotes");
 }
 
 export async function validateRcloneRemote(
   remoteName: string
 ): Promise<boolean> {
-  return invoke("validate_rclone_remote", { remoteName });
+  return call("validate_rclone_remote", { remoteName });
 }

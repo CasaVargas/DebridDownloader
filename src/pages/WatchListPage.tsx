@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { subscribe } from "../api/transport";
 import * as watchlistApi from "../api/watchlist";
 import type { WatchRule, WatchMatch } from "../types";
 import DataTable, { type Column } from "../components/DataTable";
@@ -272,7 +272,7 @@ export default function WatchListPage() {
   }, [loadData]);
 
   useEffect(() => {
-    const unlisten = listen("watchlist-match", () => {
+    const unlisten = subscribe("watchlist-match", () => {
       loadData();
     });
     return () => { unlisten.then((fn) => fn()); };
