@@ -51,7 +51,8 @@ impl PremiumizeClient {
                 status, text
             )));
         }
-        Ok(resp.json().await?)
+        let text = resp.text().await?;
+        parse_body(&text)
     }
 
     async fn post_form<T: serde::de::DeserializeOwned>(
@@ -82,7 +83,8 @@ impl PremiumizeClient {
                 status, text
             )));
         }
-        Ok(resp.json().await?)
+        let text = resp.text().await?;
+        parse_body(&text)
     }
 
     async fn find_transfer(&self, id: &str) -> Result<PmTransfer, shared::ProviderError> {
@@ -91,6 +93,33 @@ impl PremiumizeClient {
             .into_iter()
             .find(|t| t.id == id)
             .ok_or_else(|| shared::ProviderError::Other(format!("Transfer {} not found", id)))
+    }
+}
+
+/// Decodes a Premiumize response body. On a shape mismatch, surfaces the API's own error message
+/// when the body is a `{"status":"error","message":...}` envelope, otherwise a readable error that
+/// names the decode problem instead of reqwest's opaque "error decoding response body".
+fn parse_body<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, shared::ProviderError> {
+    match serde_json::from_str::<T>(text) {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            if let Ok(env) = serde_json::from_str::<PmStatusResponse>(text) {
+                if env.status != "success" {
+                    let message = env
+                        .message
+                        .as_deref()
+                        .map(shared::humanize_api_message)
+                        .filter(|m| !m.is_empty())
+                        .unwrap_or_else(|| "Premiumize returned an error".to_string());
+                    return Err(shared::ProviderError::Api { message, code: None });
+                }
+            }
+            let snippet: String = text.chars().take(200).collect();
+            Err(shared::ProviderError::Other(format!(
+                "Unexpected Premiumize response ({}): {}",
+                e, snippet
+            )))
+        }
     }
 }
 
@@ -170,7 +199,7 @@ impl DebridProvider for PremiumizeClient {
         Ok(shared::User {
             username: resp
                 .customer_id
-                .map(|id| id.to_string())
+                .filter(|id| !id.is_empty())
                 .unwrap_or_else(|| "Premiumize User".to_string()),
             email: String::new(),
             premium: premium_until > now,
@@ -291,7 +320,8 @@ impl DebridProvider for PremiumizeClient {
             .text("apikey", key);
 
         let resp = self.http.post(&url).multipart(form).send().await?;
-        let api_resp: PmCreateResponse = resp.json().await?;
+        let text = resp.text().await?;
+        let api_resp: PmCreateResponse = parse_body(&text)?;
         if api_resp.status != "success" {
             return Err(shared::ProviderError::Api {
                 message: api_resp
@@ -453,5 +483,41 @@ impl DebridProvider for PremiumizeClient {
             .filter(|(_, &cached)| cached)
             .map(|(hash, _)| hash.to_lowercase())
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_body_decodes_real_account_info() {
+        let a: PmAccountInfo = parse_body(
+            r#"{"status":"success","customer_id":"123","premium_until":1767225600,"limit_used":0.1,"space_used":1.5e9}"#,
+        )
+        .unwrap();
+        assert_eq!(a.customer_id.as_deref(), Some("123"));
+        assert_eq!(a.space_used, Some(1_500_000_000));
+    }
+
+    #[test]
+    fn parse_body_surfaces_api_error_message_on_shape_mismatch() {
+        // An error envelope has no id/name, so PmItem fails to decode; the API message should
+        // come through instead of a decode error.
+        let err = parse_body::<PmItem>(r#"{"status":"error","message":"Not logged in."}"#)
+            .unwrap_err();
+        match err {
+            shared::ProviderError::Api { message, .. } => assert_eq!(message, "Not logged in."),
+            other => panic!("expected Api error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_body_non_json_gives_readable_error() {
+        let err = parse_body::<PmAccountInfo>("<html>Bad Gateway</html>").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.starts_with("Unexpected Premiumize response"), "{msg}");
+        assert!(msg.contains("Bad Gateway"), "{msg}");
+        assert!(!msg.contains("error decoding response body"));
     }
 }
