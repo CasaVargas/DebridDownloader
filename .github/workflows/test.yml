@@ -28,3 +28,26 @@ jobs:
         run: npx tsc --noEmit
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  # The headless binary only builds with `--features headless`, so the default `cargo test` above
+  # skips its integration tests (startup smoke, kill-and-restart resume). No webview deps needed.
+  headless:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: headless
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
+      - name: Headless integration tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features headless --test headless_smoke --test headless_restart
