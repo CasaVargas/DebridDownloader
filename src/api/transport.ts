@@ -117,9 +117,44 @@ export const HTTP_ROUTES: Record<string, Route> = {
 /** The SSE stream of app events (`server.rs` `event_stream`). */
 export const EVENTS_PATH = "/api/events";
 
-/** True inside the Tauri WebView (Tauri v2 always injects `__TAURI_INTERNALS__`). */
+/**
+ * True inside the Tauri WebView (Tauri v2 always injects `__TAURI_INTERNALS__`). The web build
+ * (`npm run build:web`, Vite mode `web`) is browser-only, so it always takes the HTTP path.
+ */
 export function isTauri(): boolean {
+  if (import.meta.env.MODE === "web") return false;
   return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+}
+
+// ── Browser session (headless server only) ───────────────────────────
+
+/** Window event fired when the server answers 401: the session cookie is missing or stale. */
+export const UNAUTHORIZED_EVENT = "dd-server-unauthorized";
+
+/** Whether this browser has a valid server session (the `dd_token` cookie). */
+export async function hasServerSession(): Promise<boolean> {
+  const resp = await fetch("/api/auth/status", { credentials: "same-origin", headers: { Accept: "application/json" } });
+  return resp.status !== 401;
+}
+
+/**
+ * `POST /login` with the server token; on success the server sets the `dd_token` cookie every
+ * later call relies on. Rejects with a readable message on a wrong token or a server error.
+ */
+export async function serverLogin(token: string): Promise<void> {
+  let resp: Response;
+  try {
+    resp = await fetch("/login", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+  } catch {
+    throw new Error("Couldn't reach the server");
+  }
+  if (resp.status === 401) throw new Error("Wrong token");
+  if (!resp.ok) throw new Error(`Login failed (${resp.status} ${resp.statusText})`.trim());
 }
 
 /**
@@ -176,6 +211,7 @@ async function httpCall<T>(cmd: string, args?: Args): Promise<T> {
       data = text;
     }
   }
+  if (resp.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
   if (!resp.ok) {
     // Reject with the message string, as `invoke()` does with a command's `Err(String)`.
     const message =

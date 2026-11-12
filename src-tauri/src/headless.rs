@@ -9,7 +9,10 @@
 //! | `--bind IP`   | `DEBRIDDOWNLOADER_BIND`       | `127.0.0.1`                              |
 //! | `--port N`    | `DEBRIDDOWNLOADER_PORT`       | `8777`                                   |
 //! | `--data-dir P`| `DEBRIDDOWNLOADER_DATA_DIR`   | `$XDG_DATA_HOME/debriddownloader`, else `~/.local/share/debriddownloader`, else `./data` |
+//! | `--web-dir P` | `DEBRIDDOWNLOADER_WEB_DIR`    | none (API only)                          |
 //!
+//! `--web-dir` points at the browser UI bundle (`npm run build:web`, which writes `dist-web/`). It
+//! is served at `/`, with `index.html` for client routes such as `/downloads`; `/api/*` always wins.
 //! The data dir holds `settings.json` (same shape as the desktop store), `secrets.json` (provider
 //! tokens and the server token, `0600`) and `downloads.json`.
 //!
@@ -35,15 +38,18 @@ use std::sync::Arc;
 pub const ENV_BIND: &str = "DEBRIDDOWNLOADER_BIND";
 pub const ENV_PORT: &str = "DEBRIDDOWNLOADER_PORT";
 pub const ENV_DATA_DIR: &str = "DEBRIDDOWNLOADER_DATA_DIR";
+pub const ENV_WEB_DIR: &str = "DEBRIDDOWNLOADER_WEB_DIR";
 pub const DEFAULT_BIND: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 pub const DEFAULT_PORT: u16 = 8777;
 
 const USAGE: &str = "\
-Usage: debriddownloader-headless [--bind IP] [--port N] [--data-dir PATH]
+Usage: debriddownloader-headless [--bind IP] [--port N] [--data-dir PATH] [--web-dir PATH]
 
   --bind IP        Address to listen on (env DEBRIDDOWNLOADER_BIND, default 127.0.0.1)
   --port N         Port to listen on; 0 picks a free one (env DEBRIDDOWNLOADER_PORT, default 8777)
   --data-dir PATH  Settings, secrets and download state (env DEBRIDDOWNLOADER_DATA_DIR)
+  --web-dir PATH   Browser UI bundle to serve at / (`npm run build:web` output, dist-web/;
+                   env DEBRIDDOWNLOADER_WEB_DIR, default: API only)
   -h, --help       Show this help
 
 The API token is read from secrets.json (key server.auth_token) or the env var
@@ -53,6 +59,8 @@ DEBRIDDOWNLOADER_SECRET_SERVER_AUTH_TOKEN; one is generated on first start if ne
 pub struct HeadlessConfig {
     pub addr: SocketAddr,
     pub data_dir: PathBuf,
+    /// The browser UI bundle served at `/`; `None` serves the API only.
+    pub web_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,6 +79,7 @@ where
     let mut bind = None;
     let mut port = None;
     let mut data_dir = None;
+    let mut web_dir = None;
 
     let mut args = args.into_iter().map(Into::into);
     while let Some(arg) = args.next() {
@@ -83,6 +92,7 @@ where
             "--bind" => &mut bind,
             "--port" => &mut port,
             "--data-dir" => &mut data_dir,
+            "--web-dir" => &mut web_dir,
             _ => return Err(format!("Unknown argument '{}'\n\n{}", arg, USAGE)),
         };
         let value = match inline {
@@ -104,7 +114,8 @@ where
         Some(d) => PathBuf::from(d),
         None => default_data_dir(&env),
     };
-    Ok(Cli::Run(HeadlessConfig { addr: SocketAddr::new(bind, port), data_dir }))
+    let web_dir = web_dir.or_else(|| env(ENV_WEB_DIR)).map(PathBuf::from);
+    Ok(Cli::Run(HeadlessConfig { addr: SocketAddr::new(bind, port), data_dir, web_dir }))
 }
 
 fn parse_bind(value: &str) -> Result<IpAddr, String> {
@@ -246,6 +257,11 @@ pub async fn serve(
         .map_err(|e| format!("Failed to listen on {}: {}", config.addr, e))?;
     let addr = listener.local_addr().map_err(|e| e.to_string())?;
     log::info!("DebridDownloader headless listening on http://{} (data dir {})", addr, config.data_dir.display());
+    match &config.web_dir {
+        Some(dir) if dir.join("index.html").is_file() => log::info!("Serving the web UI from {}", dir.display()),
+        Some(dir) => log::warn!("No index.html in {}; build it with `npm run build:web`", dir.display()),
+        None => log::info!("No --web-dir: serving the API only"),
+    }
     on_bound(addr);
     // Graceful shutdown waits for open connections; end the SSE streams so it doesn't wait forever.
     let streams = core.server.shutdown.clone();
@@ -253,7 +269,8 @@ pub async fn serve(
         shutdown.await;
         streams.cancel();
     };
-    let served = axum::serve(listener, core.router()).with_graceful_shutdown(shutdown).await;
+    let router = server::router(core.server.clone().with_web_dir(config.web_dir.clone()));
+    let served = axum::serve(listener, router).with_graceful_shutdown(shutdown).await;
     core.shutdown().await;
     served.map_err(|e| format!("Server error: {}", e))
 }
@@ -362,6 +379,16 @@ mod tests {
     }
 
     #[test]
+    fn web_dir_comes_from_flag_or_env() {
+        assert_eq!(run(&[], &[]).web_dir, None);
+        assert_eq!(run(&[], &[(ENV_WEB_DIR, "/env-web")]).web_dir, Some(PathBuf::from("/env-web")));
+        assert_eq!(run(&[], &[(ENV_WEB_DIR, " ")]).web_dir, None);
+        let c = run(&["--web-dir", "/srv/web"], &[(ENV_WEB_DIR, "/env-web")]);
+        assert_eq!(c.web_dir, Some(PathBuf::from("/srv/web")));
+        assert_eq!(run(&["--web-dir=dist-web"], &[]).web_dir, Some(PathBuf::from("dist-web")));
+    }
+
+    #[test]
     fn bad_input_is_an_error() {
         let parse = |args: &[&str], env: &[(&str, &str)]| parse_cli(args.iter().copied(), env_of(env));
         assert!(parse(&["--port", "70000"], &[]).unwrap_err().contains("Invalid port"));
@@ -425,6 +452,56 @@ mod tests {
         stop_tx.send(()).unwrap();
         tokio::time::timeout(std::time::Duration::from_secs(20), server).await.unwrap().unwrap().unwrap();
         drop(events);
+    }
+
+    /// With `--web-dir`, the binary serves the UI bundle at `/` and the index for a client route,
+    /// over real TCP, while `/api/*` keeps answering as the API.
+    #[tokio::test]
+    async fn serve_serves_the_web_ui_with_spa_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        let web = tempfile::tempdir().unwrap();
+        std::fs::write(web.path().join("index.html"), "<!doctype html><div id=\"root\"></div>").unwrap();
+        std::fs::create_dir(web.path().join("assets")).unwrap();
+        std::fs::write(web.path().join("assets/index-abc.js"), "console.log(1)").unwrap();
+        let port = crate::engine::tests::mock_server::free_port();
+        let args = [
+            "--port".to_string(),
+            port.to_string(),
+            "--data-dir".into(),
+            dir.path().to_string_lossy().into(),
+            "--web-dir".into(),
+            web.path().to_string_lossy().into(),
+        ];
+        let Cli::Run(config) = parse_cli(args, |_| None).unwrap() else { unreachable!() };
+        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+        let (bound_tx, bound_rx) = tokio::sync::oneshot::channel();
+        let server = tokio::spawn(serve(
+            config,
+            move |addr| {
+                let _ = bound_tx.send(addr);
+            },
+            async move {
+                let _ = stop_rx.await;
+            },
+        ));
+        let addr = tokio::time::timeout(std::time::Duration::from_secs(20), bound_rx).await.unwrap().unwrap();
+        let get = |path: &str| reqwest::get(format!("http://{}{}", addr, path));
+
+        for path in ["/", "/downloads", "/settings/general"] {
+            let resp = get(path).await.unwrap();
+            assert_eq!(resp.status(), 200, "{}", path);
+            assert_eq!(resp.headers()["content-type"], "text/html; charset=utf-8", "{}", path);
+            assert!(resp.text().await.unwrap().contains("<div id=\"root\">"), "{}", path);
+        }
+        let resp = get("/assets/index-abc.js").await.unwrap();
+        assert_eq!(resp.status(), 200);
+        assert!(resp.headers()["content-type"].to_str().unwrap().starts_with("text/javascript"));
+        assert_eq!(resp.text().await.unwrap(), "console.log(1)");
+        assert_eq!(get("/api/downloads").await.unwrap().status(), 401);
+        assert_eq!(get("/api/nope").await.unwrap().status(), 404);
+
+        stop_tx.send(()).unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(20), server).await.unwrap().unwrap().unwrap();
     }
 
     /// The headless host's app events (engine, watchlist, routes) reach `/api/events` subscribers.

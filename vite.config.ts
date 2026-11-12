@@ -5,9 +5,16 @@ import tailwindcss from "@tailwindcss/vite";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+/** Where `npm run build:web` (Vite mode `web`) writes the browser UI the headless server serves. */
+export const WEB_OUT_DIR = "dist-web";
+
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async ({ mode }) => ({
   plugins: [react(), tailwindcss()],
+
+  // `--mode web`: the browser bundle for `debriddownloader-headless --web-dir dist-web`. It always
+  // uses the HTTP transport (src/api/transport.ts) and leaves the desktop bundle in dist/ alone.
+  build: mode === "web" ? { outDir: WEB_OUT_DIR, emptyOutDir: true } : {},
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
