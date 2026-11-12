@@ -151,9 +151,13 @@ async fn pause_resume_and_cancel() {
 
     h.engine.pause(&ids[0]);
     h.engine.cancel(&ids[1]);
-    let list = h.wait_until("paused + cancelled", |l| {
+    // The engine deletes a cancelled job's `.part` in a detached task, so the file can outlive
+    // the `Cancelled` state for a moment: wait for both.
+    let list = h.wait_until("paused + cancelled with its .part removed", |l| {
         l.iter().any(|j| j.id == ids[0] && j.status == JobState::Paused)
-            && l.iter().any(|j| j.id == ids[1] && j.status == JobState::Cancelled)
+            && l.iter().any(|j| {
+                j.id == ids[1] && j.status == JobState::Cancelled && !std::path::Path::new(&format!("{}.part", j.destination)).exists()
+            })
     })
     .await;
     let paused = list.iter().find(|j| j.id == ids[0]).unwrap();
