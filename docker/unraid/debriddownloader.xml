@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>DebridDownloader</Name>
+  <Repository>ghcr.io/casavargas/debriddownloader:latest</Repository>
+  <Registry>https://github.com/CasaVargas/DebridDownloader/pkgs/container/debriddownloader</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/CasaVargas/DebridDownloader/issues</Support>
+  <Project>https://github.com/CasaVargas/DebridDownloader</Project>
+  <Overview>A downloader for Real-Debrid, TorBox, Premiumize and AllDebrid that runs on your server and is managed from a browser. Add a magnet or a .torrent file, pick the files you want, and they download to your array over several connections at once.
+
+Downloads resume after a dropped connection, a container restart or a crash, and expired debrid links refresh by themselves. You can pause, resume and retry one download or all of them, and set a speed limit and a limit on how many run at once.
+
+This is the headless container: the same download engine as the DebridDownloader desktop app, with its interface served in your browser on port 8777.
+
+FIRST START: set an Access token below. The web UI asks for it when you open it. Then sign in to your debrid provider in the web UI; the provider token is saved in the Config folder.
+
+The web UI speaks plain HTTP. Beyond your home network, put it behind a reverse proxy with TLS or a VPN such as Tailscale.</Overview>
+  <Category>Downloaders:</Category>
+  <WebUI>http://[IP]:[PORT:8777]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/CasaVargas/debriddownloader-unraid/main/templates/debriddownloader.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/CasaVargas/debriddownloader-unraid/main/icon.png</Icon>
+  <ReadMe>https://raw.githubusercontent.com/CasaVargas/debriddownloader-unraid/main/README.md</ReadMe>
+  <ExtraSearchTerms>debrid real-debrid realdebrid torbox premiumize alldebrid torrent magnet downloader download manager</ExtraSearchTerms>
+  <License>GPL-3.0-or-later</License>
+  <Screenshot>https://raw.githubusercontent.com/CasaVargas/debriddownloader-unraid/main/screenshots/downloads.jpg</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/CasaVargas/debriddownloader-unraid/main/screenshots/torrents.jpg</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/CasaVargas/debriddownloader-unraid/main/screenshots/settings.jpg</Screenshot>
+  <Requires>An account with Real-Debrid, TorBox, Premiumize or AllDebrid.</Requires>
+  <Date>2026-11-12</Date>
+  <Changes>
+### 2026-11-12
+
+First Community Applications release. The container follows DebridDownloader's releases; per-version notes are at https://github.com/CasaVargas/DebridDownloader/releases
+  </Changes>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/debriddownloader" Mode="rw" Description="Settings, download state and secrets.json (your provider token and the access token). Small; keep it on appdata." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/debriddownloader</Config>
+  <Config Name="Downloads" Target="/downloads" Default="/mnt/user/downloads" Mode="rw" Description="Where finished and in-progress downloads are written." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/downloads</Config>
+  <Config Name="Web UI port" Target="8777" Default="8777" Mode="tcp" Description="The DebridDownloader interface in your browser, and its HTTP API." Type="Port" Display="always" Required="true" Mask="false">8777</Config>
+  <Config Name="Access token" Target="DEBRIDDOWNLOADER_SECRET_SERVER_AUTH_TOKEN" Default="" Mode="" Description="The token the web UI and API ask for. Pick a long random one." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User id the downloads are written as (99 is nobody)." Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group id the downloads are written as (100 is users)." Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+</Container>
