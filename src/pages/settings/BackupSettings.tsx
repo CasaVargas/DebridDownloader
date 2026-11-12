@@ -15,6 +15,21 @@ type UpdateStatus =
 
 const CHANGELOG: { version: string; title: string; items: string[] }[] = [
   {
+    version: "1.8.0",
+    title: "AllDebrid, Archive Contents & a Server Edition",
+    items: [
+      "AllDebrid joins Real-Debrid, TorBox, and Premiumize as a fourth provider",
+      "Download a ZIP's or RAR's contents straight into folders, with no extract step afterwards, and choose which files you want",
+      "Choose which files of a torrent to download",
+      "Downloads and Completed group files by torrent or archive",
+      "The lists stay responsive with thousands of downloads",
+      "New headless server with the same interface in a browser, as a Docker image for a NAS or home server (Unraid included)",
+      "Downloads to SMB shares no longer fail with 'Operation not supported (os error 45)'",
+      "Premiumize accounts and transfers load reliably, with readable errors",
+      "Deleting a torrent waits for you to confirm before anything is removed",
+    ],
+  },
+  {
     version: "1.7.4",
     title: "TorBox Torrents Tab Fix",
     items: [
