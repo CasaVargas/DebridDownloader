@@ -93,19 +93,21 @@ It's a neutral tool. Users are responsible for how they use it and which sources
 
 ## Docker (headless server)
 
-The same download engine runs without a window as `debriddownloader-headless`, serving the browser UI and the HTTP API on one port. The [`Dockerfile`](Dockerfile) builds it into a slim image (no GTK or webkit) that runs as a non-root user (uid/gid `1000`).
+The same download engine runs without a window as `debriddownloader-headless`, serving the browser UI and the HTTP API on one port. It ships as a slim image (no GTK or webkit) for amd64 and arm64 at `ghcr.io/casavargas/debriddownloader`, published with each release. The server inside runs as a non-root user (`PUID`/`PGID`, `1000:1000` by default).
 
 ```bash
-docker build -t debriddownloader .
-
 docker run -d --name debriddownloader \
   -p 8777:8777 \
   -v debriddownloader-config:/config \
   -v /path/to/downloads:/downloads \
   -e DEBRIDDOWNLOADER_SECRET_SERVER_AUTH_TOKEN=pick-a-long-random-token \
   --restart unless-stopped \
-  debriddownloader
+  ghcr.io/casavargas/debriddownloader:latest
 ```
+
+To build it yourself: `docker build -t debriddownloader .` from a checkout.
+
+On Unraid, install **DebridDownloader** from the Apps tab; the template is [`docker/unraid/debriddownloader.xml`](docker/unraid/debriddownloader.xml), published through [debriddownloader-unraid](https://github.com/CasaVargas/debriddownloader-unraid).
 
 Open `http://<host>:8777/` and sign in with the token. `GET /health` answers `200` without a token, for health checks.
 
@@ -117,10 +119,11 @@ Open `http://<host>:8777/` and sign in with the token. `GET /health` answers `20
 | Env var | Default in the image | What it does |
 |---|---|---|
 | `DEBRIDDOWNLOADER_SECRET_SERVER_AUTH_TOKEN` | none | The token for the UI and API. If unset, one is generated on first start and saved in `/config/secrets.json` under `server.auth_token`. When set, the env var wins over the file. |
+| `PUID` / `PGID` | `1000` / `1000` | The user and group the server runs as and files are written as. Unraid uses `99` / `100`. |
 | `DEBRIDDOWNLOADER_BIND` | `0.0.0.0` | Listen address inside the container. |
 | `DEBRIDDOWNLOADER_PORT` | `8777` | Listen port; change the `-p` mapping to match. |
 
-The container runs as uid `1000`. A bind-mounted host folder must be writable by it: `chown 1000:1000 /path/to/downloads`, or run with `--user $(id -u):$(id -g)` and own both mounts as that user. Put the port behind a reverse proxy with TLS (or a VPN such as Tailscale) before exposing it beyond your LAN.
+The container starts as root, makes the top level of `/config` and `/downloads` owned by `PUID:PGID`, then runs the server as that user. Set `PUID` and `PGID` to the owner of your downloads folder. With `--user $(id -u):$(id -g)` it skips that step, so both mounts must already be writable by that user. Put the port behind a reverse proxy with TLS (or a VPN such as Tailscale) before exposing it beyond your LAN.
 
 ## Development
 
