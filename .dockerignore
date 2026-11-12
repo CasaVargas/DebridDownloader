@@ -1,0 +1,21 @@
+# Build context for the Dockerfile: only package files, the web sources and src-tauri/ are used.
+.git
+.github
+.vscode
+.idea
+.DS_Store
+node_modules
+dist
+dist-web
+dist-ssr
+src-tauri/target
+src-tauri/gen
+*.log
+.env
+.env.*
+*.p12
+docs
+specs
+assets
+Dockerfile
+.dockerignore
