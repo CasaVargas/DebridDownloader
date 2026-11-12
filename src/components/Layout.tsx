@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { subscribe } from "../api/transport";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import Sidebar from "./Sidebar";
 import Toast from "./Toast";
@@ -43,8 +43,7 @@ export default function Layout() {
   }, [activeView]);
 
   useEffect(() => {
-    const unlisten = listen<WatchMatch>("watchlist-match", async (event) => {
-      const match = event.payload;
+    const unlisten = subscribe<WatchMatch>("watchlist-match", async (match) => {
       const statusText = match.status.type === "Failed" ? " (failed)" : "";
 
       if (activeView !== "watchlist") {

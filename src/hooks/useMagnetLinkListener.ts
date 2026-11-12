@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
+import { subscribe } from "../api/transport";
+import { getPendingMagnetUri } from "../api/magnet";
 
 function parseMagnetDisplayName(uri: string): string | null {
   try {
@@ -44,11 +44,11 @@ export function useMagnetLinkListener(
   }, []);
 
   useEffect(() => {
-    const unlisten = listen<string>("magnet-link-received", (event) => {
-      handleMagnetUri(event.payload);
+    const unlisten = subscribe<string>("magnet-link-received", (uri) => {
+      handleMagnetUri(uri);
     });
 
-    invoke<string | null>("get_pending_magnet_uri").then((uri) => {
+    getPendingMagnetUri().then((uri) => {
       if (uri) {
         handleMagnetUri(uri);
       }

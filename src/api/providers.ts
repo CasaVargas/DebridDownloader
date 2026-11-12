@@ -1,18 +1,18 @@
-import { invoke } from "@tauri-apps/api/core";
+import { call } from "./transport";
 import type { ProviderInfo } from "../types";
 
 export async function getAvailableProviders(): Promise<ProviderInfo[]> {
-  return invoke("get_available_providers");
+  return call("get_available_providers");
 }
 
 export async function switchProvider(providerId: string): Promise<boolean> {
-  return invoke("switch_provider", { providerId });
+  return call("switch_provider", { providerId });
 }
 
 export async function getActiveProvider(): Promise<string> {
-  return invoke("get_active_provider");
+  return call("get_active_provider");
 }
 
 export async function getAuthMethod(): Promise<"api_key" | "oauth_device"> {
-  return invoke("get_auth_method");
+  return call("get_auth_method");
 }

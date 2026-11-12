@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { call } from "./transport";
 import type { DownloadLink, ZipDownloadStarted, ZipEntry, ZipInspection } from "../types";
 
 /**
@@ -6,7 +6,7 @@ import type { DownloadLink, ZipDownloadStarted, ZipEntry, ZipInspection } from "
  * `fileId` null: the torrent's single download link (Real-Debrid's packed RAR).
  */
 export async function inspectTorrentArchive(torrentId: string, fileId: number | null): Promise<ZipInspection> {
-  return invoke("inspect_torrent_archive", { torrentId, fileId });
+  return call("inspect_torrent_archive", { torrentId, fileId });
 }
 
 /** Queue the given archive members as individual downloads (no extract step afterwards). */
@@ -17,7 +17,7 @@ export async function startArchiveContentsDownload(
   destinationFolder: string,
   torrentName?: string
 ): Promise<ZipDownloadStarted> {
-  return invoke("start_archive_contents_download", {
+  return call("start_archive_contents_download", {
     link,
     archiveSize,
     entries,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { listen } from "@tauri-apps/api/event";
+import { subscribe } from "../api/transport";
 import * as archiveApi from "../api/archive";
 import { getSettings } from "../api/settings";
 import type { ArchiveListingProgress, ZipEntry, ZipInspection } from "../types";
@@ -44,8 +44,8 @@ export default function ZipContentsDialog({
   const [scrollTop, setScrollTop] = useState(0);
 
   useEffect(() => {
-    const unlisten = listen<ArchiveListingProgress>("archive-listing-progress", (e) => {
-      if (e.payload.torrent_id === torrentId) setProgress(e.payload);
+    const unlisten = subscribe<ArchiveListingProgress>("archive-listing-progress", (p) => {
+      if (p.torrent_id === torrentId) setProgress(p);
     });
     return () => {
       unlisten.then((fn) => fn());

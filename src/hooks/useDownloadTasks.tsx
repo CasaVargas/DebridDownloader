@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { subscribe } from "../api/transport";
 import * as downloadsApi from "../api/downloads";
 import type { DownloadTask, DownloadProgress } from "../types";
 
@@ -37,8 +37,8 @@ export function DownloadTasksProvider({ children }: { children: ReactNode }) {
         return next;
       });
     };
-    const unlisten = listen<DownloadProgress>("download-progress", (event) => {
-      pending.current.set(event.payload.id, event.payload);
+    const unlisten = subscribe<DownloadProgress>("download-progress", (p) => {
+      pending.current.set(p.id, p);
       if (timer === null) timer = setTimeout(flush, FLUSH_MS);
     });
     return () => {
@@ -57,7 +57,7 @@ export function DownloadTasksProvider({ children }: { children: ReactNode }) {
       }
     };
     fetchTasks();
-    const unlisten = listen("downloads-changed", fetchTasks);
+    const unlisten = subscribe("downloads-changed", fetchTasks);
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
