@@ -5,6 +5,7 @@ import { Button, IconButton, Inspector, Menu, StatusDot, Toolbar } from "../comp
 import { useDownloadTasks } from "../hooks/useDownloadTasks";
 import * as downloadsApi from "../api/downloads";
 import { getSettings } from "../api/settings";
+import { isTauri } from "../api/transport";
 import type { AppSettings, DownloadTask } from "../types";
 import { formatBytes, formatSpeed, formatEta } from "../utils";
 import { downloadActions, downloadStatusView, isActiveStatus as isActive, isFailedStatus, postProcessingSteps } from "../lib/downloadStatus";
@@ -404,7 +405,8 @@ export default function DownloadsPage() {
     const segments = task.status === "Downloading" ? task.segments_active ?? 0 : 0;
     const eta = task.speed > 0 ? formatEta(task.total_bytes, task.downloaded_bytes, task.speed) : null;
     const errorText = task.error || (isFailedStatus(task.status) ? task.status.Failed : null);
-    const canReveal = !!task.destination && (!task.remote || task.remote === "symlink");
+    // In a browser the file is on the server, so there is no folder to show.
+    const canReveal = isTauri() && !!task.destination && (!task.remote || task.remote === "symlink");
     return (
       <Inspector
         id="downloads"

@@ -116,6 +116,7 @@ pub fn router(s: ServerState) -> Router {
         .route("/api/downloads/retry-failed", post(retry_failed_downloads))
         .route("/api/downloads/clear-completed", post(clear_completed_downloads))
         .route("/api/downloads/{id}", delete(remove_download))
+        .route("/api/downloads/{id}/file", get(download_file))
         .route("/api/downloads/{id}/cancel", post(cancel_download))
         .route("/api/downloads/{id}/pause", post(pause_download))
         .route("/api/downloads/{id}/resume", post(resume_download))
@@ -495,6 +496,125 @@ async fn clear_completed_downloads(State(s): State<ServerState>) -> ApiResult<()
 
 async fn remove_download(State(s): State<ServerState>, Path(id): Path<String>) -> ApiResult<()> {
     done(service::downloads::remove_download(&s.state, &id)).await
+}
+
+/// `GET /api/downloads/{id}/file`: the finished file of a job, as an attachment, so the browser
+/// saves it to the device it runs on. Honours one `Range` (resume, seeking); a request with
+/// several ranges gets the whole file.
+async fn download_file(
+    State(s): State<ServerState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+    let not_found = || ApiError {
+        status: StatusCode::NOT_FOUND,
+        message: "No finished file on the server for this download".to_string(),
+    };
+    let Some((path, name)) = service::downloads::completed_file(&s.state, &id).await? else {
+        return Err(not_found());
+    };
+    let mut file = tokio::fs::File::open(&path).await.map_err(|_| not_found())?;
+    let len = file.metadata().await.map_err(|_| not_found())?.len();
+
+    let range = headers.get(header::RANGE).and_then(|v| v.to_str().ok());
+    let (status, start, count) = match parse_range(range, len) {
+        ByteRange::Full => (StatusCode::OK, 0, len),
+        ByteRange::Part { start, end } => (StatusCode::PARTIAL_CONTENT, start, end - start + 1),
+        ByteRange::Unsatisfiable => {
+            let mut resp = ApiError {
+                status: StatusCode::RANGE_NOT_SATISFIABLE,
+                message: "Range not satisfiable".to_string(),
+            }
+            .into_response();
+            if let Ok(v) = HeaderValue::from_str(&format!("bytes */{}", len)) {
+                resp.headers_mut().insert(header::CONTENT_RANGE, v);
+            }
+            return Ok(resp);
+        }
+    };
+    if start > 0 {
+        file.seek(std::io::SeekFrom::Start(start)).await.map_err(|e| e.to_string())?;
+    }
+    let body = axum::body::Body::from_stream(tokio_util::io::ReaderStream::new(file.take(count)));
+
+    let mut resp = Response::new(body);
+    *resp.status_mut() = status;
+    let h = resp.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream"));
+    h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    h.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(count));
+    if let Ok(v) = HeaderValue::from_str(&attachment_disposition(&name)) {
+        h.insert(header::CONTENT_DISPOSITION, v);
+    }
+    if status == StatusCode::PARTIAL_CONTENT {
+        if let Ok(v) = HeaderValue::from_str(&format!("bytes {}-{}/{}", start, start + count - 1, len)) {
+            h.insert(header::CONTENT_RANGE, v);
+        }
+    }
+    Ok(resp)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ByteRange {
+    /// No usable `Range` header: send everything.
+    Full,
+    /// Inclusive byte positions.
+    Part { start: u64, end: u64 },
+    Unsatisfiable,
+}
+
+/// One `bytes=` range against a file of `len` bytes: `a-b`, `a-` or `-n` (the last n bytes).
+/// Anything else (another unit, several ranges, garbage) is ignored, as RFC 9110 allows.
+fn parse_range(header: Option<&str>, len: u64) -> ByteRange {
+    let Some(spec) = header.and_then(|h| h.trim().strip_prefix("bytes=")) else {
+        return ByteRange::Full;
+    };
+    let Some((first, last)) = spec.trim().split_once('-') else {
+        return ByteRange::Full;
+    };
+    if spec.contains(',') {
+        return ByteRange::Full;
+    }
+    match (first.trim(), last.trim()) {
+        ("", "") => ByteRange::Full,
+        ("", n) => match n.parse::<u64>() {
+            Ok(0) => ByteRange::Unsatisfiable,
+            Ok(_) if len == 0 => ByteRange::Unsatisfiable,
+            Ok(n) => ByteRange::Part { start: len.saturating_sub(n), end: len - 1 },
+            Err(_) => ByteRange::Full,
+        },
+        (a, b) => {
+            let Ok(start) = a.parse::<u64>() else {
+                return ByteRange::Full;
+            };
+            let end = match b {
+                "" => None,
+                b => match b.parse::<u64>() {
+                    Ok(end) => Some(end),
+                    Err(_) => return ByteRange::Full,
+                },
+            };
+            if end.is_some_and(|end| end < start) {
+                return ByteRange::Full;
+            }
+            if start >= len {
+                return ByteRange::Unsatisfiable;
+            }
+            ByteRange::Part { start, end: end.map_or(len - 1, |end| end.min(len - 1)) }
+        }
+    }
+}
+
+/// `Content-Disposition` for saving `name`: an ASCII fallback plus the exact UTF-8 name (RFC 6266).
+fn attachment_disposition(name: &str) -> String {
+    let ascii: String = name
+        .chars()
+        .map(|c| if c.is_ascii() && !c.is_ascii_control() && c != '"' && c != '\\' { c } else { '_' })
+        .collect();
+    format!("attachment; filename=\"{}\"; filename*=UTF-8''{}", ascii, urlencoding::encode(name))
 }
 
 async fn cancel_download(State(s): State<ServerState>, Path(id): Path<String>) -> ApiResult<()> {
@@ -1342,6 +1462,8 @@ mod tests {
             .chain([("GET".into(), "/health".into()), ("POST".into(), "/login".into())])
             // An endless SSE body; covered by the `/api/events` tests below.
             .chain([("GET".into(), "/api/events".into())])
+            // Answers a file, not JSON; covered by the `download_file` tests below.
+            .chain([("GET".into(), "/api/downloads/{id}/file".into())])
             .collect();
         let mut registered = registered_routes();
         tested.sort();
@@ -1575,6 +1697,139 @@ mod tests {
         // Watchlist matches and other app events go out the same way.
         h.events.emit_json("watchlist-match", json!({ "rule_id": "r1" }));
         assert_eq!(sse.next().await, Some(("watchlist-match".to_string(), json!({ "rule_id": "r1" }))));
+    }
+
+    /// A finished job whose file `name` under the harness dir holds `bytes`; its id.
+    async fn finished_file(h: &Harness, name: &str, bytes: &[u8]) -> String {
+        let path = h.dir.path().join(name);
+        std::fs::write(&path, bytes).unwrap();
+        h.state
+            .engine()
+            .unwrap()
+            .add_completed(crate::engine::NewJob {
+                kind: crate::engine::JobKind::Http,
+                filename: name.to_string(),
+                destination: path.to_string_lossy().to_string(),
+                source: LinkSource::Direct,
+                url: String::new(),
+                total_bytes: bytes.len() as i64,
+                batch_id: String::new(),
+                batch_name: String::new(),
+            })
+            .await
+    }
+
+    /// `GET /api/downloads/{id}/file`, optionally with a `Range`: status, headers and body bytes.
+    async fn get_file(h: &Harness, id: &str, range: Option<&str>, auth: Auth<'_>) -> (StatusCode, HeaderMap, Vec<u8>) {
+        let mut req = Request::builder().method(Method::GET).uri(format!("/api/downloads/{}/file", id));
+        req = match auth {
+            Auth::None => req,
+            Auth::Bearer(t) => req.header(header::AUTHORIZATION, format!("Bearer {}", t)),
+            Auth::Cookie(t) => req.header(header::COOKIE, format!("{}={}", AUTH_COOKIE, t)),
+        };
+        if let Some(range) = range {
+            req = req.header(header::RANGE, range);
+        }
+        let resp = h.router.clone().oneshot(req.body(Body::empty()).unwrap()).await.unwrap();
+        let (status, headers) = (resp.status(), resp.headers().clone());
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        (status, headers, bytes.to_vec())
+    }
+
+    #[tokio::test]
+    async fn download_file_sends_the_finished_file_as_an_attachment() {
+        let h = harness().await;
+        let bytes = pattern(70_000);
+        let id = finished_file(&h, "Épisode \"1\".mkv", &bytes).await;
+
+        // The `/login` cookie is what a plain link in the browser carries.
+        for auth in [Auth::Bearer(TOKEN), Auth::Cookie(TOKEN)] {
+            let (status, headers, body) = get_file(&h, &id, None, auth).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(body, bytes);
+            assert_eq!(headers[header::CONTENT_LENGTH], "70000");
+            assert_eq!(headers[header::CONTENT_TYPE], "application/octet-stream");
+            assert_eq!(headers[header::ACCEPT_RANGES], "bytes");
+            assert_eq!(
+                headers[header::CONTENT_DISPOSITION],
+                "attachment; filename=\"_pisode _1_.mkv\"; filename*=UTF-8''%C3%89pisode%20%221%22.mkv"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn download_file_honours_one_range() {
+        let h = harness().await;
+        let bytes = pattern(100);
+        let id = finished_file(&h, "clip.bin", &bytes).await;
+        let auth = || Auth::Bearer(TOKEN);
+
+        for (range, from, to) in [("bytes=10-19", 10, 19), ("bytes=90-", 90, 99), ("bytes=-5", 95, 99), ("bytes=40-500", 40, 99)] {
+            let (status, headers, body) = get_file(&h, &id, Some(range), auth()).await;
+            assert_eq!(status, StatusCode::PARTIAL_CONTENT, "{}", range);
+            assert_eq!(body, &bytes[from..=to], "{}", range);
+            assert_eq!(headers[header::CONTENT_RANGE], format!("bytes {}-{}/100", from, to).as_str(), "{}", range);
+            assert_eq!(headers[header::CONTENT_LENGTH], (to - from + 1).to_string().as_str(), "{}", range);
+        }
+
+        // Past the end: 416 with the size, so the client can correct itself.
+        let (status, headers, _) = get_file(&h, &id, Some("bytes=100-"), auth()).await;
+        assert_eq!(status, StatusCode::RANGE_NOT_SATISFIABLE);
+        assert_eq!(headers[header::CONTENT_RANGE], "bytes */100");
+
+        // Several ranges, or another unit: the whole file.
+        for range in ["bytes=0-5,10-12", "items=0-5", "bytes=9-2"] {
+            let (status, _, body) = get_file(&h, &id, Some(range), auth()).await;
+            assert_eq!(status, StatusCode::OK, "{}", range);
+            assert_eq!(body, bytes, "{}", range);
+        }
+    }
+
+    #[tokio::test]
+    async fn download_file_needs_the_token_and_a_finished_local_file() {
+        let h = harness().await;
+        let id = finished_file(&h, "movie.mkv", b"data").await;
+
+        for bad in [Auth::None, Auth::Bearer("wrong"), Auth::Cookie("wrong")] {
+            let (status, headers, body) = get_file(&h, &id, None, bad).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED);
+            assert_eq!(headers[header::WWW_AUTHENTICATE], "Bearer");
+            assert!(!body.windows(4).any(|w| w == b"data"));
+        }
+
+        let missing = |body: Vec<u8>| serde_json::from_slice::<serde_json::Value>(&body).unwrap()["error"].clone();
+        // No such job. The id is only ever looked up, never used as a path.
+        for unknown in ["nope", "..%2F..%2Fetc%2Fpasswd"] {
+            let (status, _, body) = get_file(&h, unknown, None, Auth::Bearer(TOKEN)).await;
+            assert_eq!(status, StatusCode::NOT_FOUND, "{}", unknown);
+            assert_eq!(missing(body), "No finished file on the server for this download");
+        }
+        // The file was moved or deleted after the download.
+        std::fs::remove_file(h.dir.path().join("movie.mkv")).unwrap();
+        let (status, _, body) = get_file(&h, &id, None, Auth::Bearer(TOKEN)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(missing(body), "No finished file on the server for this download");
+        // A folder is not a file to send.
+        let folder = finished_file(&h, "placeholder", b"x").await;
+        std::fs::remove_file(h.dir.path().join("placeholder")).unwrap();
+        std::fs::create_dir(h.dir.path().join("placeholder")).unwrap();
+        assert_eq!(get_file(&h, &folder, None, Auth::Bearer(TOKEN)).await.0, StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn parse_range_reads_one_bytes_range() {
+        use ByteRange::*;
+        assert_eq!(parse_range(None, 10), Full);
+        assert_eq!(parse_range(Some("bytes=0-0"), 10), Part { start: 0, end: 0 });
+        assert_eq!(parse_range(Some(" bytes=2-"), 10), Part { start: 2, end: 9 });
+        assert_eq!(parse_range(Some("bytes=-3"), 10), Part { start: 7, end: 9 });
+        assert_eq!(parse_range(Some("bytes=-30"), 10), Part { start: 0, end: 9 });
+        assert_eq!(parse_range(Some("bytes=10-"), 10), Unsatisfiable);
+        assert_eq!(parse_range(Some("bytes=-0"), 10), Unsatisfiable);
+        assert_eq!(parse_range(Some("bytes=0-"), 0), Unsatisfiable);
+        assert_eq!(parse_range(Some("bytes=-"), 10), Full);
+        assert_eq!(parse_range(Some("bytes=a-b"), 10), Full);
+        assert_eq!(parse_range(Some("bytes=5"), 10), Full);
     }
 
     #[tokio::test]

@@ -4,6 +4,7 @@ import DataTable, { type Column } from "../components/DataTable";
 import { Button, cn, IconButton, Inspector, Toolbar } from "../components/ui";
 import { useDownloadTasks } from "../hooks/useDownloadTasks";
 import * as downloadsApi from "../api/downloads";
+import { isTauri } from "../api/transport";
 import { fileLabel, groupCompleted, isExtra, type CompletedGroup } from "../lib/completedGroups";
 import type { DownloadTask } from "../types";
 import { formatBytes, formatRelativeTime } from "../utils";
@@ -11,6 +12,12 @@ import { formatBytes, formatRelativeTime } from "../utils";
 const FolderIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const SaveIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 );
 
@@ -53,6 +60,9 @@ function StorageIcon({ t }: { t: DownloadTask }) {
 
 /** Reveal is only possible for files on this machine (local or symlinked), as before. */
 const canReveal = (t: DownloadTask) => !!t.destination && (!t.remote || t.remote === "symlink");
+
+/** The browser UI's stand-in for "Show in Folder": the file is sent from the server. */
+const SAVE_LABEL = "Save to this device";
 
 function storageLabel(t: DownloadTask): string {
   if (t.remote === "symlink") return "Symlinked";
@@ -185,6 +195,14 @@ export default function CompletedPage() {
   /** A torrent reveals its largest file, which opens the torrent's folder with the main file picked out. */
   const revealTarget = (row: Row) => (row.kind === "file" ? row.task : row.group.files[0]);
 
+  // In a browser the files are on the server: there is no folder to show, so a file is sent to
+  // this device instead. One file at a time, so a torrent with several offers it per file.
+  const inBrowser = !isTauri();
+  const saveTarget = (row: Row): DownloadTask | null => {
+    const t = row.kind === "file" ? row.task : row.group.files.length === 1 ? row.group.files[0] : null;
+    return t && canReveal(t) ? t : null;
+  };
+
   const selectRow = (row: Row) => { setSelectedKey(row.key); setInspectorOpen(true); };
   const clickRow = (row: Row) => {
     if (row.kind === "extras") toggleExtras(row.group);
@@ -265,9 +283,14 @@ export default function CompletedPage() {
       render: (row) =>
         row.kind === "extras" ? null : (
           <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-            {canReveal(revealTarget(row)) && (
+            {!inBrowser && canReveal(revealTarget(row)) && (
               <IconButton label="Show in Folder" onClick={() => reveal(revealTarget(row))}>
                 <FolderIcon />
+              </IconButton>
+            )}
+            {inBrowser && saveTarget(row) && (
+              <IconButton label={SAVE_LABEL} onClick={() => downloadsApi.saveToDevice(saveTarget(row)!.id)}>
+                <SaveIcon />
               </IconButton>
             )}
             <IconButton label="Remove from list" variant="danger" onClick={() => handleRemove(row)}>
@@ -324,8 +347,11 @@ export default function CompletedPage() {
             }
             footer={
               <>
-                {canReveal(revealTarget(inspected)) && (
+                {!inBrowser && canReveal(revealTarget(inspected)) && (
                   <Button onClick={() => reveal(revealTarget(inspected))}>Show in Folder</Button>
+                )}
+                {inBrowser && saveTarget(inspected) && (
+                  <Button onClick={() => downloadsApi.saveToDevice(saveTarget(inspected)!.id)}>{SAVE_LABEL}</Button>
                 )}
                 <Button variant="danger" title="Removes it from this list. The files stay on disk." onClick={() => handleRemove(inspected)}>
                   Remove
