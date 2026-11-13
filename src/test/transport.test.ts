@@ -13,7 +13,7 @@ const { invoke, listen, unlisten } = vi.hoisted(() => {
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen }));
 
-import { call, httpRequest, HTTP_ROUTES, subscribe } from "../api/transport";
+import { call, DOWNLOAD_FILE_PATH, downloadFileUrl, httpRequest, HTTP_ROUTES, subscribe } from "../api/transport";
 import { getDownloadTasks, pauseBatch } from "../api/downloads";
 
 const ROOT = resolve(__dirname, "../..");
@@ -215,11 +215,17 @@ describe("route map", () => {
 
   it("every server.rs API route is reached by some command", () => {
     const mapped = new Set(Object.values(HTTP_ROUTES).map((r) => `${r.method} ${r.path}`));
-    // `/health` and `/login` aren't commands; `/api/events` is what `subscribe` reads.
+    // `/health` and `/login` aren't commands; `/api/events` is what `subscribe` reads, and the
+    // file route is opened as a link by `saveToDevice`.
     const unreached = [...serverRoutes].filter(
-      (r) => r.includes(" /api/") && r !== "GET /api/events" && !mapped.has(r),
+      (r) => r.includes(" /api/") && r !== "GET /api/events" && r !== `GET ${DOWNLOAD_FILE_PATH}` && !mapped.has(r),
     );
     expect(unreached).toEqual([]);
+  });
+
+  it("the file link is a route server.rs registers, with the id escaped", () => {
+    expect(serverRoutes).toContain(`GET ${DOWNLOAD_FILE_PATH}`);
+    expect(downloadFileUrl("a b/c")).toBe("/api/downloads/a%20b%2Fc/file");
   });
 
   it("every path param is filled from a command arg", () => {

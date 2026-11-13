@@ -6,7 +6,7 @@ import { formatBytes } from "../utils";
 
 // The Completed view groups finished files by the torrent they came from.
 
-const { tasks, removeDownload } = vi.hoisted(() => {
+const { tasks, removeDownload, saveToDevice, desktop } = vi.hoisted(() => {
   const task = (id: string, batch: string, filename: string, bytes: number, dest: string, updated: number) => ({
     id, filename, url: "", destination: dest, total_bytes: bytes, downloaded_bytes: bytes, speed: 0,
     status: "Completed", batch_id: batch, updated_at: updated,
@@ -22,13 +22,22 @@ const { tasks, removeDownload } = vi.hoisted(() => {
       task("s1", "", "Linked.mkv", 1e9, "/lib/Linked.mkv", 4000),
     ] as DownloadTask[],
     removeDownload: vi.fn().mockResolvedValue(undefined),
+    saveToDevice: vi.fn(),
+    /** What `isTauri()` answers: the desktop app, or the headless server's browser UI. */
+    desktop: { value: false },
   };
 });
+
+vi.mock("../api/transport", async (original) => ({
+  ...(await original<typeof import("../api/transport")>()),
+  isTauri: () => desktop.value,
+}));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../hooks/useDownloadTasks", () => ({ useDownloadTasks: () => ({ tasks, refreshTasks: vi.fn() }) }));
 vi.mock("../api/downloads", () => ({
   removeDownload: (...a: unknown[]) => removeDownload(...a),
+  saveToDevice: (...a: unknown[]) => saveToDevice(...a),
   clearCompletedDownloads: vi.fn(),
 }));
 
@@ -92,6 +101,37 @@ describe("Completed page", () => {
       fireEvent.click(within(screen.getByRole("complementary")).getByRole("button", { name: "Remove" }));
     });
     expect(removeDownload.mock.calls.map((c) => c[0]).sort()).toEqual(["e1", "e2", "e3", "e4"]);
+  });
+});
+
+describe("CompletedPage file actions", () => {
+  const renderPage = () => render(<TooltipProvider><CompletedPage /></TooltipProvider>);
+  const buttons = (name: string) => screen.queryAllByRole("button", { name });
+
+  it("in a browser, saves a file to this device instead of showing its folder", () => {
+    desktop.value = false;
+    saveToDevice.mockClear();
+    renderPage();
+    expect(buttons("Show in Folder")).toHaveLength(0);
+    // The two single-file rows; the four-file torrent has no single file to send.
+    expect(buttons("Save to this device")).toHaveLength(2);
+    fireEvent.click(buttons("Save to this device")[0]);
+    expect(saveToDevice.mock.calls).toEqual([["m1"]]);
+
+    // Its files are saved one at a time: the torrent's rows, and the details panel of a file.
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    expect(buttons("Save to this device")).toHaveLength(4);
+    fireEvent.click(screen.getByText("rune-escape.iso"));
+    fireEvent.click(within(screen.getByRole("complementary")).getByRole("button", { name: "Save to this device" }));
+    expect(saveToDevice.mock.calls).toEqual([["m1"], ["e2"]]);
+  });
+
+  it("in the desktop app, shows the folder and offers no save", () => {
+    desktop.value = true;
+    renderPage();
+    expect(buttons("Save to this device")).toHaveLength(0);
+    expect(buttons("Show in Folder")).toHaveLength(3);
+    desktop.value = false;
   });
 });
 

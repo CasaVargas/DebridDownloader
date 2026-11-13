@@ -296,3 +296,29 @@ mod tests {
         assert_eq!(build_destination("gdrive:Media", true, false, None, "f.mkv"), "gdrive:Media/f.mkv");
     }
 }
+
+/// The finished file of job `id` as it sits on this machine, for sending to a browser:
+/// its path and name. `None` when there's no such job, it isn't completed, it went to an
+/// rclone remote, or the file is no longer at its destination (moved or deleted since).
+/// The path always comes from the job, never from the caller.
+pub async fn completed_file(state: &AppState, id: &str) -> Result<Option<(PathBuf, String)>, String> {
+    let jobs = state.engine()?.list().await;
+    let Some(job) = jobs.into_iter().find(|j| j.id == id) else {
+        return Ok(None);
+    };
+    let local = matches!(job.remote.as_deref(), None | Some("symlink"));
+    if job.status != crate::engine::types::JobState::Completed || !local || job.destination.is_empty() {
+        return Ok(None);
+    }
+    let path = PathBuf::from(&job.destination);
+    match tokio::fs::metadata(&path).await {
+        Ok(meta) if meta.is_file() => {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| job.filename.clone());
+            Ok(Some((path, name)))
+        }
+        _ => Ok(None),
+    }
+}

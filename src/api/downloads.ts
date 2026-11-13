@@ -1,4 +1,4 @@
-import { call } from "./transport";
+import { call, downloadFileUrl } from "./transport";
 import type {
   DownloadItem,
   DownloadLink,
@@ -23,6 +23,19 @@ export async function startDownloads(
     destinationFolder,
     torrentName: torrentName ?? null,
   });
+}
+
+/**
+ * Browser UI only: have the browser save the finished file of download `id` from the headless
+ * server to the device it runs on. The server answers with an attachment, so the page stays put.
+ */
+export function saveToDevice(id: string): void {
+  const a = document.createElement("a");
+  a.href = downloadFileUrl(id);
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 export async function cancelDownload(id: string): Promise<void> {

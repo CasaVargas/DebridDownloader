@@ -118,6 +118,16 @@ export const HTTP_ROUTES: Record<string, Route> = {
 export const EVENTS_PATH = "/api/events";
 
 /**
+ * The headless route that sends a finished download's file (`download_file` in `server.rs`).
+ * Not a command: the browser opens it as a link, and the `dd_token` cookie authorizes it.
+ */
+export const DOWNLOAD_FILE_PATH = "/api/downloads/{id}/file";
+
+export function downloadFileUrl(id: string): string {
+  return DOWNLOAD_FILE_PATH.replace("{id}", encodeURIComponent(id));
+}
+
+/**
  * True inside the Tauri WebView (Tauri v2 always injects `__TAURI_INTERNALS__`). The web build
  * (`npm run build:web`, Vite mode `web`) is browser-only, so it always takes the HTTP path.
  */
