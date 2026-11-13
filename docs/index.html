@@ -156,6 +156,12 @@ kbd { font-family: inherit; font-size: 13px; padding: 1px 6px; border: 1px solid
   .dl-table td { border-top: 0; padding-top: 0; }
 }
 
+/* Docker */
+.code { margin: 0 0 24px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.6; overflow-x: auto; max-width: 720px; }
+.steps { margin: 0 0 20px; padding-left: 20px; color: var(--text-2); max-width: 720px; }
+.steps li { margin: 6px 0; }
+.steps code, .dl-note code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: var(--text); }
+
 /* Footer */
 footer { border-top: 1px solid var(--border); padding: 40px 0 56px; font-size: 14px; color: var(--text-3); }
 .foot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
@@ -180,6 +186,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 0 56px; font-size: 1
       <nav class="site-nav" aria-label="Main">
         <a href="#features">Features</a>
         <a href="#whats-new">What's new</a>
+        <a href="#docker">Docker</a>
         <a href="#download" class="keep">Download</a>
         <a href="https://github.com/CasaVargas/DebridDownloader" class="keep">GitHub</a>
       </nav>
@@ -197,7 +204,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 0 56px; font-size: 1
         </a>
         <a class="btn btn-secondary" href="https://github.com/CasaVargas/DebridDownloader">View on GitHub</a>
       </div>
-      <p class="meta">Version 1.8.0 · macOS, Windows, and Linux · GPL-3.0</p>
+      <p class="meta">Version 1.8.0 · macOS, Windows, Linux, and <a href="#docker">Docker</a> · GPL-3.0</p>
 
       <div class="shot hero-shot">
         <picture>
@@ -326,7 +333,29 @@ footer { border-top: 1px solid var(--border); padding: 40px 0 56px; font-size: 1
             </tr>
           </tbody>
         </table>
-        <p class="dl-note">Also available as .rpm, and on the <a href="https://github.com/CasaVargas/DebridDownloader/releases/latest">GitHub releases page</a>.</p>
+        <p class="dl-note">Also available as .rpm, and on the <a href="https://github.com/CasaVargas/DebridDownloader/releases/latest">GitHub releases page</a>. For a NAS or home server, see <a href="#docker">Docker</a>.</p>
+      </div>
+    </section>
+
+    <section id="docker">
+      <div class="wrap">
+        <p class="eyebrow">Docker</p>
+        <h2>Run it on your server</h2>
+        <p class="section-intro">The same download engine without a window, with its interface in your browser. One image for amd64 and arm64, for a NAS, a home server, or a Raspberry Pi.</p>
+<pre class="code"><code>docker run -d --name debriddownloader \
+  -p 8777:8777 \
+  -v debriddownloader-config:/config \
+  -v /path/to/downloads:/downloads \
+  -e DEBRIDDOWNLOADER_SECRET_SERVER_AUTH_TOKEN=pick-a-long-random-token \
+  --restart unless-stopped \
+  ghcr.io/casavargas/debriddownloader:latest</code></pre>
+        <ol class="steps">
+          <li>Open <code>http://your-server:8777/</code> and paste the token.</li>
+          <li>Sign in to your debrid provider in the web UI.</li>
+          <li>Add a magnet or a .torrent file. Downloads land in the folder you mounted at <code>/downloads</code>.</li>
+        </ol>
+        <p class="dl-note">Settings and unfinished downloads are kept in <code>/config</code>, so they survive restarts and updates. The web UI speaks plain HTTP: beyond your home network, put it behind a reverse proxy with TLS or a VPN.</p>
+        <p class="dl-note">Docker Compose, <code>PUID</code>/<code>PGID</code> and the other options are in the <a href="https://github.com/CasaVargas/DebridDownloader#docker-headless-server">README</a>. On Unraid, use the <a href="https://github.com/CasaVargas/debriddownloader-unraid">Community Applications template</a>.</p>
       </div>
     </section>
   </main>
