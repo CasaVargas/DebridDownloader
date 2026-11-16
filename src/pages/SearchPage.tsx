@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { searchTorrents, checkCacheAvailability, getTrackerConfigs } from "../api/search";
-import { getSettings } from "../api/settings";
 import { listTorrents, addMagnet, selectTorrentFiles } from "../api/torrents";
 import type { SearchResult, Torrent, TrackerStatus } from "../types";
 import { Button, cn, EmptyState, Input, Kbd, Spinner, StatusDot } from "../components/ui";
@@ -42,7 +41,7 @@ export default function SearchPage() {
   const [cachedHashes, setCachedHashes] = useState<Set<string>>(new Set());
   const [cacheChecked, setCacheChecked] = useState(false);
   const [error, setError] = useState("");
-  // Whether any search source (enabled tracker or TorBox search) exists, for the "no trackers" empty state.
+  // Whether any search source (enabled tracker) exists, for the "no trackers" empty state.
   const [sourcesKnown, setSourcesKnown] = useState(false);
   const [hasSearchSource, setHasSearchSource] = useState(true);
 
@@ -59,9 +58,10 @@ export default function SearchPage() {
   }, []);
 
   useEffect(() => {
-    Promise.all([getTrackerConfigs(), getSettings().catch(() => null)])
-      .then(([trackers, settings]) => {
-        setHasSearchSource(trackers.some((t) => t.enabled) || !!settings?.torbox_search_enabled);
+    // TorBox Search was retired (#92); a persisted torbox_search_enabled no longer counts as a source.
+    getTrackerConfigs()
+      .then((trackers) => {
+        setHasSearchSource(trackers.some((t) => t.enabled));
         setSourcesKnown(true);
       })
       .catch(() => {});

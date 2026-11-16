@@ -1,7 +1,6 @@
 pub mod jackett;
 pub mod piratebay;
 pub mod prowlarr;
-pub mod torbox_search;
 pub mod torznab;
 pub mod utils;
 pub use utils::format_size;

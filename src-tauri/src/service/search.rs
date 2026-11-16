@@ -1,32 +1,16 @@
 use crate::persistence::{Persistence, TRACKER_CONFIGS_KEY};
-use crate::providers::torbox::client::TorBoxClient;
-use crate::scrapers::{self, SearchResponse, TorrentScraper, TrackerConfig};
+use crate::scrapers::{self, SearchResponse, TrackerConfig};
 use crate::state::AppState;
 
-/// Search every enabled tracker, plus TorBox's own search when it's the active provider and enabled.
+/// Search every enabled tracker. TorBox's own Search API was retired (issue #92), so
+/// `AppSettings::torbox_search_enabled` is ignored and only configured trackers are searched.
 pub async fn search_torrents(
-    state: &AppState,
+    _state: &AppState,
     persistence: &Persistence,
     params: scrapers::SearchParams,
 ) -> SearchResponse {
     let configs = persistence.load_tracker_configs();
-
-    let mut extra: Vec<Box<dyn TorrentScraper>> = Vec::new();
-
-    let provider_id = state.provider_id.read().await.clone();
-    if provider_id == "torbox" {
-        let enabled = state.settings.read().await.torbox_search_enabled;
-        if enabled {
-            let provider = state.get_provider().await;
-            if let Some(tb) = provider.as_any().downcast_ref::<TorBoxClient>() {
-                if let Ok(key) = tb.get_api_key().await {
-                    extra.push(Box::new(scrapers::torbox_search::TorBoxSearchScraper::new(key)));
-                }
-            }
-        }
-    }
-
-    scrapers::search_all(&params, &configs, extra).await
+    scrapers::search_all(&params, &configs, Vec::new()).await
 }
 
 pub fn get_tracker_configs(persistence: &Persistence) -> Vec<TrackerConfig> {
