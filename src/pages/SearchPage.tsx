@@ -8,6 +8,9 @@ import { Button, cn, EmptyState, Input, Kbd, Spinner, StatusDot } from "../compo
 import { torrentStatusDot, torrentStatusLabel } from "../utils";
 
 const SEARCH_COLS = "minmax(0, 1fr) calc(var(--spacing) * 24) calc(var(--spacing) * 20) calc(var(--spacing) * 16) calc(var(--spacing) * 18)";
+// Wait this long after the last keystroke before hitting the trackers (Prowlarr fans each query
+// out to every indexer, so partial queries are expensive). Enter skips the wait.
+const SEARCH_DEBOUNCE_MS = 600;
 const LOCAL_COLS = "minmax(0, 1fr) calc(var(--spacing) * 20) calc(var(--spacing) * 28)";
 
 const SearchIcon = () => (
@@ -45,6 +48,10 @@ export default function SearchPage() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Id of the newest tracker search; older responses compare against it and bail out.
+  const requestIdRef = useRef(0);
+  // Query the last tracker search ran with, so Enter knows whether to search or add.
+  const lastSearchedRef = useRef<string | null>(null);
 
   // Auto-focus input on mount
   useEffect(() => {
@@ -72,55 +79,77 @@ export default function SearchPage() {
     setSelectedIndex(0);
   }, [query, mode]);
 
+  // Runs one tracker search. Each run takes a new request id; a response, error or cache check
+  // that comes back after a newer search started (or after the input was cleared) is dropped.
+  const runSearch = useCallback(async (q: string) => {
+    const id = ++requestIdRef.current;
+    const isCurrent = () => id === requestIdRef.current;
+    lastSearchedRef.current = q;
+    setLoading(true);
+    setError("");
+    setCacheChecked(false);
+    setCachedHashes(new Set());
+    try {
+      const response = await searchTorrents(q, undefined, "seeders", 1);
+      if (!isCurrent()) return;
+      setSearchResults(response.results);
+      setTrackerStatus(response.tracker_status);
+
+      const hashes = response.results
+        .map((r) => r.info_hash)
+        .filter((h) => h.length > 0);
+      if (hashes.length > 0) {
+        checkCacheAvailability(hashes)
+          .then((cached) => {
+            if (!isCurrent()) return;
+            setCachedHashes(new Set(cached.map((h) => h.toLowerCase())));
+            setCacheChecked(true);
+          })
+          .catch(() => {
+            if (isCurrent()) setCacheChecked(true);
+          });
+      } else {
+        setCacheChecked(true);
+      }
+    } catch (e) {
+      if (!isCurrent()) return;
+      setError(e instanceof Error ? e.message : String(e));
+      setSearchResults([]);
+    } finally {
+      if (isCurrent()) setLoading(false);
+    }
+  }, []);
+
+  const cancelPendingSearch = () => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+  };
+
   // Debounced search
   useEffect(() => {
     if (mode !== "search") return;
     if (!query.trim()) {
+      cancelPendingSearch();
+      // Invalidate any search still in flight so its results don't land after the clear.
+      requestIdRef.current++;
+      lastSearchedRef.current = null;
       setSearchResults([]);
       setTrackerStatus([]);
       setError("");
+      setLoading(false);
       return;
     }
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    cancelPendingSearch();
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      runSearch(query);
+    }, SEARCH_DEBOUNCE_MS);
 
-    debounceRef.current = setTimeout(async () => {
-      setLoading(true);
-      setError("");
-      setCacheChecked(false);
-      setCachedHashes(new Set());
-      try {
-        const response = await searchTorrents(query, undefined, "seeders", 1);
-        setSearchResults(response.results);
-        setTrackerStatus(response.tracker_status);
-
-        const hashes = response.results
-          .map((r) => r.info_hash)
-          .filter((h) => h.length > 0);
-        if (hashes.length > 0) {
-          checkCacheAvailability(hashes)
-            .then((cached) => {
-              setCachedHashes(new Set(cached.map((h) => h.toLowerCase())));
-              setCacheChecked(true);
-            })
-            .catch(() => {
-              setCacheChecked(true);
-            });
-        } else {
-          setCacheChecked(true);
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        setSearchResults([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 300);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, mode]);
+    return cancelPendingSearch;
+  }, [query, mode, runSearch]);
 
   // Magnet paste detection
   const handleChange = useCallback(async (value: string) => {
@@ -195,6 +224,12 @@ export default function SearchPage() {
 
       if (e.key === "Enter") {
         e.preventDefault();
+        // A query that hasn't been searched yet: search now instead of waiting for the debounce.
+        if (mode === "search" && query.trim() && query !== lastSearchedRef.current) {
+          cancelPendingSearch();
+          runSearch(query);
+          return;
+        }
         if (displayResults.length === 0) return;
 
         if (mode === "search") {
@@ -210,7 +245,7 @@ export default function SearchPage() {
         }
       }
     },
-    [displayResults, mode, selectedIndex, searchResults, filteredLocal, addedHashes, addingHash, handleAddTorrent, handleSelectTorrent]
+    [displayResults, mode, query, runSearch, selectedIndex, searchResults, filteredLocal, addedHashes, addingHash, handleAddTorrent, handleSelectTorrent]
   );
 
   const warningTrackers = trackerStatus.filter((t) => !t.ok);
