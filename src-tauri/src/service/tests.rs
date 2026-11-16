@@ -500,6 +500,24 @@ async fn tracker_configs_round_trip_and_feed_search() {
     assert_eq!(found.results[0].info_hash, "abcdef0123456789abcdef0123456789abcdef01");
 }
 
+/// Issue #92: TorBox retired its Search API. Old blobs with the flag still load, and the flag no
+/// longer adds a search source, so a TorBox user with no trackers gets the "No trackers" status.
+#[tokio::test]
+async fn retired_torbox_search_flag_still_loads_and_adds_no_source() {
+    let blob = json!({ "download_folder": null, "max_concurrent_downloads": 3, "create_torrent_subfolders": true, "theme": "dark", "torbox_search_enabled": true });
+    let loaded: AppSettings = serde_json::from_value(blob).unwrap();
+    assert!(loaded.torbox_search_enabled);
+
+    let env = env().with_provider("torbox", FakeProvider::new("t")).await;
+    *env.state.settings.write().await = loaded;
+    let params = crate::scrapers::SearchParams { query: "show".into(), category: None, sort_by: None, page: None };
+    let resp = search::search_torrents(&env.state, &env.persistence, params).await;
+    assert!(resp.results.is_empty());
+    assert_eq!(resp.tracker_status.len(), 1);
+    assert_eq!(resp.tracker_status[0].name, "No trackers");
+    assert!(!std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/scrapers/torbox_search.rs").exists());
+}
+
 #[tokio::test]
 async fn test_tracker_reports_connected_and_unknown_types() {
     let base = tracker_server().await;

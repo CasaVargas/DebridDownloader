@@ -216,6 +216,7 @@ export interface AppSettings {
   speed_limit_bytes?: number | null;
   auto_extract_archives?: boolean;
   delete_archives_after_extract?: boolean;
+  /** Ignored: TorBox retired its Search API (#92). Kept so older settings blobs still load. */
   torbox_search_enabled?: boolean;
   segments_per_file?: number;
 }

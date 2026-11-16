@@ -50,6 +50,7 @@ pub struct AppSettings {
     pub auto_extract_archives: bool,
     #[serde(default)]
     pub delete_archives_after_extract: bool,
+    /// Ignored: TorBox retired its Search API (#92). Kept so older persisted blobs still load.
     #[serde(default)]
     pub torbox_search_enabled: bool,
     #[serde(default = "default_segments")]

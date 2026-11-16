@@ -30,7 +30,7 @@ function normalizeTrackerUrl(raw: string): string {
 }
 
 export default function SearchSettings() {
-  const { settings, applyChange, savedField, markSaved } = useSettings();
+  const { savedField, markSaved } = useSettings();
   const [trackers, setTrackers] = useState<TrackerConfig[]>([]);
   const [activeProvider, setActiveProvider] = useState("real-debrid");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -184,22 +184,12 @@ export default function SearchSettings() {
         ))}
       </SettingsGroup>
 
-      {activeProvider === "torbox" && settings && (
+      {activeProvider === "torbox" && (
         <SettingsGroup title="Built-in">
           <SettingsRow
             label="TorBox Search"
-            description="Search torrents using the TorBox Search API with your existing API key"
-            saved={savedField === "torbox_search_enabled"}
-          >
-            <Toggle
-              label="TorBox Search"
-              checked={settings.torbox_search_enabled ?? false}
-              onChange={async (v) => {
-                await applyChange({ torbox_search_enabled: v });
-                markSaved("torbox_search_enabled");
-              }}
-            />
-          </SettingsRow>
+            description="TorBox retired its Search API, so it is no longer available. Add Prowlarr or Jackett under Search sources instead."
+          />
         </SettingsGroup>
       )}
 
